@@ -23,7 +23,14 @@ command -v nvim >/dev/null 2>&1 || {
 target="${1:-TESTS/}"
 
 if [[ "$target" == *.lua ]]; then
-  cmd="PlenaryBustedFile $target"
+  # NOT ":PlenaryBustedFile $target": that command spawns its own fresh
+  # headless nvim subprocess and has no way to hand it minimal_init (its
+  # underlying harness.test_file() takes no opts at all) -- the child would
+  # boot with none of lib.nvim/diff.nvim/plenary on 'runtimepath' and fall
+  # through to silently picking up whatever a real user config happens to
+  # provide instead. require("plenary.busted").run(file) runs the spec
+  # in-process, in the nvim this script already configured via -u below.
+  cmd="lua require('plenary.busted').run('$target')"
 else
   cmd="PlenaryBustedDirectory $target { minimal_init = 'scripts/minimal_init.lua', sequential = true }"
 fi

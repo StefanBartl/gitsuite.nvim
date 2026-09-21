@@ -133,28 +133,42 @@ local function build_routes()
       end,
     },
 
-    -- diff: thin alias onto diff.nvim's :Diff (phase 4)
+    -- diff: thin alias onto diff.nvim's :Diff
     {
       path = { "diff", "head" },
       desc = "Diff the current file against HEAD",
-      run = stub("diff head"),
+      run = function()
+        require("gitsuite.features.diff").head()
+      end,
     },
     {
       path = { "diff", "last" },
       desc = "Diff the current file against the previous commit",
-      run = stub("diff last"),
+      run = function()
+        require("gitsuite.features.diff").last()
+      end,
     },
     {
       path = { "diff", "rev" },
       args = { { name = "rev", type = "STRING" } },
       desc = "Diff the current file against an arbitrary revision",
-      run = stub("diff rev"),
+      run = function(ctx)
+        require("gitsuite.features.diff").rev(ctx.args.rev)
+      end,
     },
-    { path = { "diff", "split" }, desc = "Open the diff view", run = stub("diff split") },
+    {
+      path = { "diff", "split" },
+      desc = "Open the diff view",
+      run = function()
+        require("gitsuite.features.diff").split()
+      end,
+    },
     {
       path = { "diff", "history" },
       desc = "Show file history (diff.nvim :DiffHistory)",
-      run = stub("diff history"),
+      run = function()
+        require("gitsuite.features.diff").history()
+      end,
     },
 
     -- branch: extracted from ui.nvim's git_clickable statusline module (phase 5)
