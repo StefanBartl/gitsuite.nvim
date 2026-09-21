@@ -65,6 +65,14 @@ directory; from Lua: `require("gitsuite.features.ui").lazygit(dir)`. A `dir`
 that does not exist or is not inside a git repository is reported, no float
 is opened.
 
+Blame without a buffer (for other plugins): `require("gitsuite.features.blame")
+.for_location(dir, path, lnum)` returns `{ line, sha, author, author_time,
+summary }` for one line of `path` (relative to `dir`, or absolute); an
+uncommitted line has an all-zero `sha`. It blocks without a callback; with a
+`cb(entry, err)` as fourth argument it runs asynchronously and returns a
+`{ stop }` handle. Failures (not a repo, untracked file, line past the end) are
+`nil, err`.
+
 ==============================================================================
 5. CONFIGURATION                                                *gitsuite-config*
 >lua

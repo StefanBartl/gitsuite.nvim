@@ -34,6 +34,63 @@ local function format_entry(entry)
   return ("%s %s %-15s %s"):format(short_sha, date, entry.author or "?", entry.summary or "")
 end
 
+---@internal
+---@param entries Lib.Git.BlameEntry[]
+---@param lnum integer
+---@return Lib.Git.BlameEntry|nil
+local function pick_line(entries, lnum)
+  for _, entry in ipairs(entries) do
+    if entry.line == lnum then return entry end
+  end
+  return entries[1]
+end
+
+---Blame one line of a file, without any buffer: who last changed line `lnum`
+---of `path` (relative to `dir`, or absolute), in the repo containing `dir`.
+---
+---Without `cb` the call blocks and returns `entry, err`; with `cb` it runs
+---asynchronously, returns the job handle and calls `cb(entry, err)` from the
+---main loop. In both forms: `entry` is nil with `err` nil when git has no data
+---for the line (empty range), and nil with `err` set when blame failed (not a
+---repo, untracked file, line past the end) or the arguments are invalid.
+---An uncommitted line comes back with an all-zero `sha`.
+---@overload fun(dir: string|nil, path: string, lnum: integer): Lib.Git.BlameEntry|nil, string|nil
+---@param dir string|nil Directory to run git in (`git -C`); nil = the cwd.
+---@param path string
+---@param lnum integer 1-based
+---@param cb fun(entry: Lib.Git.BlameEntry|nil, err: string|nil)
+---@return { stop: fun() } handle
+function M.for_location(dir, path, lnum, cb)
+  if
+    type(path) ~= "string"
+    or path == ""
+    or type(lnum) ~= "number"
+    or lnum < 1
+    or lnum % 1 ~= 0
+  then
+    local err = "invalid location (need a file path and a 1-based integer line)"
+    if not cb then return nil, err end
+    vim.schedule(function()
+      cb(nil, err)
+    end)
+    return { stop = function() end }
+  end
+
+  local opts = { dir = dir, first = lnum, last = lnum }
+  if not cb then
+    local entries, err = git.blame_porcelain(path, opts)
+    if not entries then return nil, err or "git blame failed" end
+    return pick_line(entries, lnum), nil
+  end
+  return git.blame_porcelain_async(path, opts, function(entries, err)
+    if not entries then
+      cb(nil, err or "git blame failed")
+      return
+    end
+    cb(pick_line(entries, lnum), nil)
+  end)
+end
+
 ---Blame the current line, as a notification.
 ---@return nil
 function M.line()
@@ -44,16 +101,16 @@ function M.line()
     return
   end
   local lnum = vim.api.nvim_win_get_cursor(0)[1]
-  local entries, err = git.blame_porcelain(path, { dir = dir, first = lnum, last = lnum })
-  if not entries then
-    notify.error("blame: " .. (err or "git blame failed"))
+  local entry, err = M.for_location(dir, path, lnum)
+  if err then
+    notify.error("blame: " .. err)
     return
   end
-  if #entries == 0 then
+  if not entry then
     notify.info("blame: no data for this line")
     return
   end
-  notify.info(format_entry(entries[1]))
+  notify.info(format_entry(entry))
 end
 
 ---Toggle a persistent current-line blame virtual text, refreshed on cursor
@@ -96,13 +153,13 @@ function M.toggle()
 
     generation = generation + 1
     local this_generation = generation
-    git.blame_porcelain_async(path, { dir = dir, first = lnum, last = lnum }, function(entries)
+    M.for_location(dir, path, lnum, function(entry)
       if this_generation ~= generation then return end
       if not vim.api.nvim_buf_is_valid(bufnr) then return end
       vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
-      if not entries or #entries == 0 then return end
+      if not entry then return end
       vim.api.nvim_buf_set_extmark(bufnr, NS, lnum - 1, -1, {
-        virt_text = { { "  " .. format_entry(entries[1]), "Comment" } },
+        virt_text = { { "  " .. format_entry(entry), "Comment" } },
         virt_text_pos = "eol",
       })
     end)
