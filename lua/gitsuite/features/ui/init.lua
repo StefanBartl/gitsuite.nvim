@@ -9,10 +9,12 @@ local notify = require("gitsuite.util.notify")
 
 local M = {}
 
----Open the lazygit float.
+---Open the lazygit float, rooted at the cwd's repo or -- with `repo_dir` --
+---at the repo containing that directory.
+---@param repo_dir? string
 ---@return nil
-function M.lazygit()
-  require("gitsuite.features.ui.lazygit").open()
+function M.lazygit(repo_dir)
+  require("gitsuite.features.ui.lazygit").open(repo_dir)
 end
 
 ---Open neogit.

@@ -59,6 +59,12 @@ docs/BINDINGS.md for the full, generated list of `{scope} {action}` pairs --
 that file is generated from the same route tree that drives dispatch, so it
 never drifts from what `:Git <Tab>` actually offers.
 
+`:Git ui lazygit [dir]` opens lazygit for the repository containing `dir` (any
+directory inside its work tree) instead of the one of the current working
+directory; from Lua: `require("gitsuite.features.ui").lazygit(dir)`. A `dir`
+that does not exist or is not inside a git repository is reported, no float
+is opened.
+
 ==============================================================================
 5. CONFIGURATION                                                *gitsuite-config*
 >lua

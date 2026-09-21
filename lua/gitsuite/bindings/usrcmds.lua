@@ -237,9 +237,10 @@ local function build_routes()
     -- ui: TUI launchers -- lazygit float owned by gitsuite, neogit/diffview are thin adapters
     {
       path = { "ui", "lazygit" },
-      desc = "Open lazygit in a floating terminal",
-      run = function()
-        require("gitsuite.features.ui").lazygit()
+      args = { { name = "dir", type = "DIR", optional = true } },
+      desc = "Open lazygit in a floating terminal (optionally for the repo containing <dir>)",
+      run = function(ctx)
+        require("gitsuite.features.ui").lazygit(ctx.args.dir)
       end,
     },
     {

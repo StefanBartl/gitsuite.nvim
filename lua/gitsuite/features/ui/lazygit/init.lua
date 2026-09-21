@@ -47,10 +47,35 @@ local function setup_terminal_keymaps(bufnr)
   )
 end
 
----Open lazygit in a floating terminal, rooted at the current file's repo
----(or the cwd's repo, for a buffer with no file).
+---@internal
+--- The directory lazygit is rooted at: the repo containing `repo_dir` or,
+--- without one, the repo of the current cwd.
+---@param repo_dir string|nil
+---@return string|nil root
+---@return string|nil err
+local function resolve_repo_dir(repo_dir)
+  local git = require("lib.nvim.git")
+
+  if repo_dir == nil or repo_dir == "" then
+    if not git.in_git_repo() then return nil, "not inside a git repository" end
+    return git.repo_root() or vim.fn.getcwd()
+  end
+
+  local dir = vim.fs.normalize(repo_dir)
+  local stat = vim.uv.fs_stat(dir)
+  if not stat or stat.type ~= "directory" then return nil, "not a directory: " .. repo_dir end
+  if not git.in_git_repo({ dir = dir }) then
+    return nil, "not inside a git repository: " .. repo_dir
+  end
+  return git.repo_root({ dir = dir }) or dir
+end
+
+---Open lazygit in a floating terminal. Without `repo_dir` it is rooted at the
+---repo of the current cwd; with one, at the repo containing that directory
+---(any subdirectory of a work tree works, not only its root).
+---@param repo_dir? string
 ---@return nil
-function M.open()
+function M.open(repo_dir)
   if vim.fn.executable("lazygit") ~= 1 then
     notify.error(
       'ui lazygit: the "lazygit" executable is not on $PATH -- see https://github.com/jesseduffield/lazygit#installation'
@@ -58,12 +83,12 @@ function M.open()
     return
   end
 
-  local git = require("lib.nvim.git")
-  if not git.in_git_repo() then
-    notify.error("ui lazygit: not inside a git repository")
+  local root, err = resolve_repo_dir(repo_dir)
+  if not root then
+    notify.error("ui lazygit: " .. err)
     return
   end
-  local repo_dir = git.repo_root() or vim.fn.getcwd()
+  repo_dir = root
 
   local width = math.floor(vim.o.columns * 0.9)
   local height = math.floor(vim.o.lines * 0.9)
