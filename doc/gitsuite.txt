@@ -1,0 +1,98 @@
+*gitsuite.txt*  One :Git command tree for everything git             *gitsuite.nvim*
+
+Author:   Stefan Bartl
+Version:  0.1.0
+
+==============================================================================
+CONTENTS                                                   *gitsuite-contents*
+
+  1. Introduction .............. |gitsuite-intro|
+  2. Requirements ............... |gitsuite-requirements|
+  3. Installation ............... |gitsuite-installation|
+  4. Commands .................... |gitsuite-commands|
+  5. Configuration ............... |gitsuite-config|
+  6. Adapters ..................... |gitsuite-adapters|
+  7. Health check ................. |gitsuite-health|
+
+==============================================================================
+1. INTRODUCTION                                                *gitsuite-intro*
+
+gitsuite.nvim collects every git-related user command this config used to
+spread across seven external plugins into one `:Git <scope> <action>` tree
+(see |gitsuite-commands|). It follows the filetree.nvim pattern: its own
+implementation where that pays off (merge-conflict resolution, blame,
+browse), and a thin adapter where an external plugin has already done years
+of edge-case work (gitsigns' hunk engine, neogit's staging UI, diffview, the
+real `lazygit` TUI run in a floating terminal).
+
+This is an alpha-stage, actively-growing plugin -- see docs/BINDINGS.md for
+which subcommands are implemented versus still a stub.
+
+==============================================================================
+2. REQUIREMENTS                                          *gitsuite-requirements*
+
+- Neovim >= 0.10
+- `git` on `$PATH`
+- StefanBartl/lib.nvim (hard dependency)
+- StefanBartl/diff.nvim (hard dependency, used by `:Git diff *`)
+
+==============================================================================
+3. INSTALLATION                                          *gitsuite-installation*
+>lua
+  {
+    "StefanBartl/gitsuite.nvim",
+    dependencies = { "StefanBartl/lib.nvim", "StefanBartl/diff.nvim" },
+    cmd = "Git",
+    config = function(_, opts)
+      require("gitsuite").setup(opts)
+    end,
+  }
+<
+==============================================================================
+4. COMMANDS                                                  *gitsuite-commands*
+
+                                                                        *:Git*
+:Git {scope} {action} [args]
+
+Compound command tree with `<Tab>` completion at every level. See
+docs/BINDINGS.md for the full, generated list of `{scope} {action}` pairs --
+that file is generated from the same route tree that drives dispatch, so it
+never drifts from what `:Git <Tab>` actually offers.
+
+==============================================================================
+5. CONFIGURATION                                                *gitsuite-config*
+>lua
+  require("gitsuite").setup({
+    features = { conflict = true, hunk = true, blame = true, diff = true,
+      browse = true, branch = true, ui = true, status = true },
+    commands = { git = "Git" },
+    keymaps = { blame_full = "<leader>gb", ui_lazygit = "<leader>lg" },
+    browse = { hosts = {} },
+  })
+<
+Set a `keymaps.*` entry to `false` to disable that default mapping without
+disabling the underlying feature.
+
+==============================================================================
+6. ADAPTERS                                                    *gitsuite-adapters*
+
+Each feature family resolves its own backend independently through
+`gitsuite.adapter` (`gitsigns`, `diffview`, `neogit`, `lazygit`, `native`).
+`native` needs nothing but `git` itself and is always available inside a git
+repo; every other adapter is only available once its own plugin/binary is
+present -- an unavailable adapter is never an error by itself, only the
+family it would have served falling back further, or refusing with a clear
+message when nothing is left to fall back to.
+
+==============================================================================
+7. HEALTH CHECK                                                  *gitsuite-health*
+
+`:checkhealth gitsuite` reports:
+  - lib.nvim / diff.nvim presence (hard dependencies -- error if missing)
+  - `git` on `$PATH`
+  - each adapter's availability (info, not warn/error -- see |gitsuite-adapters|)
+  - rejected `setup()` options, if any
+  - the composer's own route-tree check for `:Git`
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:

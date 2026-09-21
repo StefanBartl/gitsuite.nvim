@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: lint (stylua + luacheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: stylua (check)
+        uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: v2.5.2
+          args: --check .
+
+      - name: Install luacheck
+        run: sudo apt-get update && sudo apt-get install -y luarocks && sudo luarocks install luacheck 1.2.0
+
+      - name: luacheck
+        run: luacheck lua TESTS
+
+  test:
+    name: tests (headless) (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout gitsuite.nvim
+        uses: actions/checkout@v5
+        with:
+          path: gitsuite.nvim
+
+      - name: Checkout lib.nvim
+        uses: actions/checkout@v5
+        with:
+          repository: StefanBartl/lib.nvim
+          path: lib.nvim
+          ref: ci-verified
+
+      - name: Checkout diff.nvim
+        uses: actions/checkout@v5
+        with:
+          repository: StefanBartl/diff.nvim
+          path: diff.nvim
+
+      - name: Checkout plenary.nvim
+        uses: actions/checkout@v5
+        with:
+          repository: nvim-lua/plenary.nvim
+          path: plenary.nvim
+
+      - name: Install Neovim (stable)
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
+      - name: Run test suite
+        working-directory: gitsuite.nvim
+        run: scripts/test.sh
