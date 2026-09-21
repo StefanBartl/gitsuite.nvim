@@ -170,21 +170,27 @@ local function build_routes()
       run = stub("branch current"),
     },
 
-    -- browse: new -- remote-URL resolution for GitHub/GitLab/Codeberg (phase 5)
+    -- browse: remote-URL resolution for GitHub/GitLab/Codeberg
     {
       path = { "browse", "file" },
       desc = "Open the current file on its web host",
-      run = stub("browse file"),
+      run = function()
+        require("gitsuite.features.browse").file()
+      end,
     },
     {
       path = { "browse", "selection" },
       desc = "Open the current visual selection (with line range) on its web host",
-      run = stub("browse selection"),
+      run = function()
+        require("gitsuite.features.browse").selection()
+      end,
     },
     {
       path = { "browse", "repo" },
       desc = "Open the repository root on its web host",
-      run = stub("browse repo"),
+      run = function()
+        require("gitsuite.features.browse").repo()
+      end,
     },
 
     -- ui: TUI launchers -- lazygit float owned by gitsuite, neogit/diffview are thin adapters (phase 3)
