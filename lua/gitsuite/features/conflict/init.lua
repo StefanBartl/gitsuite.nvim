@@ -53,12 +53,21 @@ local function apply_highlight(bufnr, regions)
   vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
   for _, r in ipairs(regions) do
     highlight_range(bufnr, r.start_line, r.start_line, "GitSuiteConflictMarker")
-    highlight_range(bufnr, r.ours_first, r.ours_last, "GitSuiteConflictOurs")
-    if r.base_first then
-      highlight_range(bufnr, r.base_first, r.base_last, "GitSuiteConflictBase")
+    if r.ambiguous then
+      -- No section boundaries are known: mark every line that could be the
+      -- separator and leave the text unhighlighted rather than colour it as
+      -- "ours"/"theirs" on a guess.
+      for _, row in ipairs(r.separators) do
+        highlight_range(bufnr, row, row, "GitSuiteConflictMarker")
+      end
+    else
+      highlight_range(bufnr, r.ours_first, r.ours_last, "GitSuiteConflictOurs")
+      if r.base_first then
+        highlight_range(bufnr, r.base_first, r.base_last, "GitSuiteConflictBase")
+      end
+      highlight_range(bufnr, r.sep_line, r.sep_line, "GitSuiteConflictMarker")
+      highlight_range(bufnr, r.theirs_first, r.theirs_last, "GitSuiteConflictTheirs")
     end
-    highlight_range(bufnr, r.sep_line, r.sep_line, "GitSuiteConflictMarker")
-    highlight_range(bufnr, r.theirs_first, r.theirs_last, "GitSuiteConflictTheirs")
     highlight_range(bufnr, r.end_line, r.end_line, "GitSuiteConflictMarker")
   end
 end
@@ -116,6 +125,16 @@ function M.choose(keep)
   local region = region_at_cursor(bufnr, cursor_row)
   if not region then
     notify.error("conflict: no conflict region under the cursor")
+    return
+  end
+  if region.ambiguous then
+    -- A wrong guess here moves lines from one side to the other, i.e. loses
+    -- code in a merge; refusing costs the user one manual edit.
+    notify.error(
+      ("conflict: ambiguous separator -- %d lines read `=======`, so where our side ends cannot be told from the text. Resolve this one by hand (git's `conflict-marker-size` attribute avoids this for the next merge)"):format(
+        #region.separators
+      )
+    )
     return
   end
   if keep == "base" and not region.base_first then

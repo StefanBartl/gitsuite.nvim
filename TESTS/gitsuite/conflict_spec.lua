@@ -35,6 +35,73 @@ describe("gitsuite.features.conflict", function()
     assert.is_true(conflict.has_conflicts(bufnr))
   end)
 
+  describe("an ambiguous region (a `=======` line that may be text)", function()
+    local lines = {
+      "before",
+      "<<<<<<< HEAD", -- row 1
+      "Title",
+      "=======", -- candidate, row 3
+      "our text",
+      "=======", -- candidate, row 5
+      "their text",
+      ">>>>>>> other", -- row 7
+      "after",
+    }
+
+    it("is still a conflict: has_conflicts() and next() see it", function()
+      set_lines(lines)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_true(conflict.has_conflicts(bufnr))
+      vim.api.nvim_win_set_cursor(0, { 1, 0 })
+      conflict.next()
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(2, vim.api.nvim_win_get_cursor(0)[1])
+    end)
+
+    it("refresh() marks the markers and every candidate, and colours no section", function()
+      set_lines(lines)
+      conflict.refresh(bufnr)
+      local ns = vim.api.nvim_create_namespace("gitsuite_conflict")
+      local marks = vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, { details = true })
+      local rows = {}
+      for _, mark in ipairs(marks) do
+        rows[#rows + 1] = mark[2]
+        ---@diagnostic disable-next-line: undefined-field
+        assert.equals("GitSuiteConflictMarker", mark[4].hl_group)
+      end
+      table.sort(rows)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.same(
+        { 1, 3, 5, 7 },
+        rows,
+        "start, both candidates, end -- nothing coloured ours/theirs"
+      )
+    end)
+
+    it("choose() refuses, says why, and leaves the buffer untouched", function()
+      set_lines(lines)
+      local seen = {}
+      local original_notify = vim.notify
+      vim.notify = function(msg)
+        seen[#seen + 1] = tostring(msg)
+      end
+      vim.api.nvim_win_set_cursor(0, { 3, 0 })
+      local ok = pcall(conflict.choose, "ours")
+      vim.notify = original_notify
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_true(ok, "refusing is a message, not an error")
+      ---@diagnostic disable-next-line: undefined-field
+      assert.same(lines, get_lines())
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(1, #seen)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_truthy(seen[1]:find("ambiguous", 1, true))
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_truthy(seen[1]:find("2 lines", 1, true), "it says how many candidates there are")
+    end)
+  end)
+
   it("refresh() places one extmark per marker/content section", function()
     set_lines({ "<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> branch" })
     conflict.refresh(bufnr)

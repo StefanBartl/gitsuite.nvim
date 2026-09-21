@@ -73,6 +73,25 @@ uncommitted line has an all-zero `sha`. It blocks without a callback; with a
 `{ stop }` handle. Failures (not a repo, untracked file, line past the end) are
 `nil, err`.
 
+                                                          *gitsuite-conflict*
+`:Git conflict {ours|theirs|both|base|none}` resolves the conflict under the
+cursor. Markers are matched by their exact length (`<<<<<<<` opens a conflict,
+and every other marker of it has as many characters): git writes a conflict
+nested in the base section -- the conflicting virtual ancestor of a criss-cross
+merge -- with longer markers, and the `conflict-marker-size` git attribute
+raises the length for a file.
+
+A line that is exactly `=======` can be text (the underline of a Markdown
+setext heading). In a merge-style conflict that makes the separator
+impossible to tell from the text: the region is still highlighted (markers and
+every candidate line only), found by `:Git conflict next|prev` and counted by
+`has_conflicts()`, but `:Git conflict ours|theirs|both|base|none` refuse with a
+message instead of guessing where our side ends. Resolve such a conflict by
+hand; `*.md conflict-marker-size=10` in `.gitattributes` avoids it for the next
+merge. diff3/zdiff3 are affected only if the base section itself holds such a
+line (the `|||||||` marker otherwise tells the sides apart, and git keeps
+conflicts around an unchanged underline apart).
+
 ==============================================================================
 5. CONFIGURATION                                                *gitsuite-config*
 >lua
