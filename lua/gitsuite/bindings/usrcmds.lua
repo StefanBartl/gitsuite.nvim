@@ -96,36 +96,48 @@ local function build_routes()
       end,
     },
 
-    -- hunk: delegated to the gitsigns adapter when available, else native (phase 4)
+    -- hunk: delegated to the gitsigns adapter (Schicht 3, never nachbauen)
     {
       path = { "hunk", "stage" },
       desc = "Stage the hunk under the cursor",
-      run = stub("hunk stage"),
+      run = function()
+        require("gitsuite.features.hunk").stage()
+      end,
     },
     {
       path = { "hunk", "reset" },
       desc = "Reset the hunk under the cursor",
-      run = stub("hunk reset"),
+      run = function()
+        require("gitsuite.features.hunk").reset()
+      end,
     },
     {
       path = { "hunk", "preview" },
       desc = "Preview the hunk under the cursor",
-      run = stub("hunk preview"),
+      run = function()
+        require("gitsuite.features.hunk").preview()
+      end,
     },
     {
       path = { "hunk", "stage-buffer" },
       desc = "Stage every hunk in the current buffer",
-      run = stub("hunk stage-buffer"),
+      run = function()
+        require("gitsuite.features.hunk").stage_buffer()
+      end,
     },
     {
       path = { "hunk", "reset-buffer" },
       desc = "Reset every hunk in the current buffer",
-      run = stub("hunk reset-buffer"),
+      run = function()
+        require("gitsuite.features.hunk").reset_buffer()
+      end,
     },
     {
       path = { "hunk", "toggle-deleted" },
       desc = "Toggle showing deleted lines inline",
-      run = stub("hunk toggle-deleted"),
+      run = function()
+        require("gitsuite.features.hunk").toggle_deleted()
+      end,
     },
 
     -- blame: own implementation, native `git blame --porcelain`
