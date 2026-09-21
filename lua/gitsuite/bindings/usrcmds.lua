@@ -189,17 +189,27 @@ local function build_routes()
       end,
     },
 
-    -- branch: extracted from ui.nvim's git_clickable statusline module (phase 5)
+    -- branch: extracted from ui.nvim's git_clickable statusline module
     {
       path = { "branch", "switch" },
       desc = "Switch to another local branch",
-      run = stub("branch switch"),
+      run = function()
+        require("gitsuite.features.branch").switch()
+      end,
     },
-    { path = { "branch", "list" }, desc = "List local branches", run = stub("branch list") },
+    {
+      path = { "branch", "list" },
+      desc = "List local branches",
+      run = function()
+        require("gitsuite.features.branch").list()
+      end,
+    },
     {
       path = { "branch", "current" },
       desc = "Show the current branch",
-      run = stub("branch current"),
+      run = function()
+        require("gitsuite.features.branch").current()
+      end,
     },
 
     -- browse: remote-URL resolution for GitHub/GitLab/Codeberg
@@ -234,16 +244,20 @@ local function build_routes()
     { path = { "ui", "neogit" }, desc = "Open neogit", run = stub("ui neogit") },
     { path = { "ui", "diffview" }, desc = "Open diffview", run = stub("ui diffview") },
 
-    -- status: lib.nvim.git.status_porcelain + insights.nvim.conflicts (phase 5)
+    -- status: lib.nvim.git.status_porcelain
     {
       path = { "status", "repo" },
       desc = "Show repo status (branch, ahead/behind, dirty)",
-      run = stub("status repo"),
+      run = function()
+        require("gitsuite.features.status").repo()
+      end,
     },
     {
       path = { "status", "quickfix" },
       desc = "Export repo status to the quickfix list",
-      run = stub("status quickfix"),
+      run = function()
+        require("gitsuite.features.status").quickfix()
+      end,
     },
   }
 end
