@@ -110,21 +110,27 @@ local function build_routes()
       run = stub("hunk toggle-deleted"),
     },
 
-    -- blame: own implementation, native `git blame --porcelain` (phase 4)
+    -- blame: own implementation, native `git blame --porcelain`
     {
       path = { "blame", "line" },
       desc = "Show blame for the current line",
-      run = stub("blame line"),
+      run = function()
+        require("gitsuite.features.blame").line()
+      end,
     },
     {
       path = { "blame", "toggle" },
       desc = "Toggle current-line blame virtual text",
-      run = stub("blame toggle"),
+      run = function()
+        require("gitsuite.features.blame").toggle()
+      end,
     },
     {
       path = { "blame", "full" },
       desc = "Show full blame for the current file",
-      run = stub("blame full"),
+      run = function()
+        require("gitsuite.features.blame").full()
+      end,
     },
 
     -- diff: thin alias onto diff.nvim's :Diff (phase 4)
