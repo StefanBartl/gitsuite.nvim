@@ -55,6 +55,7 @@ jobs:
         with:
           repository: StefanBartl/diff.nvim
           path: diff.nvim
+          ref: ci-verified
 
       - name: Checkout plenary.nvim
         uses: actions/checkout@v5
