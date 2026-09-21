@@ -68,4 +68,7 @@ jobs:
 
       - name: Run test suite
         working-directory: gitsuite.nvim
-        run: scripts/test.sh
+        # bash scripts/test.sh, not ./scripts/test.sh: the exec bit is not
+        # what actually matters (nor reliably preserved through a Windows
+        # git checkout) -- invoking the interpreter directly sidesteps it.
+        run: bash scripts/test.sh
