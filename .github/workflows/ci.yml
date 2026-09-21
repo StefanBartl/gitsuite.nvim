@@ -9,6 +9,7 @@ jobs:
   lint:
     name: lint (stylua + luacheck)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
 
@@ -28,6 +29,7 @@ jobs:
   test:
     name: tests (headless) (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -59,6 +61,8 @@ jobs:
         with:
           repository: nvim-lua/plenary.nvim
           path: plenary.nvim
+          # Pinned to the 2026-09-20 HEAD; bump deliberately, not by drifting.
+          ref: 74b06c6c75e4eeb3108ec01852001636d85a932b
 
       - name: Install Neovim (stable)
         uses: rhysd/action-setup-vim@v1
@@ -71,4 +75,12 @@ jobs:
         # bash scripts/test.sh, not ./scripts/test.sh: the exec bit is not
         # what actually matters (nor reliably preserved through a Windows
         # git checkout) -- invoking the interpreter directly sidesteps it.
-        run: bash scripts/test.sh
+        run: |
+          exec > >(tee -a "$RUNNER_TEMP/test-output.log") 2>&1
+          bash scripts/test.sh
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-output-test-${{ matrix.os }}
+          path: ${{ runner.temp }}/test-output.log
+          if-no-files-found: ignore
