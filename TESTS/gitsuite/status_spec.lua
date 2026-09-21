@@ -40,4 +40,49 @@ describe("gitsuite.features.status", function()
     vim.fn.delete(scratch)
     vim.cmd("cclose")
   end)
+
+  -- Without `-z`, git C-quotes a path containing a space or a non-ASCII byte
+  -- (`"a b.txt"`, `"\303\274.txt"`), so the quickfix export used to list
+  -- entries whose "file" did not exist. Needs a real throwaway repo: the
+  -- repo this suite runs in has no such files.
+  describe("paths git would otherwise quote", function()
+    local original_cwd, repo
+
+    before_each(function()
+      original_cwd = vim.fn.getcwd()
+      repo = vim.fn.tempname() .. "-gitsuite-status-quoting"
+      vim.fn.mkdir(repo, "p")
+      local init = vim.system({ "git", "-C", repo, "init", "-q" }):wait()
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(0, init.code, "fixture: git init failed: " .. tostring(init.stderr))
+      vim.fn.writefile({ "x" }, repo .. "/a b.txt")
+      vim.fn.writefile({ "x" }, repo .. "/ü.txt")
+      vim.api.nvim_set_current_dir(repo)
+    end)
+
+    after_each(function()
+      vim.api.nvim_set_current_dir(original_cwd)
+      vim.cmd("cclose")
+      pcall(vim.fn.delete, repo, "rf")
+    end)
+
+    it("quickfix() lists them under their real, existing paths", function()
+      status.quickfix()
+      local items = vim.fn.getqflist({ items = 0 }).items
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(2, #items)
+      for _, item in ipairs(items) do
+        local name = vim.fn.bufname(item.bufnr)
+        ---@diagnostic disable-next-line: undefined-field
+        assert.equals(
+          1,
+          vim.fn.filereadable(name),
+          ("quickfix entry %q is not a real file"):format(name)
+        )
+        ---@diagnostic disable-next-line: undefined-field
+        assert.is_nil(item.text:find('"', 1, true), "the entry text carries no git quoting")
+      end
+    end)
+  end)
 end)
