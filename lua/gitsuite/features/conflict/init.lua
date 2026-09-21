@@ -1,0 +1,194 @@
+---@module 'gitsuite.features.conflict'
+--- Buffer-local merge-conflict resolution: scan, highlight, choose
+--- (ours/theirs/both/base/none), navigate, refresh -- built on
+--- `parser.lua`'s pure marker parsing (PRINCIPLES.md "Pure Core / Impure
+--- Shell": this file is the impure shell around it -- buffer/window reads,
+--- extmarks, the actual mutation).
+---
+--- `list`/repo-wide `refresh` delegate to `insights.nvim.conflicts`
+--- (`git diff --name-only --diff-filter=U` into the quickfix list) --
+--- already written, reused as-is rather than duplicated.
+
+local parser = require("gitsuite.features.conflict.parser")
+local highlights = require("gitsuite.features.conflict.highlights")
+local notify = require("gitsuite.util.notify")
+
+local M = {}
+
+local NS = vim.api.nvim_create_namespace("gitsuite_conflict")
+
+---Scan a buffer for conflict regions. Pure read, no side effects.
+---@param bufnr integer
+---@return GitSuite.Conflict.Region[]
+function M.scan(bufnr)
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  return parser.parse(lines)
+end
+
+---Whether a buffer currently contains at least one conflict region.
+---@param bufnr integer
+---@return boolean
+function M.has_conflicts(bufnr)
+  return #M.scan(bufnr) > 0
+end
+
+---@internal
+---@param bufnr integer
+---@param first integer
+---@param last integer  inclusive; `last < first` (an empty section) is a no-op.
+---@param hl_group string
+local function highlight_range(bufnr, first, last, hl_group)
+  if last < first then return end
+  vim.api.nvim_buf_set_extmark(bufnr, NS, first, 0, {
+    end_row = last + 1,
+    hl_group = hl_group,
+    hl_eol = true,
+  })
+end
+
+---@internal
+---@param bufnr integer
+---@param regions GitSuite.Conflict.Region[]
+local function apply_highlight(bufnr, regions)
+  vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
+  for _, r in ipairs(regions) do
+    highlight_range(bufnr, r.start_line, r.start_line, "GitSuiteConflictMarker")
+    highlight_range(bufnr, r.ours_first, r.ours_last, "GitSuiteConflictOurs")
+    if r.base_first then
+      highlight_range(bufnr, r.base_first, r.base_last, "GitSuiteConflictBase")
+    end
+    highlight_range(bufnr, r.sep_line, r.sep_line, "GitSuiteConflictMarker")
+    highlight_range(bufnr, r.theirs_first, r.theirs_last, "GitSuiteConflictTheirs")
+    highlight_range(bufnr, r.end_line, r.end_line, "GitSuiteConflictMarker")
+  end
+end
+
+---Re-scan the current buffer for conflict markers and refresh highlighting.
+---@param bufnr? integer defaults to the current buffer
+---@return GitSuite.Conflict.Region[]
+function M.refresh(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  highlights.setup()
+  local regions = M.scan(bufnr)
+  apply_highlight(bufnr, regions)
+  return regions
+end
+
+---@internal
+---@param bufnr integer
+---@param cursor_row integer 0-indexed
+---@return GitSuite.Conflict.Region|nil
+local function region_at_cursor(bufnr, cursor_row)
+  for _, r in ipairs(M.scan(bufnr)) do
+    if cursor_row >= r.start_line and cursor_row <= r.end_line then return r end
+  end
+  return nil
+end
+
+---@internal
+--- Collect the replacement lines for `keep`, given a region.
+---@param bufnr integer
+---@param region GitSuite.Conflict.Region
+---@param keep "ours"|"theirs"|"both"|"base"|"none"
+---@return string[]
+local function collect_replacement(bufnr, region, keep)
+  local out = {}
+  local function add(first, last)
+    if last < first then return end
+    vim.list_extend(out, vim.api.nvim_buf_get_lines(bufnr, first, last + 1, false))
+  end
+
+  if keep == "ours" or keep == "both" then add(region.ours_first, region.ours_last) end
+  if keep == "base" then add(region.base_first, region.base_last) end
+  if keep == "theirs" or keep == "both" then add(region.theirs_first, region.theirs_last) end
+  -- keep == "none": out stays empty.
+
+  return out
+end
+
+---Resolve the conflict region under the cursor by keeping `keep`.
+---@param keep "ours"|"theirs"|"both"|"base"|"none"
+---@return nil
+function M.choose(keep)
+  local bufnr = vim.api.nvim_get_current_buf()
+  local cursor_row = vim.api.nvim_win_get_cursor(0)[1] - 1
+
+  local region = region_at_cursor(bufnr, cursor_row)
+  if not region then
+    notify.error("conflict: no conflict region under the cursor")
+    return
+  end
+  if keep == "base" and not region.base_first then
+    notify.error("conflict: no base section here (not a diff3/zdiff3-style conflict)")
+    return
+  end
+
+  -- ERR-30 (TOCTOU): re-verify the marker rows this region was scanned at
+  -- still hold the markers they held then, immediately before mutating --
+  -- refuse rather than blindly overwrite if the buffer changed in between
+  -- (an autocmd, another choose action, manual edits).
+  local start_marker =
+    vim.api.nvim_buf_get_lines(bufnr, region.start_line, region.start_line + 1, false)[1]
+  local end_marker =
+    vim.api.nvim_buf_get_lines(bufnr, region.end_line, region.end_line + 1, false)[1]
+  if
+    not (start_marker and start_marker:match("^<<<<<<<"))
+    or not (end_marker and end_marker:match("^>>>>>>>"))
+  then
+    notify.error(
+      "conflict: buffer changed since this region was found -- re-run :Git conflict refresh"
+    )
+    return
+  end
+
+  local replacement = collect_replacement(bufnr, region, keep)
+  vim.api.nvim_buf_set_lines(bufnr, region.start_line, region.end_line + 1, false, replacement)
+  M.refresh(bufnr)
+end
+
+---Jump to the next conflict marker after the cursor.
+---@return nil
+function M.next()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local cursor_row = vim.api.nvim_win_get_cursor(0)[1] - 1
+  for _, r in ipairs(M.scan(bufnr)) do
+    if r.start_line > cursor_row then
+      vim.api.nvim_win_set_cursor(0, { r.start_line + 1, 0 })
+      return
+    end
+  end
+  notify.info("conflict: no next conflict in this buffer")
+end
+
+---Jump to the previous conflict marker before the cursor.
+---@return nil
+function M.prev()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local cursor_row = vim.api.nvim_win_get_cursor(0)[1] - 1
+  local regions = M.scan(bufnr)
+  for i = #regions, 1, -1 do
+    if regions[i].start_line < cursor_row then
+      vim.api.nvim_win_set_cursor(0, { regions[i].start_line + 1, 0 })
+      return
+    end
+  end
+  notify.info("conflict: no previous conflict in this buffer")
+end
+
+---List every file with unresolved conflicts in the quickfix list
+---(repo-wide, delegates to insights.nvim.conflicts).
+---@return nil
+function M.list()
+  local ok_req, insights_conflicts = pcall(require, "insights.conflicts")
+  if not ok_req then
+    notify.error(
+      'conflict: insights.nvim is not installed -- install "StefanBartl/insights.nvim" to use :Git conflict list'
+    )
+    return
+  end
+  insights_conflicts.run_async({}, function(count)
+    if count == 0 then notify.info("conflict: no unresolved conflicts") end
+  end)
+end
+
+return M

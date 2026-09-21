@@ -31,51 +31,69 @@ end
 ---@return table[] routes
 local function build_routes()
   return {
-    -- conflict: buffer-local merge-conflict resolution (own implementation, phase 2)
+    -- conflict: buffer-local merge-conflict resolution (own implementation)
     {
       path = { "conflict", "ours" },
       desc = "Resolve the conflict under the cursor: keep ours",
-      run = stub("conflict ours"),
+      run = function()
+        require("gitsuite.features.conflict").choose("ours")
+      end,
     },
     {
       path = { "conflict", "theirs" },
       desc = "Resolve the conflict under the cursor: keep theirs",
-      run = stub("conflict theirs"),
+      run = function()
+        require("gitsuite.features.conflict").choose("theirs")
+      end,
     },
     {
       path = { "conflict", "both" },
       desc = "Resolve the conflict under the cursor: keep both",
-      run = stub("conflict both"),
+      run = function()
+        require("gitsuite.features.conflict").choose("both")
+      end,
     },
     {
       path = { "conflict", "base" },
       desc = "Resolve the conflict under the cursor: keep the common ancestor (diff3/zdiff3 only)",
-      run = stub("conflict base"),
+      run = function()
+        require("gitsuite.features.conflict").choose("base")
+      end,
     },
     {
       path = { "conflict", "none" },
       desc = "Resolve the conflict under the cursor: keep neither",
-      run = stub("conflict none"),
+      run = function()
+        require("gitsuite.features.conflict").choose("none")
+      end,
     },
     {
       path = { "conflict", "next" },
       desc = "Jump to the next conflict marker in this buffer",
-      run = stub("conflict next"),
+      run = function()
+        require("gitsuite.features.conflict").next()
+      end,
     },
     {
       path = { "conflict", "prev" },
       desc = "Jump to the previous conflict marker in this buffer",
-      run = stub("conflict prev"),
+      run = function()
+        require("gitsuite.features.conflict").prev()
+      end,
     },
     {
       path = { "conflict", "list" },
       desc = "List every file with unresolved conflicts in the quickfix list",
-      run = stub("conflict list"),
+      run = function()
+        require("gitsuite.features.conflict").list()
+      end,
     },
     {
       path = { "conflict", "refresh" },
       desc = "Re-scan the current buffer for conflict markers",
-      run = stub("conflict refresh"),
+      run = function()
+        require("gitsuite.features.conflict").refresh()
+      end,
     },
 
     -- hunk: delegated to the gitsigns adapter when available, else native (phase 4)
