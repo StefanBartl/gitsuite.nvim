@@ -51,8 +51,10 @@ local function resolve(bufnr)
     return nil, ("unrecognized host '%s' -- add it to browse.hosts in setup()"):format(remote.host)
   end
 
-  local info = git.info(dir)
-  local branch = info.branch or info.commit
+  -- current_ref, not info(dir): info() always pays for a third, unused
+  -- `git describe --tags --always` call on top of the two (branch/commit)
+  -- actually needed here.
+  local branch = git.current_ref(dir)
   if not branch then return nil, "could not determine a branch or commit to link against" end
 
   local rel_path = git.relative_path(basename, { dir = dir })

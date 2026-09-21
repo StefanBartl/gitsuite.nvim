@@ -88,7 +88,7 @@ function M.open()
     return
   end
 
-  vim.fn.jobstart(build_argv(repo_dir), {
+  local job_id = vim.fn.jobstart(build_argv(repo_dir), {
     term = true,
     cwd = repo_dir,
     on_exit = function()
@@ -99,6 +99,16 @@ function M.open()
       end)
     end,
   })
+  -- jobstart() returns 0 (invalid arguments) or -1 (not executable) on a
+  -- SYNCHRONOUS failure -- on_exit above never fires for either, so without
+  -- this check the float is left open around a dead terminal with no error
+  -- and no way to close it via the terminal-mode keymaps below (they are
+  -- still bound, but there is no shell to send <Esc> to).
+  if job_id <= 0 then
+    notify.error("ui lazygit: failed to start the lazygit process")
+    pcall(vim.api.nvim_win_close, winid, true)
+    return
+  end
 
   setup_terminal_keymaps(bufnr)
   vim.cmd("startinsert")

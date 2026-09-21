@@ -34,10 +34,16 @@ describe("gitsuite.features.blame", function()
     ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(vim.b[bufnr].gitsuite_blame_active)
 
+    -- The refresh is async (LUA-15: a blocking call on every CursorHold
+    -- would freeze the UI) -- the first extmark lands after the underlying
+    -- git job completes, not synchronously when toggle() returns.
     blame.toggle()
     ---@diagnostic disable-next-line: undefined-field
     assert.is_true(vim.b[bufnr].gitsuite_blame_active)
     local ns = vim.api.nvim_create_namespace("gitsuite_blame")
+    vim.wait(2000, function()
+      return #vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, {}) > 0
+    end)
     local marks = vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, {})
     ---@diagnostic disable-next-line: undefined-field
     assert.is_true(#marks > 0, "toggle() on must place at least one extmark")

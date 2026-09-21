@@ -23,8 +23,19 @@
 #   - nvr reads $NVIM directly from the environment (no shell expansion
 #     needed) and calls :GitsuiteLazygitBadd / :GitsuiteLazygitReplace in the
 #     parent Neovim.
-#   - Double quotes group the same way in cmd/PowerShell/bash/zsh, so this is
-#     shell- and platform-independent.
+#   - `{{ printf "Verb %s" .SelectedFile.Name | quote }}` composes the Ex
+#     command + filename into ONE string, then hands that whole string to
+#     lazygit's `quote` template function, which wraps it as a single
+#     platform-appropriate shell token. This is NOT cosmetic: a file name is
+#     repo-controlled data (a cloned/untrusted repo picks it), and lazygit's
+#     `command` is run through the OS shell -- an unescaped
+#     `{{.SelectedFile.Name}}` inside a hand-written "..." wrapper lets a
+#     crafted file name (backticks, `$(...)`, an embedded `"`) break out of
+#     that wrapper and execute arbitrary shell commands the moment `O`/`<C-o>`
+#     is pressed. `quote` must own the ENTIRE token, including the verb --
+#     nesting it inside a second, hand-written pair of quotes reopens the
+#     same hole, because a literal `"` surviving inside `quote`'s own
+#     escaping still terminates the OUTER hand-written quote early.
 #
 # Requirement: `nvr` (neovim-remote) must be on $PATH.
 #   pip install neovim-remote   (Arch: AUR neovim-remote, macOS: brew/pipx)
@@ -32,20 +43,20 @@ customCommands:
   - key: "O"
     context: "files"
     description: "Open file as background buffer in parent Neovim"
-    command: 'nvr --nostart -c "GitsuiteLazygitBadd {{.SelectedFile.Name}}"'
+    command: 'nvr --nostart -c {{ printf "GitsuiteLazygitBadd %s" .SelectedFile.Name | quote }}'
     output: none
   - key: "O"
     context: "commitFiles"
     description: "Open file as background buffer in parent Neovim"
-    command: 'nvr --nostart -c "GitsuiteLazygitBadd {{.SelectedCommitFile.Name}}"'
+    command: 'nvr --nostart -c {{ printf "GitsuiteLazygitBadd %s" .SelectedCommitFile.Name | quote }}'
     output: none
   - key: "<c-o>"
     context: "files"
     description: "Replace visible editor buffer with file in parent Neovim"
-    command: 'nvr --nostart -c "GitsuiteLazygitReplace {{.SelectedFile.Name}}"'
+    command: 'nvr --nostart -c {{ printf "GitsuiteLazygitReplace %s" .SelectedFile.Name | quote }}'
     output: none
   - key: "<c-o>"
     context: "commitFiles"
     description: "Replace visible editor buffer with file in parent Neovim"
-    command: 'nvr --nostart -c "GitsuiteLazygitReplace {{.SelectedCommitFile.Name}}"'
+    command: 'nvr --nostart -c {{ printf "GitsuiteLazygitReplace %s" .SelectedCommitFile.Name | quote }}'
     output: none

@@ -17,13 +17,18 @@ function M.repo()
 
   local branch = git.current_branch()
   local ahead, behind = git.ahead_behind()
-  local dirty = git.is_dirty()
+  -- status_porcelain(), not is_dirty(): same one git call either way, but
+  -- this reuses the richer function quickfix() below already needs, instead
+  -- of maintaining two separate "is anything changed" queries -- and it
+  -- lets the summary say how many files, not just yes/no.
+  local status = git.status_porcelain()
+  local dirty_count = status and vim.tbl_count(status) or 0
 
   local parts = { branch and ("branch: " .. branch) or "branch: (detached HEAD)" }
   if ahead or behind then
     parts[#parts + 1] = ("ahead=%s behind=%s"):format(tostring(ahead), tostring(behind))
   end
-  parts[#parts + 1] = dirty and "dirty" or "clean"
+  parts[#parts + 1] = (dirty_count > 0) and ("dirty (%d)"):format(dirty_count) or "clean"
 
   notify.info(table.concat(parts, "  "))
 end

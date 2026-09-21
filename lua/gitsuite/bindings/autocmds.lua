@@ -51,11 +51,19 @@ function M.register(cfg)
     group = group,
     desc = "[gitsuite] Scan for merge-conflict markers, highlight + bind if found",
     callback = function(args)
+      -- Cheap guard before the scan itself: conflict markers are a file-
+      -- buffer concept, never meaningful in a terminal/quickfix/help/scratch
+      -- buffer, so there is no reason to read + parse those at all.
+      if vim.bo[args.buf].buftype ~= "" then return end
+
+      -- One scan, not two: has_conflicts() + refresh() used to each
+      -- independently read and re-parse the whole buffer for any buffer
+      -- that DOES have a conflict. refresh() already returns the regions
+      -- it found, so that single call answers both "are there any" and
+      -- "highlight them" at once.
       local conflict = require("gitsuite.features.conflict")
-      if conflict.has_conflicts(args.buf) then
-        conflict.refresh(args.buf)
-        setup_buffer_mappings(args.buf)
-      end
+      local regions = conflict.refresh(args.buf)
+      if #regions > 0 then setup_buffer_mappings(args.buf) end
     end,
   })
 end

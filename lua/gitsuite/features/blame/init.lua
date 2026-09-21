@@ -78,6 +78,14 @@ function M.toggle()
   local group = vim.api.nvim_create_augroup(("gitsuite_blame_%d"):format(bufnr), { clear = true })
   vim.b[bufnr].gitsuite_blame_augroup = group
 
+  -- LUA-15/ERR-32: this refresh fires on every CursorHold/CursorHoldI/
+  -- BufEnter while blame is on -- a *blocking* git call here would freeze
+  -- the UI on every cursor move, so this uses the async primitive instead.
+  -- `generation` guards against the out-of-order result a slower, older
+  -- request could otherwise deliver after a newer one already rendered
+  -- (the cursor moves again before the first request returns).
+  local generation = 0
+
   local function refresh()
     -- LUA-13: buffer may have gone invalid between the autocmd firing and
     -- this callback running (CursorHold can be delayed by 'updatetime').
@@ -85,13 +93,19 @@ function M.toggle()
     local dir, path = file_location(bufnr)
     if not dir then return end
     local lnum = vim.api.nvim_win_get_cursor(0)[1]
-    vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
-    local entries = git.blame_porcelain(path, { dir = dir, first = lnum, last = lnum })
-    if not entries or #entries == 0 then return end
-    vim.api.nvim_buf_set_extmark(bufnr, NS, lnum - 1, -1, {
-      virt_text = { { "  " .. format_entry(entries[1]), "Comment" } },
-      virt_text_pos = "eol",
-    })
+
+    generation = generation + 1
+    local this_generation = generation
+    git.blame_porcelain_async(path, { dir = dir, first = lnum, last = lnum }, function(entries)
+      if this_generation ~= generation then return end
+      if not vim.api.nvim_buf_is_valid(bufnr) then return end
+      vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
+      if not entries or #entries == 0 then return end
+      vim.api.nvim_buf_set_extmark(bufnr, NS, lnum - 1, -1, {
+        virt_text = { { "  " .. format_entry(entries[1]), "Comment" } },
+        virt_text_pos = "eol",
+      })
+    end)
   end
 
   vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI", "BufEnter" }, {
