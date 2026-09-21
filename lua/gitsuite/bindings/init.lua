@@ -15,6 +15,12 @@ function M.register(cfg)
   require("gitsuite.bindings.keymaps").register(cfg)
 
   require("gitsuite.bindings.autocmds").register(cfg)
+
+  if cfg.features.ui then
+    -- GitsuiteLazygitBadd/GitsuiteLazygitReplace: lazygit's O/<C-o> nvr
+    -- targets, not part of the :Git tree (see features/ui/lazygit/init.lua).
+    require("gitsuite.features.ui.lazygit").setup()
+  end
 end
 
 return M

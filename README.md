@@ -1,7 +1,7 @@
-> **Alpha stage — active development.** This repository is being built out
-> feature by feature (see [docs/BINDINGS.md](docs/BINDINGS.md) for what
-> already works). Breaking changes are expected. Pin a commit if you depend
-> on it.
+> **Alpha stage — active development.** Every `:Git` subcommand is a real
+> implementation (see [docs/BINDINGS.md](docs/BINDINGS.md) for the full
+> list), but the surface is not frozen: breaking changes are still
+> possible. Pin a commit if you depend on it.
 
 # gitsuite.nvim
 
@@ -36,13 +36,15 @@ staging UI, diffview, the real `lazygit` TUI in a float).
 - [Bindings cheatsheet](docs/BINDINGS.md) — every `:Git` subcommand and
   keymap, generated from the same route tree that drives dispatch and
   completion.
+- [lazygit config.yml reference](docs/lazygit-config.yml) — the
+  `customCommands` that let lazygit's `O`/`<C-o>` open files in the parent
+  Neovim from inside the `:Git ui lazygit` float.
 
 `:help gitsuite` is the same reference inside the editor.
 
 More documentation (requirements, installation, quickstart, full
-configuration reference, architecture) lands as the corresponding features
-do — see the cheatsheet above for what is implemented today versus what is
-still a stub.
+configuration reference, architecture) lands next — every subcommand works
+today, but the doc set beyond the two pages above is still catching up.
 
 ---
 

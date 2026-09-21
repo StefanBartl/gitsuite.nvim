@@ -57,3 +57,11 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 | `:Git ui diffview` | Open diffview |
 | `:Git ui lazygit` | Open lazygit in a floating terminal |
 | `:Git ui neogit` | Open neogit |
+
+## Internal (not typed by hand)
+
+`GitsuiteLazygitBadd`/`GitsuiteLazygitReplace` are lazygit's `O`/`<C-o>`
+custom-command targets, called via `nvr` from inside lazygit's own process
+-- see [docs/lazygit-config.yml](lazygit-config.yml). Registered directly
+via `lib.nvim.bindings.usercmd`, outside the `:Git` tree and this generated
+table, since nothing about them is ever typed by a person.

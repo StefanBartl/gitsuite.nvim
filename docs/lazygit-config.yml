@@ -1,0 +1,51 @@
+# =============================================================================
+# REFERENCE COPY of lazygit's config -- does NOT belong here, copy it into
+# lazygit's own config directory for your OS:
+#
+#   Windows : %LOCALAPPDATA%\lazygit\config.yml
+#   Linux   : ~/.config/lazygit/config.yml          ($XDG_CONFIG_HOME/lazygit)
+#   macOS   : ~/Library/Application Support/lazygit/config.yml
+#             (or ~/.config/lazygit/config.yml if $XDG_CONFIG_HOME is set)
+#
+# Print the correct path on any system with:
+#   lazygit --print-config-dir     (or  lazygit -cd)
+# =============================================================================
+
+# customCommands: open files selected in lazygit in the Neovim instance
+# lazygit was started from.
+#   O      -> as a background buffer (buffer list +1, no focus/window change)
+#   <C-o>  -> replaces the file currently visible in the editor (focus-safe,
+#             lazygit stays open)
+#
+# Mechanism (cross-platform):
+#   - Neovim sets $NVIM (its RPC server address) for terminal subprocesses --
+#     including the lazygit float gitsuite.nvim opens (:Git ui lazygit).
+#   - nvr reads $NVIM directly from the environment (no shell expansion
+#     needed) and calls :GitsuiteLazygitBadd / :GitsuiteLazygitReplace in the
+#     parent Neovim.
+#   - Double quotes group the same way in cmd/PowerShell/bash/zsh, so this is
+#     shell- and platform-independent.
+#
+# Requirement: `nvr` (neovim-remote) must be on $PATH.
+#   pip install neovim-remote   (Arch: AUR neovim-remote, macOS: brew/pipx)
+customCommands:
+  - key: "O"
+    context: "files"
+    description: "Open file as background buffer in parent Neovim"
+    command: 'nvr --nostart -c "GitsuiteLazygitBadd {{.SelectedFile.Name}}"'
+    output: none
+  - key: "O"
+    context: "commitFiles"
+    description: "Open file as background buffer in parent Neovim"
+    command: 'nvr --nostart -c "GitsuiteLazygitBadd {{.SelectedCommitFile.Name}}"'
+    output: none
+  - key: "<c-o>"
+    context: "files"
+    description: "Replace visible editor buffer with file in parent Neovim"
+    command: 'nvr --nostart -c "GitsuiteLazygitReplace {{.SelectedFile.Name}}"'
+    output: none
+  - key: "<c-o>"
+    context: "commitFiles"
+    description: "Replace visible editor buffer with file in parent Neovim"
+    command: 'nvr --nostart -c "GitsuiteLazygitReplace {{.SelectedCommitFile.Name}}"'
+    output: none

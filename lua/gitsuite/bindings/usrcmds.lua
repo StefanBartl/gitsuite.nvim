@@ -4,28 +4,15 @@
 --- dispatch, `<Tab>` completion and generated docs at once -- see
 --- `docs/BINDINGS.md`.
 ---
---- Every route currently in the tree covers a scope from the old, scattered
---- surface this plugin replaces (git-conflict.nvim's nine commands,
---- vim-fugitive's `:Git blame`, vim-rhubarb's `:Gbrowse`, diffview's/neogit's/
---- lazygit's launchers -- see gitsuite.nvim's README). `run` bodies land
---- feature by feature; until a feature module exists, its route calls the
---- shared `stub()` so the full command surface is typeable and completable
---- from day one, matching every historical entry point onto exactly one name.
+--- Every route covers a scope from the old, scattered surface this plugin
+--- replaces (git-conflict.nvim's nine commands, vim-fugitive's
+--- `:Git blame`, vim-rhubarb's `:Gbrowse`, diffview's/neogit's/lazygit's
+--- launchers -- see gitsuite.nvim's README): every historical entry point
+--- onto exactly one name.
 
 local composer = require("lib.nvim.bindings.usercmd.composer")
-local notify = require("gitsuite.util.notify")
 
 local M = {}
-
----@internal
----Placeholder for a route whose feature has not landed yet.
----@param label string human-readable route description, e.g. "conflict ours"
----@return fun(ctx: table)
-local function stub(label)
-  return function(_)
-    notify.info(("'%s' is not implemented yet."):format(label))
-  end
-end
 
 ---@internal
 ---@return table[] routes
@@ -247,14 +234,28 @@ local function build_routes()
       end,
     },
 
-    -- ui: TUI launchers -- lazygit float owned by gitsuite, neogit/diffview are thin adapters (phase 3)
+    -- ui: TUI launchers -- lazygit float owned by gitsuite, neogit/diffview are thin adapters
     {
       path = { "ui", "lazygit" },
       desc = "Open lazygit in a floating terminal",
-      run = stub("ui lazygit"),
+      run = function()
+        require("gitsuite.features.ui").lazygit()
+      end,
     },
-    { path = { "ui", "neogit" }, desc = "Open neogit", run = stub("ui neogit") },
-    { path = { "ui", "diffview" }, desc = "Open diffview", run = stub("ui diffview") },
+    {
+      path = { "ui", "neogit" },
+      desc = "Open neogit",
+      run = function()
+        require("gitsuite.features.ui").neogit()
+      end,
+    },
+    {
+      path = { "ui", "diffview" },
+      desc = "Open diffview",
+      run = function()
+        require("gitsuite.features.ui").diffview()
+      end,
+    },
 
     -- status: lib.nvim.git.status_porcelain
     {
