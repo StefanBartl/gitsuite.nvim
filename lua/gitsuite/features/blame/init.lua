@@ -120,6 +120,11 @@ end
 function M.toggle()
   local bufnr = vim.api.nvim_get_current_buf()
 
+  -- Bumped on every toggle, on or off: the one thing that survives an
+  -- async refresh() request outliving the "on" session that started it
+  -- (ERR-32-adjacent -- see below).
+  vim.b[bufnr].gitsuite_blame_epoch = (vim.b[bufnr].gitsuite_blame_epoch or 0) + 1
+
   if vim.b[bufnr].gitsuite_blame_active then
     vim.b[bufnr].gitsuite_blame_active = nil
     local group = vim.b[bufnr].gitsuite_blame_augroup
@@ -132,6 +137,7 @@ function M.toggle()
   end
 
   vim.b[bufnr].gitsuite_blame_active = true
+  local epoch = vim.b[bufnr].gitsuite_blame_epoch
   local group = vim.api.nvim_create_augroup(("gitsuite_blame_%d"):format(bufnr), { clear = true })
   vim.b[bufnr].gitsuite_blame_augroup = group
 
@@ -140,7 +146,17 @@ function M.toggle()
   -- the UI on every cursor move, so this uses the async primitive instead.
   -- `generation` guards against the out-of-order result a slower, older
   -- request could otherwise deliver after a newer one already rendered
-  -- (the cursor moves again before the first request returns).
+  -- (the cursor moves again before the first request returns) -- but it is
+  -- local to *this* "on" session and cannot see past it: a request kicked
+  -- off just before toggling off (deleting the augroup does not cancel the
+  -- in-flight git process) used to land its extmark anyway once it finally
+  -- returned, minutes later if the user left it off, at whatever line the
+  -- cursor happened to be on when that *first* request started -- a single
+  -- permanently "stuck" blame line no further toggle ever cleared, because
+  -- nothing was listening for CursorHold any more to clear it again.
+  -- `epoch`, bumped by *every* toggle() call (on the buffer, not this
+  -- closure), is what a request from a since-ended session can still see
+  -- and compare against.
   local generation = 0
 
   local function refresh()
@@ -156,6 +172,7 @@ function M.toggle()
     M.for_location(dir, path, lnum, function(entry)
       if this_generation ~= generation then return end
       if not vim.api.nvim_buf_is_valid(bufnr) then return end
+      if vim.b[bufnr].gitsuite_blame_epoch ~= epoch then return end
       vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
       if not entry then return end
       vim.api.nvim_buf_set_extmark(bufnr, NS, lnum - 1, -1, {

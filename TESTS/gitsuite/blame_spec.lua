@@ -56,6 +56,36 @@ describe("gitsuite.features.blame", function()
     assert.equals(0, #marks, "toggle() off must clear its own extmarks")
   end)
 
+  it(
+    "toggling off right after on does not let the in-flight async result "
+      .. "resurrect a ghost extmark at the original line",
+    function()
+      -- Deleting the augroup on toggle-off does not cancel the git process
+      -- refresh() already kicked off: that request's callback used to check
+      -- only its own "on session"-local `generation`, which nothing had
+      -- incremented since (no more CursorHold fired once toggling off tore
+      -- the augroup down) -- so it still matched, and the callback placed
+      -- its extmark anyway once it finally returned, permanently, at
+      -- whatever line the cursor was on when *this* toggle() call started.
+      local ns = vim.api.nvim_create_namespace("gitsuite_blame")
+
+      blame.toggle() -- on: kicks off an async blame lookup for this line
+      blame.toggle() -- off, almost certainly before that lookup returns
+
+      -- Give the async git process every chance to finish and, if the race
+      -- were still there, place its now-stale extmark.
+      vim.wait(1500)
+
+      local marks = vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, {})
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(
+        0,
+        #marks,
+        "a blame result from before toggle-off must not add an extmark after it"
+      )
+    end
+  )
+
   it("full() opens a synced split with one line per source line", function()
     local src_win = vim.api.nvim_get_current_win()
     local expected = #vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
