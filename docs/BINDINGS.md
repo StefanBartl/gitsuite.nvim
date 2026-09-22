@@ -58,9 +58,12 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 | `:Git hunk stage` | Stage the hunk under the cursor |
 | `:Git hunk stage-buffer` | Stage every hunk in the current buffer |
 | `:Git hunk toggle-deleted` | Toggle showing deleted lines inline |
+| `:Git status lint` | Pre-commit gate: LSP diagnostics for the changed files that already have a loaded buffer |
 | `:Git status quickfix` | Export repo status to the quickfix list |
 | `:Git status relink` | Fix references (Markdown links, etc.) to files git status reports as renamed |
 | `:Git status repo` | Show repo status (branch, ahead/behind, dirty) |
+| `:Git status spell` | Pre-commit gate: misspellings in the changed files' on-disk content |
+| `:Git status todos` | Pre-commit gate: TODO/FIXME/... annotations in the changed files only |
 | `:Git ui diffview close` | Close the current diffview |
 | `:Git ui diffview open` | Open diffview |
 | `:Git ui lazygit [{dir:DIR}]` | Open lazygit in a floating terminal (optionally for the repo containing <dir>) |

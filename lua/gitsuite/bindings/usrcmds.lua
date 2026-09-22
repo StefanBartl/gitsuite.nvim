@@ -301,6 +301,27 @@ local function build_routes()
         require("gitsuite.features.status.relink").relink()
       end,
     },
+    {
+      path = { "status", "todos" },
+      desc = "Pre-commit gate: TODO/FIXME/... annotations in the changed files only",
+      run = function()
+        require("gitsuite.features.status.gates").todos()
+      end,
+    },
+    {
+      path = { "status", "lint" },
+      desc = "Pre-commit gate: LSP diagnostics for the changed files that already have a loaded buffer",
+      run = function()
+        require("gitsuite.features.status.gates").lint()
+      end,
+    },
+    {
+      path = { "status", "spell" },
+      desc = "Pre-commit gate: misspellings in the changed files' on-disk content",
+      run = function()
+        require("gitsuite.features.status.gates").spell()
+      end,
+    },
   }
 end
 
