@@ -7,6 +7,11 @@
 --- original's `vim.fn.systemlist` -- gitsuite.nvim already treats lib.nvim
 --- as a hard dependency, so there is no reason not to.
 ---
+--- Since GS-15, `git_clickable`'s left click delegates back to `M.switch()`
+--- here when gitsuite.nvim is loaded (`ui.util.soft_require`, its own
+--- `pcall`) -- soft in both directions, never a hard dependency either way
+--- (K-5c): this module has no knowledge of ui.nvim at all.
+---
 --- Native: no adapter needed, only `git` on `$PATH`.
 
 local git = require("lib.nvim.git")
@@ -48,10 +53,13 @@ end
 ---@param current string|nil
 local function checkout(choice, current)
   if not choice or choice == current then return end
-  local ok, out =
-    require("lib.nvim.cross.run_argv").run_blocking_captured({ "git", "checkout", choice })
+  -- git.checkout (GS-15) uses run_blocking, not run_blocking_captured -- the
+  -- old code here only ever saw stdout on failure (empty for a checkout
+  -- error, which git writes to stderr), so this actually gains git's real
+  -- reason instead of losing it.
+  local ok, err = git.checkout(choice)
   if not ok then
-    notify.error(("branch: git checkout %s failed: %s"):format(choice, out))
+    notify.error(("branch: git checkout %s failed: %s"):format(choice, err))
     return
   end
   notify.info("branch: switched to " .. choice)
