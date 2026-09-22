@@ -1,6 +1,6 @@
 ---@module 'gitsuite.features.hunk'
---- Hunk actions, delegated to the gitsigns adapter (Schicht 3: gitsigns'
---- hunk engine is years of edge-case work, never nachbauen). There is no
+--- Hunk actions, delegated to the gitsigns adapter (gitsigns' hunk engine
+--- is years of edge-case work, never reimplemented). There is no
 --- native fallback for stage/reset/toggle-deleted -- that would mean
 --- reimplementing gitsigns' git-index writes and deleted-line tracking.
 --- `preview` alone degrades gracefully to `:Git diff head` (diff.nvim)

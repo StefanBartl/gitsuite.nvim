@@ -1,8 +1,8 @@
 ---@module 'gitsuite.features.ui'
 --- `:Git ui lazygit|neogit|diffview {open|close}` -- TUI launchers. lazygit
 --- is gitsuite.nvim's own (`features/ui/lazygit/`, a float + the real
---- `lazygit` binary); neogit and diffview are thin adapters (Schicht 3,
---- never nachbauen). diffview's file-history is not exposed here -- moved
+--- `lazygit` binary); neogit and diffview are thin adapters, never
+--- reimplemented. diffview's file-history is not exposed here -- moved
 --- onto diff.nvim's own `:Git diff history` (GS-08).
 ---
 --- `diffview {open|close}` never hard-requires sindrets/diffview.nvim

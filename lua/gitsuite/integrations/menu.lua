@@ -22,7 +22,7 @@
 --- replaces did -- a renamed `commands.git` (see `bindings/keymaps.lua`)
 --- never desyncs this from it. Only the entries with no fallback at all
 --- (stage/reset a hunk or the whole buffer, toggle deleted lines -- gitsigns'
---- own hunk engine, Schicht 3, never nachgebaut) gate on gitsigns being
+--- own hunk engine, never reimplemented) gate on gitsigns being
 --- loaded: blame is gitsuite's own native implementation and diff is
 --- diff.nvim, gitsuite's other hard dependency, so both stay offered either
 --- way -- the whole point of GS-09 (previously the entire section, blame and

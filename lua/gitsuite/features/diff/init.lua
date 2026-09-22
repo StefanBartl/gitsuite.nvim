@@ -2,7 +2,7 @@
 --- `:Git diff head|last|rev|split|history` -- a thin alias onto diff.nvim's
 --- own public Lua API (`require("diff")`), not string-built `vim.cmd`
 --- invocations: diff.nvim already owns every diff view in this ecosystem
---- (Schicht 3, never nachbauen), so this feature is deliberately a few
+--- and is never reimplemented, so this feature is deliberately a few
 --- lines that hand off, not a reimplementation.
 
 local M = {}

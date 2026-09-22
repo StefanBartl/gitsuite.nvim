@@ -83,7 +83,7 @@ local function build_routes()
       end,
     },
 
-    -- hunk: delegated to the gitsigns adapter (Schicht 3, never nachbauen)
+    -- hunk: delegated to the gitsigns adapter (never reimplemented)
     {
       path = { "hunk", "stage" },
       desc = "Stage the hunk under the cursor",
