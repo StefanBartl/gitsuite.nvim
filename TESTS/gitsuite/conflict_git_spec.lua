@@ -378,7 +378,7 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
     do
       local style = "merge"
       it(
-        "merge: a conflict that CONTAINS the underline is reported as ambiguous, never guessed",
+        "merge: a conflict that CONTAINS the underline is reported as ambiguous, and asks which `=======` is real (GS-28) instead of guessing",
         function()
           local fixture = setext
           local path = make_conflict(fixture, style, "\n", false)
@@ -396,20 +396,34 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
           ---@diagnostic disable-next-line: undefined-field
           assert.is_true(conflict.has_conflicts(bufnr), "keymaps and the statusline still see it")
 
+          -- Cancelling the prompt each time: this test is about every
+          -- candidate being offered and a declined prompt never touching the
+          -- buffer, not about which resolution a specific pick produces
+          -- (conflict_spec.lua's synthetic-buffer tests already cover that
+          -- in detail). `vim.ui.select` has no headless auto-dismiss, so it
+          -- must always be stubbed before `choose()` can reach it.
           for _, keep in ipairs({ "ours", "theirs", "both", "none", "base" }) do
-            notices = {}
+            local offered
+            local original_select = vim.ui.select
+            vim.ui.select = function(items, _opts, on_choice)
+              offered = items
+              on_choice(nil)
+            end
             vim.api.nvim_win_set_cursor(0, { r.start_line + 1, 0 })
             conflict.choose(keep)
+            vim.ui.select = original_select
+
+            ---@diagnostic disable-next-line: undefined-field
+            assert.same(
+              r.separators,
+              offered,
+              ("choose('%s'): every candidate separator is offered"):format(keep)
+            )
             ---@diagnostic disable-next-line: undefined-field
             assert.equals(
               conflicted,
               table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n") .. "\n",
-              ("choose('%s') must leave the buffer untouched"):format(keep)
-            )
-            ---@diagnostic disable-next-line: undefined-field
-            assert.is_true(
-              #notices == 1 and notices[1].msg:lower():find("ambiguous", 1, true) ~= nil,
-              "exactly one message, and it says why"
+              ("choose('%s'): cancelling the prompt must leave the buffer untouched"):format(keep)
             )
           end
         end
