@@ -62,14 +62,20 @@ function M.stage()
   require("gitsuite.adapter.gitsigns").stage_hunk(on_status_changed(dir))
 end
 
+---Reset the hunk at the cursor to its `HEAD`/index version.
+---
+---Does not fire `GitsuiteStatusChanged`: gitsigns' `reset_hunk` only rewrites
+---the buffer's in-memory lines (`util.set_lines`) -- it never touches the
+---git index or the file on disk, so `git status` is unchanged the moment
+---this completes. Firing the event here would tell a consumer to re-check a
+---status that has not actually moved.
 ---@return nil
 function M.reset()
   if not gitsigns_available() then
     unavailable("reset")
     return
   end
-  local dir = repo_root_of(vim.api.nvim_get_current_buf())
-  require("gitsuite.adapter.gitsigns").reset_hunk(on_status_changed(dir))
+  require("gitsuite.adapter.gitsigns").reset_hunk()
 end
 
 ---@return nil
@@ -92,15 +98,15 @@ function M.stage_buffer()
   require("gitsuite.adapter.gitsigns").stage_buffer(on_status_changed(dir))
 end
 
+---Reset every hunk in the buffer to `HEAD`/index. Does not fire
+---`GitsuiteStatusChanged` -- see `M.reset()`'s docstring, same reason.
 ---@return nil
 function M.reset_buffer()
   if not gitsigns_available() then
     unavailable("reset-buffer")
     return
   end
-  local dir = repo_root_of(vim.api.nvim_get_current_buf())
   require("gitsuite.adapter.gitsigns").reset_buffer()
-  if dir then require("gitsuite.events").status_changed(dir) end
 end
 
 ---@return nil

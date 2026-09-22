@@ -62,6 +62,9 @@
 ---@class GitSuite.Event.ConflictsResolved
 ---@field bufnr integer
 
---- `GitsuiteStatusChanged` -- after a hunk stage/reset actually wrote to git.
+--- `GitsuiteStatusChanged` -- after a hunk stage (single hunk or whole
+--- buffer) actually writes to the git index. Not fired for a hunk reset:
+--- gitsigns' reset only rewrites the buffer's in-memory lines, never the
+--- index or the file on disk, so `git status` has not moved.
 ---@class GitSuite.Event.StatusChanged
 ---@field dir string  Repo root the change happened in.

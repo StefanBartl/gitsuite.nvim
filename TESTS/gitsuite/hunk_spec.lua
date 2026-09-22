@@ -88,7 +88,8 @@ describe("gitsuite.features.hunk", function()
 
     local expected_dir = git.repo_root()
 
-    local async_actions = { "stage", "reset", "stage_buffer" }
+    -- Only stage writes to the git index -- reset (see below) never does.
+    local async_actions = { "stage", "stage_buffer" }
     for _, action in ipairs(async_actions) do
       it(
         ("%s() fires with {dir} once gitsigns' callback reports success"):format(action),
@@ -112,15 +113,21 @@ describe("gitsuite.features.hunk", function()
       end)
     end
 
-    it("reset_buffer() fires with {dir} (gitsigns' own reset_buffer is synchronous)", function()
-      package.loaded["gitsigns"] = fake_gitsigns(nil)
-      hunk.reset_buffer()
+    -- reset()/reset_buffer() never fire GitsuiteStatusChanged: gitsigns'
+    -- reset only rewrites the buffer's in-memory lines (found in a
+    -- bug/security/performance review of the commit that introduced this
+    -- event) -- it never touches the git index or the file on disk, so
+    -- `git status` has not moved when either of these returns.
+    local reset_actions = { "reset", "reset_buffer" }
+    for _, action in ipairs(reset_actions) do
+      it(("%s() does not fire GitsuiteStatusChanged"):format(action), function()
+        package.loaded["gitsigns"] = fake_gitsigns(nil)
+        hunk[action]()
 
-      ---@diagnostic disable-next-line: undefined-field
-      assert.is_not_nil(captured)
-      ---@diagnostic disable-next-line: undefined-field
-      assert.equals(expected_dir, captured.dir)
-    end)
+        ---@diagnostic disable-next-line: undefined-field
+        assert.is_nil(captured)
+      end)
+    end
 
     it("toggle_deleted() does not fire GitsuiteStatusChanged", function()
       package.loaded["gitsigns"] = fake_gitsigns(nil)

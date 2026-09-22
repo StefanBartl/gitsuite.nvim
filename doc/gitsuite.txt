@@ -142,9 +142,11 @@ ran in, `branch` the ref now checked out.
 every `choose()` call -- only once the buffer has none left.
 
                                                         *GitsuiteStatusChanged*
-`GitsuiteStatusChanged`  `{ dir }` -- after a hunk stage/reset (single hunk or
-whole buffer) actually writes to git, fired from gitsigns' own completion
-callback rather than merely after the (async) action was requested.
+`GitsuiteStatusChanged`  `{ dir }` -- after a hunk stage (single hunk or whole
+buffer) actually writes to the git index, fired from gitsigns' own
+completion callback rather than merely after the (async) action was
+requested. Not fired for a hunk reset: gitsigns' reset only rewrites the
+buffer's in-memory lines, never the index or the file on disk.
 
 ==============================================================================
 8. STATUSLINE                                                *gitsuite-statusline*
