@@ -25,6 +25,52 @@ describe("gitsuite.features.conflict", function()
     pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
   end)
 
+  describe("fenced-block filtering (color_my_ascii.nvim, optional)", function()
+    local real_fences
+
+    before_each(function()
+      real_fences = package.loaded["color_my_ascii.api.fences"]
+    end)
+
+    after_each(function()
+      package.loaded["color_my_ascii.api.fences"] = real_fences
+    end)
+
+    it("without color_my_ascii.nvim: a fenced-looking conflict still counts", function()
+      package.loaded["color_my_ascii.api.fences"] = nil
+      set_lines({ "<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> branch" })
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_true(conflict.has_conflicts(bufnr))
+    end)
+
+    it("with a faked color_my_ascii.nvim: markers inside a fence are not a conflict", function()
+      package.loaded["color_my_ascii.api.fences"] = {
+        block_at = function(_, row)
+          -- A fenced block covering rows 0..4 (the whole example below).
+          if row >= 0 and row <= 4 then return { close_row = 4 } end
+          return nil
+        end,
+      }
+      set_lines({ "<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> branch" })
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_false(conflict.has_conflicts(bufnr))
+    end)
+
+    it(
+      "with a faked color_my_ascii.nvim: a real conflict outside any fence still counts",
+      function()
+        package.loaded["color_my_ascii.api.fences"] = {
+          block_at = function()
+            return nil
+          end,
+        }
+        set_lines({ "<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> branch" })
+        ---@diagnostic disable-next-line: undefined-field
+        assert.is_true(conflict.has_conflicts(bufnr))
+      end
+    )
+  end)
+
   it("has_conflicts() is false for an ordinary buffer, true once markers are added", function()
     set_lines({ "just", "ordinary", "lines" })
     ---@diagnostic disable-next-line: undefined-field
@@ -332,6 +378,68 @@ describe("gitsuite.features.conflict", function()
 
       ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(captured)
+    end)
+  end)
+
+  describe("list() -- repo-wide, delegates to insights.nvim.conflicts", function()
+    local real_insights_conflicts
+
+    before_each(function()
+      real_insights_conflicts = package.loaded["insights.conflicts"]
+    end)
+
+    after_each(function()
+      package.loaded["insights.conflicts"] = real_insights_conflicts
+    end)
+
+    it("without insights.nvim: notifies and calls on_done(0) -- fails open", function()
+      package.loaded["insights.conflicts"] = nil
+      local orig_preload = package.preload["insights.conflicts"]
+      package.preload["insights.conflicts"] = function()
+        error("no insights.nvim here")
+      end
+
+      local seen = {}
+      local original_notify = vim.notify
+      vim.notify = function(msg)
+        seen[#seen + 1] = tostring(msg)
+      end
+      local done_count
+      conflict.list(function(count)
+        done_count = count
+      end)
+      vim.notify = original_notify
+      package.preload["insights.conflicts"] = orig_preload
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(0, done_count)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_truthy(seen[1] and seen[1]:find("insights.nvim is not installed", 1, true))
+    end)
+
+    it("with a faked insights.nvim: forwards run_async's count to on_done", function()
+      package.loaded["insights.conflicts"] = {
+        run_async = function(_, on_done)
+          on_done(3)
+        end,
+      }
+      local done_count
+      conflict.list(function(count)
+        done_count = count
+      end)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(3, done_count)
+    end)
+
+    it("with a faked insights.nvim: on_done is optional", function()
+      package.loaded["insights.conflicts"] = {
+        run_async = function(_, on_done)
+          on_done(0)
+        end,
+      }
+      local ok = pcall(conflict.list)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_true(ok)
     end)
   end)
 end)

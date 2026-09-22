@@ -17,12 +17,31 @@ local M = {}
 
 local NS = vim.api.nvim_create_namespace("gitsuite_conflict")
 
+---@internal
+--- Drop marker-shaped regions that sit entirely inside a fenced code block
+--- (color_my_ascii.nvim, optional): a fence showing conflict markers as a
+--- documentation example is not an actual unresolved merge conflict.
+---@param bufnr integer
+---@param regions GitSuite.Conflict.Region[]
+---@return GitSuite.Conflict.Region[]
+local function filter_fenced(bufnr, regions)
+  local ok, fences = pcall(require, "color_my_ascii.api.fences")
+  if not ok then return regions end
+
+  local out = {}
+  for _, r in ipairs(regions) do
+    local block = fences.block_at(bufnr, r.start_line, { include_fence = true })
+    if not (block and r.end_line <= block.close_row) then out[#out + 1] = r end
+  end
+  return out
+end
+
 ---Scan a buffer for conflict regions. Pure read, no side effects.
 ---@param bufnr integer
 ---@return GitSuite.Conflict.Region[]
 function M.scan(bufnr)
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  return parser.parse(lines)
+  return filter_fenced(bufnr, parser.parse(lines))
 end
 
 ---Whether a buffer currently contains at least one conflict region.
@@ -197,17 +216,22 @@ end
 
 ---List every file with unresolved conflicts in the quickfix list
 ---(repo-wide, delegates to insights.nvim.conflicts).
+---@param on_done? fun(count: integer) Called once the scan is applied -- 0
+---when insights.nvim is not installed (a caller using this as a preflight
+---gate fails open rather than blocking on a missing optional dependency).
 ---@return nil
-function M.list()
+function M.list(on_done)
   local ok_req, insights_conflicts = pcall(require, "insights.conflicts")
   if not ok_req then
     notify.error(
       'conflict: insights.nvim is not installed -- install "StefanBartl/insights.nvim" to use :Git conflict list'
     )
+    if on_done then on_done(0) end
     return
   end
   insights_conflicts.run_async({}, function(count)
     if count == 0 then notify.info("conflict: no unresolved conflicts") end
+    if on_done then on_done(count) end
   end)
 end
 

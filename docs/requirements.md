@@ -19,6 +19,8 @@ narrower feature set rather than a crash:
 | `nvr` (neovim-remote, `pip install neovim-remote`) | Lets `:Git ui lazygit`'s `O`/`<C-o>` open a file in the *parent* Neovim from inside the float — see [docs/lazygit-config.yml](lazygit-config.yml). Without it, lazygit still opens; those two keys just don't reach back into the editor |
 | [open.nvim](https://github.com/StefanBartl/open.nvim) | Backs `:Git browse *` (opening a file/selection/repo on its web host) — without it, `:Git browse *` reports a clear error; every other feature family is unaffected |
 | [pickers.nvim](https://github.com/StefanBartl/pickers.nvim) | Gives `:Git branch switch` a real picker (snacks/telescope/fzf-lua, whichever is installed) with preview — without it, the picker is a bare `vim.ui.select` over the branch list |
+| [insights.nvim](https://github.com/StefanBartl/insights.nvim) | Backs `:Git conflict list` (repo-wide unresolved-conflict scan in the quickfix list) — without it, that one action reports "not installed"; buffer-local scanning (`has_conflicts()`, `choose()`, `next()`/`prev()`) is unaffected |
+| [color_my_ascii.nvim](https://github.com/StefanBartl/color_my_ascii.nvim) | Filters conflict-marker-shaped text inside a fenced code block (a Markdown documentation example) out of the buffer scan — without it, such an example is treated as one more conflict to resolve |
 
 None of the optional row's absence is reported by `:checkhealth gitsuite` as
 a warning — see [health.md](health.md) for exactly what is and isn't
