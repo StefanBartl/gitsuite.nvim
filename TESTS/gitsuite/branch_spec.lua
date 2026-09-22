@@ -66,4 +66,46 @@ describe("gitsuite.features.branch", function()
     ---@diagnostic disable-next-line: undefined-field
     assert.equals(original_branch, git.current_branch())
   end)
+
+  it(
+    "switch() checks out via the picker when gitsuite.integrations.pickers_nvim is available",
+    function()
+      -- pickers.nvim is not a sibling checkout in this test environment (see
+      -- pickers_nvim_spec.lua), so stub the integration module itself to
+      -- verify switch() prefers it over vim.ui.select and wires its
+      -- on_confirm callback through to a real checkout.
+      local git = require("lib.nvim.git")
+      local original_branch = git.current_branch()
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_not_nil(original_branch)
+
+      package.loaded["gitsuite.integrations.pickers_nvim"] = {
+        available = function()
+          return true
+        end,
+        branch_picker = function(on_confirm)
+          on_confirm(original_branch) -- re-select the current branch: a no-op checkout
+          return true
+        end,
+      }
+
+      local select_called = false
+      local original_select = vim.ui.select
+      vim.ui.select = function(_, _, _on_choice)
+        select_called = true
+      end
+
+      local ok = pcall(branch.switch)
+
+      vim.ui.select = original_select
+      package.loaded["gitsuite.integrations.pickers_nvim"] = nil
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_true(ok)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_false(select_called)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(original_branch, git.current_branch())
+    end
+  )
 end)
