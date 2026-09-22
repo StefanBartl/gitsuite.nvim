@@ -33,7 +33,7 @@ One line per adapter (`gitsigns`, `diffview`, `neogit`, `lazygit`,
 
 | Line | Means |
 | --- | --- |
-| ✅ `plugin loaded (vim.g.loaded_gitsuite = true)` | `:Git` has run at least once, or `setup()` was called directly |
+| ✅ `plugin loaded (vim.g.loaded_gitsuite = 1)` | `:Git` has run at least once, or `setup()` was called directly |
 | ℹ️ `plugin guard not set yet (...)` | Normal under `cmd = "Git"` lazy-loading before the first invocation — not a problem |
 
 ## gitsuite: setup() options

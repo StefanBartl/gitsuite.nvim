@@ -27,8 +27,9 @@ browse), and a thin adapter where an external plugin has already done years
 of edge-case work (gitsigns' hunk engine, neogit's staging UI, diffview, the
 real `lazygit` TUI run in a floating terminal).
 
-This is an alpha-stage, actively-growing plugin -- see docs/BINDINGS.md for
-which subcommands are implemented versus still a stub.
+This is an alpha-stage, actively-growing plugin -- every subcommand listed
+in docs/BINDINGS.md is a real implementation, but the surface is not
+frozen yet: breaking changes are still possible.
 
 ==============================================================================
 2. REQUIREMENTS                                          *gitsuite-requirements*
