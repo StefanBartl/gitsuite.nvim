@@ -58,12 +58,18 @@ sister plugin reacting to "the buffer is conflict-free again" should not
 fire once per region). An event-only cache would keep reporting a stale
 count between "resolved one of three" and either "resolved the last one" or
 the next save. `changedtick` has no such gap: it bumps on every real edit,
-`status()` just checks it lazily on the next call it receives, and that is
-still "no process in the render path" -- no autocmd needs registering at
-all. `conflict.refresh()`'s own extmark/highlight work never bumps
-`changedtick` (no text is edited), so a plain `:Git conflict refresh` after
-an external buffer reload is still covered correctly -- the reload itself is
-the edit that bumps it.
+and `status()` just checks it lazily on the next call it receives, which is
+still "no process in the render path". `conflict.refresh()`'s own
+extmark/highlight work never bumps `changedtick` (no text is edited), so a
+plain `:Git conflict refresh` after an external buffer reload is still
+covered correctly -- the reload itself is the edit that bumps it.
+
+The module does register one autocmd, `BufDelete`/`BufWipeout`, purely to
+drop a deleted buffer's cache entry (`M.invalidate(bufnr)` is the same call,
+public for callers that already know a buffer is gone) -- without it the
+per-buffer cache would grow for the rest of the session, and never help
+correctness on its own: `changedtick` already keeps a *live* buffer's entry
+right, this only keeps a *dead* one from sitting there.
 
 ## What it reports, and what it does not
 

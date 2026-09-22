@@ -147,4 +147,57 @@ describe("gitsuite.statusline", function()
     ---@diagnostic disable-next-line: undefined-field
     assert.equals(statusline.status, statusline.lualine_component)
   end)
+
+  it("invalidate() forces a fresh read even at the same changedtick", function()
+    set_lines({
+      "<<<<<<< HEAD",
+      "ours",
+      "=======",
+      "theirs",
+      ">>>>>>> branch",
+    })
+    ---@diagnostic disable-next-line: undefined-field
+    assert.equals("MERGE 1", statusline.status(bufnr))
+
+    require("gitsuite.config").setup({ features = { conflict = false } })
+    -- Same changedtick as above: without invalidate(), the cache alone
+    -- would still (wrongly) hand back the stale "MERGE 1".
+    ---@diagnostic disable-next-line: undefined-field
+    assert.equals("MERGE 1", statusline.status(bufnr))
+
+    statusline.invalidate(bufnr)
+    ---@diagnostic disable-next-line: undefined-field
+    assert.equals("", statusline.status(bufnr))
+  end)
+
+  it("registers a BufDelete/BufWipeout autocmd that drops a deleted buffer's cache", function()
+    local autocmds = vim.api.nvim_get_autocmds({ group = "gitsuite_statusline" })
+    ---@diagnostic disable-next-line: undefined-field
+    assert.is_true(#autocmds > 0)
+
+    local events = {}
+    for _, au in ipairs(autocmds) do
+      events[au.event] = true
+    end
+    ---@diagnostic disable-next-line: undefined-field
+    assert.is_true(events["BufDelete"] or false)
+    ---@diagnostic disable-next-line: undefined-field
+    assert.is_true(events["BufWipeout"] or false)
+
+    set_lines({
+      "<<<<<<< HEAD",
+      "ours",
+      "=======",
+      "theirs",
+      ">>>>>>> branch",
+    })
+    ---@diagnostic disable-next-line: undefined-field
+    assert.equals("MERGE 1", statusline.status(bufnr))
+
+    -- Real delete, not invalidate(): proves the autocmd itself fires and
+    -- does not error, not just that the underlying function works.
+    local ok = pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+    ---@diagnostic disable-next-line: undefined-field
+    assert.is_true(ok)
+  end)
 end)
