@@ -2,8 +2,9 @@
 -- shell) against this repo's own real "origin" remote (github.com), no
 -- fixture needed. open.nvim is not a sibling checkout in this test
 -- environment, so every case here exercises the resolve()/error path up to
--- (but not through) actually opening a browser -- covered separately by
--- browse_url_spec.lua's pure build()/parse_remote() tests.
+-- (but not through) actually opening a browser -- the pure build()/
+-- parse_remote() grammar moved to lib.nvim (GS-16) and is covered there by
+-- lib.nvim's TESTS/git_remote_spec.lua.
 describe("gitsuite.features.browse", function()
   local browse
   local bufnr

@@ -5,16 +5,18 @@
 --- entirely.
 ---
 --- reposcope.nvim has no file->web-URL mapping to reuse (only hardcoded
---- README-fetch URLs, see README.md) -- the parsing/building logic in
---- `url.lua` is new code. open.nvim is an optional dependency of THIS
---- feature only (LUA-05): gitsuite.nvim as a whole stays usable without it,
---- only `:Git browse *` degrades to a clear error.
+--- README-fetch URLs, see README.md). open.nvim is an optional dependency
+--- of THIS feature only (LUA-05): gitsuite.nvim as a whole stays usable
+--- without it, only `:Git browse *` degrades to a clear error.
 ---
 --- This file is the impure shell (buffer/cursor reads, the actual git
---- calls, opening the browser) around `url.lua`'s pure parsing/building.
+--- calls, opening the browser) around `lib.nvim.git.remote`'s pure
+--- parsing/building (GS-16: moved there once github_stats.nvim and
+--- documentation.nvim needed the same remote-URL grammar this module used
+--- to own alone as `features/browse/url.lua`).
 
 local git = require("lib.nvim.git")
-local url = require("gitsuite.features.browse.url")
+local url = require("lib.nvim.git.remote")
 local notify = require("gitsuite.util.notify")
 
 local M = {}
