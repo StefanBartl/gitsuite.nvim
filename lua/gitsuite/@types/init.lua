@@ -26,6 +26,9 @@
 ---@class GitSuite.Config.Browse
 ---@field hosts table<string, "github"|"gitlab"|"codeberg">  Self-hosted instances, keyed by hostname.
 
+---@class GitSuite.Config.Branch
+---@field sessions boolean  GS-24, opt-in, default false: save the current branch's window/tab layout (sessions.nvim, optional soft dep) before a `branch.switch()` checkout, load the target branch's layout after. Off by default -- an automatic load can discard unsaved buffers.
+
 --- The **resolved** configuration, as `config.get()` returns it: DEFAULTS
 --- deep-merged with the user's `setup()` table. Every field below is
 --- therefore always present.
@@ -34,6 +37,7 @@
 ---@field commands GitSuite.Config.Commands
 ---@field keymaps  GitSuite.Config.Keymaps
 ---@field browse   GitSuite.Config.Browse
+---@field branch   GitSuite.Config.Branch
 
 --- The partial shape a caller hands to `require("gitsuite").setup(opts)`.
 ---@class GitSuite.Opts
@@ -41,6 +45,7 @@
 ---@field commands? table
 ---@field keymaps?  table
 ---@field browse?   table
+---@field branch?   table
 
 --- One entry in `gitsuite.adapter`'s registry. Built-in adapter modules
 --- (`adapter/gitsigns.lua`, `adapter/native.lua`, ...) each return a table

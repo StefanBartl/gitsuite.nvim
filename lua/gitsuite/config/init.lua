@@ -55,6 +55,9 @@ local KNOWN = {
   browse = {
     hosts = true,
   },
+  branch = {
+    sessions = { ok = is_boolean, expect = "a boolean" },
+  },
 }
 
 ---@internal

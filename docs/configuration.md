@@ -79,6 +79,26 @@ Controls which web-URL grammar `:Git browse *` builds for a self-hosted
 remote — GitHub's `/blob/`, GitLab's `/-/blob/`, or Codeberg/Gitea's
 `/src/branch/`. The three public hosts need no entry here.
 
+## `branch`
+
+```lua
+branch = {
+  -- GS-24, opt-in: save the current branch's window/tab layout
+  -- (sessions.nvim, optional soft dep) before a branch.switch() checkout,
+  -- load the target branch's layout after. Off by default -- an automatic
+  -- load can discard unsaved buffers.
+  sessions = false,
+},
+```
+
+With `sessions.nvim` installed and `sessions = true`, switching branches via
+`:Git branch switch` calls `sessions.core.save(nil)` right before the
+checkout (while still on the branch being left) and `sessions.core.load(nil)`
+right after (once HEAD has moved) — `sessions.nvim`'s own branch-aware
+naming (`branch_aware`, on by default there) does the actual per-branch
+bookkeeping; this only calls `save`/`load` at the right two moments.
+Silently inert without `sessions.nvim` installed.
+
 ## See also
 
 - [What you get with the defaults](what-you-get.md) — the short version of this page.

@@ -196,4 +196,134 @@ describe("gitsuite.features.branch", function()
       assert.equals(original_branch, git.current_branch())
     end
   )
+
+  describe("checkout() + sessions.nvim (GS-24, opt-in)", function()
+    local config = require("gitsuite.config")
+    local run_argv = require("lib.nvim.cross.run_argv")
+
+    -- Same trick as "fires GitsuiteBranchSwitched" above: check out HEAD's
+    -- own sha, a real `git checkout` (attached branch -> detached HEAD) that
+    -- leaves the tree unchanged, then restore the original branch
+    -- afterwards -- every OTHER local branch is checked out in another
+    -- worktree already, so an actual branch-to-branch switch is not
+    -- available here.
+    ---@return string original_branch
+    ---@return string head_sha
+    local function detach_and_restore_setup()
+      local git = require("lib.nvim.git")
+      local original_branch = git.current_branch()
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_not_nil(original_branch)
+      local head_sha = git.head_short_hash()
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_not_nil(head_sha)
+      return original_branch, head_sha
+    end
+
+    ---@param original_branch string
+    local function restore(original_branch)
+      local ok, out = run_argv.run_blocking_captured({ "git", "checkout", original_branch })
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_true(ok, out)
+    end
+
+    after_each(function()
+      config.setup({}) -- reset to defaults: this is shared, process-wide state
+      package.loaded["sessions.core"] = nil
+    end)
+
+    it("default (branch.sessions = false): never touches sessions.nvim", function()
+      local original_branch, head_sha = detach_and_restore_setup()
+
+      local calls = {}
+      package.loaded["sessions.core"] = {
+        save = function()
+          calls[#calls + 1] = "save"
+        end,
+        load = function()
+          calls[#calls + 1] = "load"
+        end,
+      }
+
+      local original_select = vim.ui.select
+      vim.ui.select = function(_, _, on_choice)
+        on_choice(head_sha)
+      end
+      local ok = pcall(branch.switch)
+      vim.ui.select = original_select
+
+      restore(original_branch)
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_true(ok)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.same({}, calls)
+    end)
+
+    it("opt-in (branch.sessions = true): saves before the checkout, loads after", function()
+      local git = require("lib.nvim.git")
+      local original_branch, head_sha = detach_and_restore_setup()
+      config.setup({ branch = { sessions = true } })
+
+      local events = {}
+      package.loaded["sessions.core"] = {
+        save = function(name)
+          events[#events + 1] = { fn = "save", branch = git.current_branch(), name = name }
+        end,
+        load = function(name)
+          events[#events + 1] = { fn = "load", branch = git.current_branch(), name = name }
+        end,
+      }
+
+      local original_select = vim.ui.select
+      vim.ui.select = function(_, _, on_choice)
+        on_choice(head_sha)
+      end
+      local ok = pcall(branch.switch)
+      vim.ui.select = original_select
+
+      restore(original_branch)
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_true(ok)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(2, #events)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals("save", events[1].fn)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_nil(events[1].name, "save(nil) -- sessions.nvim auto-resolves the name")
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(original_branch, events[1].branch, "save() ran BEFORE HEAD moved")
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals("load", events[2].fn)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_nil(events[2].name)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_nil(events[2].branch, "load() ran AFTER HEAD moved (now detached, no branch)")
+    end)
+
+    it("opt-in but sessions.nvim absent: the checkout still succeeds", function()
+      local original_branch, head_sha = detach_and_restore_setup()
+      config.setup({ branch = { sessions = true } })
+
+      package.loaded["sessions.core"] = nil
+      local orig_preload = package.preload["sessions.core"]
+      package.preload["sessions.core"] = function()
+        error("no sessions.nvim here")
+      end
+
+      local original_select = vim.ui.select
+      vim.ui.select = function(_, _, on_choice)
+        on_choice(head_sha)
+      end
+      local ok = pcall(branch.switch)
+      vim.ui.select = original_select
+      package.preload["sessions.core"] = orig_preload
+
+      restore(original_branch)
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_true(ok)
+    end)
+  end)
 end)

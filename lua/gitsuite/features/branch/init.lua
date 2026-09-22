@@ -13,6 +13,13 @@
 --- (K-5c): this module has no knowledge of ui.nvim at all.
 ---
 --- Native: no adapter needed, only `git` on `$PATH`.
+---
+--- GS-24, opt-in (`cfg.branch.sessions`, default off): `checkout()` saves
+--- the current branch's window/tab layout via sessions.nvim (optional soft
+--- dep) before switching, then loads the target branch's layout after --
+--- sessions.nvim's own branch-aware naming does the actual per-branch
+--- bookkeeping, this module only calls `save(nil)`/`load(nil)` either side
+--- of the checkout that moves HEAD.
 
 local git = require("lib.nvim.git")
 local notify = require("gitsuite.util.notify")
@@ -49,10 +56,29 @@ function M.current()
 end
 
 ---@internal
+--- sessions.nvim (optional soft dep, GS-24) -- pcall-guarded both at
+--- `require` and at the call itself, so a missing or misbehaving
+--- sessions.nvim can never block a checkout.
+---@param fn "save"|"load"
+local function sessions_core(fn)
+  local ok, sessions = pcall(require, "sessions.core")
+  if ok then pcall(sessions[fn], nil) end
+end
+
+---@internal
 ---@param choice string|nil
 ---@param current string|nil
 local function checkout(choice, current)
   if not choice or choice == current then return end
+
+  -- GS-24, opt-in (cfg.branch.sessions, default false): save the CURRENT
+  -- branch's window/tab layout before HEAD moves -- sessions.nvim's own
+  -- branch-aware naming (sessions.git.resolve_name, cfg.branch_aware) keys
+  -- it under the branch we are about to leave, since git.checkout() has not
+  -- run yet at this point.
+  local sessions_enabled = require("gitsuite.config").get().branch.sessions
+  if sessions_enabled then sessions_core("save") end
+
   -- git.checkout (GS-15) uses run_blocking, not run_blocking_captured -- the
   -- old code here only ever saw stdout on failure (empty for a checkout
   -- error, which git writes to stderr), so this actually gains git's real
@@ -66,6 +92,13 @@ local function checkout(choice, current)
 
   local dir = git.repo_root()
   if dir then require("gitsuite.events").branch_switched(dir, choice) end
+
+  -- ...then load the TARGET branch's layout, now that HEAD has actually
+  -- moved and sessions.nvim's own resolve_name() sees the new branch.
+  -- Loading can discard unsaved buffers -- sessions.nvim's own call, this
+  -- module has no say in it -- which is exactly why this whole feature
+  -- stays opt-in.
+  if sessions_enabled then sessions_core("load") end
 end
 
 ---Switch to another local branch, picked via pickers.nvim's `git_branches`

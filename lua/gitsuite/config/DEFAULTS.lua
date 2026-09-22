@@ -34,6 +34,12 @@ local DEFAULTS = {
     -- only the three public hosts are recognized out of the box.
     hosts = {},
   },
+  branch = {
+    -- GS-24, opt-in: save/load the window/tab layout (sessions.nvim,
+    -- optional soft dep) around a branch.switch() checkout. Off by default
+    -- -- an automatic load can discard unsaved buffers.
+    sessions = false,
+  },
 }
 
 return DEFAULTS

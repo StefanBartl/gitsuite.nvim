@@ -22,6 +22,7 @@ narrower feature set rather than a crash:
 | [insights.nvim](https://github.com/StefanBartl/insights.nvim) | Backs `:Git conflict list` (repo-wide unresolved-conflict scan in the quickfix list) and `:Git status todos` (TODO/FIXME/... annotations, filtered to the changed files) — without it, those two actions report "not installed"; buffer-local conflict scanning (`has_conflicts()`, `choose()`, `next()`/`prev()`) is unaffected |
 | [color_my_ascii.nvim](https://github.com/StefanBartl/color_my_ascii.nvim) | Filters conflict-marker-shaped text inside a fenced code block (a Markdown documentation example) out of the buffer scan — without it, such an example is treated as one more conflict to resolve |
 | [filetree.nvim](https://github.com/StefanBartl/filetree.nvim) | Backs `:Git status relink` (fix Markdown/Lua/Python/TS-JS references after a git-detected rename) via its reference engine — without it, that one action reports "not installed" |
+| [sessions.nvim](https://github.com/StefanBartl/sessions.nvim) | Backs `branch.sessions` (opt-in, default off — see [configuration.md](configuration.md)): saves/loads the window/tab layout around a `:Git branch switch` checkout — without it, that opt-in setting is silently inert |
 
 None of the optional row's absence is reported by `:checkhealth gitsuite` as
 a warning — see [health.md](health.md) for exactly what is and isn't
