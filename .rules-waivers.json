@@ -1,0 +1,3 @@
+{
+  "DEP-02": "features/ui/lazygit/init.lua:21-22 -- grep hit is the doc comment explaining DEP-02 compliance ('never `termopen()`'), not a call to termopen(); the actual call at line 116 is jobstart(argv, {term=true}). Documented false-positive pattern, see LUA_NVIM.md's own DEP-02 Nachtrag (2026-09-18)."
+}
