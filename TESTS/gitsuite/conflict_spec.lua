@@ -180,6 +180,45 @@ describe("gitsuite.features.conflict", function()
         ---@diagnostic disable-next-line: undefined-field
         assert.same(lines, get_lines())
       end)
+
+      it(
+        "refuses (TOCTOU) if the buffer changed while the vim.ui.select prompt was open",
+        function()
+          -- vim.ui.select is asynchronous -- the prompt can stay open for as
+          -- long as the user takes to decide, during which other code (an
+          -- autocmd, a timer, another choose()) can edit the buffer. Here the
+          -- picked separator row (5) no longer holds `=======` by the time
+          -- on_choice runs; resolving anyway would silently drop content.
+          set_lines(lines)
+          local original_select = vim.ui.select
+          vim.ui.select = function(items, _opts, on_choice)
+            set_lines({ "before", "<<<<<<< HEAD", "Title", "=======", "our text", "EDITED" })
+            on_choice(items[2]) -- row 5: no longer "=======" after the edit above
+          end
+          local seen = {}
+          local original_notify = vim.notify
+          vim.notify = function(msg)
+            seen[#seen + 1] = tostring(msg)
+          end
+          vim.api.nvim_win_set_cursor(0, { 3, 0 })
+          local ok = pcall(conflict.choose, "ours")
+          vim.notify = original_notify
+          vim.ui.select = original_select
+
+          ---@diagnostic disable-next-line: undefined-field
+          assert.is_true(ok, "refusing is a message, not an error")
+          ---@diagnostic disable-next-line: undefined-field
+          assert.same(
+            { "before", "<<<<<<< HEAD", "Title", "=======", "our text", "EDITED" },
+            get_lines(),
+            "the concurrent edit is left untouched, not overwritten"
+          )
+          ---@diagnostic disable-next-line: undefined-field
+          assert.equals(1, #seen)
+          ---@diagnostic disable-next-line: undefined-field
+          assert.is_truthy(seen[1]:find("buffer changed", 1, true))
+        end
+      )
     end)
 
     it(

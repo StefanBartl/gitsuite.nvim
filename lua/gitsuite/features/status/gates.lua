@@ -168,8 +168,24 @@ function M.lint()
   end
 end
 
+---@internal
+---Git's own binary heuristic: a NUL byte in the first 8000 bytes. `changed_files()`
+---has no reason to exclude a binary file (an image, a lockfile-adjacent
+---blob) from the *set* of changed paths, but spell-checking one wastes work
+---and floods the quickfix list with noise from bytes that were never text.
+---@param path string
+---@return boolean
+local function looks_binary(path)
+  local fh = io.open(path, "rb")
+  if not fh then return false end
+  local chunk = fh:read(8000) or ""
+  fh:close()
+  return chunk:find("\0", 1, true) ~= nil
+end
+
 ---Pre-commit gate: misspellings (`vim.spell.check`, current `'spelllang'`)
----in the changed files' on-disk content.
+---in the changed files' on-disk content. Binary files (see `looks_binary`)
+---are skipped, not read as text.
 ---@return nil
 function M.spell()
   local paths, err = changed_files()
@@ -184,7 +200,10 @@ function M.spell()
 
   local items = {}
   for _, path in ipairs(paths) do
-    local ok_read, lines = pcall(vim.fn.readfile, path)
+    local ok_read, lines
+    if not looks_binary(path) then
+      ok_read, lines = pcall(vim.fn.readfile, path)
+    end
     if ok_read and type(lines) == "table" then
       for lnum, line in ipairs(lines) do
         local ok_check, bad = pcall(vim.spell.check, line)

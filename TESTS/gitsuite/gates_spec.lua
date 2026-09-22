@@ -225,5 +225,28 @@ describe("gitsuite.features.status.gates", function()
       ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, #items)
     end)
+
+    it("skips a binary changed file instead of spell-checking its raw bytes", function()
+      local original_spelllang = vim.o.spelllang
+      vim.o.spelllang = "en"
+      -- A NUL byte marks this as binary (git's own heuristic) -- content
+      -- that would otherwise flag as a misspelling ("tset") must never be
+      -- read as text in the first place. Written via plain Lua io, not
+      -- vim.fn.writefile: an embedded NUL in a Lua string crosses the
+      -- Lua->Vimscript bridge as a Blob, which writefile()'s list-of-lines
+      -- form rejects.
+      local fh = assert(io.open(repo .. "/asset.bin", "wb"))
+      fh:write("tset\0binary")
+      fh:close()
+
+      local ok = pcall(gates.spell)
+      vim.o.spelllang = original_spelllang
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_true(ok, "a binary changed file must not error the gate")
+      local items = vim.fn.getqflist({ items = 0 }).items
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(0, #items, "binary content is skipped, not flagged")
+    end)
   end)
 end)

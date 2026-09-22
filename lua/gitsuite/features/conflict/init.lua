@@ -173,19 +173,26 @@ local function resolve_concrete(bufnr, region, keep)
     return
   end
 
-  -- ERR-30 (TOCTOU): re-verify the marker rows this region was scanned at
-  -- still hold the markers they held then, immediately before mutating --
-  -- refuse rather than blindly overwrite if the buffer changed in between
-  -- (an autocmd, another choose action, manual edits -- including, on the
-  -- ambiguous-region path, whatever ran while `vim.ui.select`'s prompt was
-  -- open).
-  local start_marker =
-    vim.api.nvim_buf_get_lines(bufnr, region.start_line, region.start_line + 1, false)[1]
-  local end_marker =
-    vim.api.nvim_buf_get_lines(bufnr, region.end_line, region.end_line + 1, false)[1]
+  -- ERR-30 (TOCTOU): re-verify every marker row this region was scanned at
+  -- still holds the marker it held then, immediately before mutating --
+  -- refuse rather than blindly overwrite if the buffer changed in between.
+  -- `vim.ui.select` is asynchronous (the prompt can stay open indefinitely
+  -- while timers/autocmds/LSP callbacks keep running), so the
+  -- ambiguous-region path needs this to cover `sep_line`/`base_first` too,
+  -- not just `start_line`/`end_line`: a wrong row here is exactly the
+  -- silent-code-loss failure this whole feature exists to avoid.
+  local function line_at(row)
+    return vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1]
+  end
+  local start_marker = line_at(region.start_line)
+  local end_marker = line_at(region.end_line)
+  local sep_marker = line_at(region.sep_line)
+  local base_marker = region.base_first and line_at(region.base_first - 1)
   if
     not (start_marker and start_marker:match("^<<<<<<<"))
     or not (end_marker and end_marker:match("^>>>>>>>"))
+    or not (sep_marker and sep_marker:match("^======="))
+    or (region.base_first and not (base_marker and base_marker:match("^|||||||")))
   then
     notify.error(
       "conflict: buffer changed since this region was found -- re-run :Git conflict refresh"
