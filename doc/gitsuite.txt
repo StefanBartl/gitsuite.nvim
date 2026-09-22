@@ -12,7 +12,8 @@ CONTENTS                                                   *gitsuite-contents*
   4. Commands .................... |gitsuite-commands|
   5. Configuration ............... |gitsuite-config|
   6. Adapters ..................... |gitsuite-adapters|
-  7. Health check ................. |gitsuite-health|
+  7. Events ....................... |gitsuite-events|
+  8. Health check ................. |gitsuite-health|
 
 ==============================================================================
 1. INTRODUCTION                                                *gitsuite-intro*
@@ -118,7 +119,34 @@ family it would have served falling back further, or refusing with a clear
 message when nothing is left to fall back to.
 
 ==============================================================================
-7. HEALTH CHECK                                                  *gitsuite-health*
+7. EVENTS                                                      *gitsuite-events*
+
+gitsuite.nvim fires plain `User` autocmd events after certain actions so a
+sister plugin can react without gitsuite knowing it exists (D-2: events, not
+a direct `require()` from gitsuite into a consumer -- `gitsuite.events` is
+the one place they are fired from). Subscribe the usual way: >lua
+  vim.api.nvim_create_autocmd("User", {
+    pattern = "GitsuiteBranchSwitched",
+    callback = function(event) vim.print(event.data) end,
+  })
+<
+                                                       *GitsuiteBranchSwitched*
+`GitsuiteBranchSwitched`  `{ dir, branch }` -- after `gitsuite.features.branch
+.switch()` checks out a different branch. `dir` is the repo root the checkout
+ran in, `branch` the ref now checked out.
+
+                                                    *GitsuiteConflictsResolved*
+`GitsuiteConflictsResolved`  `{ bufnr }` -- after `gitsuite.features.conflict
+.choose()` resolves the *last* remaining conflict region in a buffer, not on
+every `choose()` call -- only once the buffer has none left.
+
+                                                        *GitsuiteStatusChanged*
+`GitsuiteStatusChanged`  `{ dir }` -- after a hunk stage/reset (single hunk or
+whole buffer) actually writes to git, fired from gitsigns' own completion
+callback rather than merely after the (async) action was requested.
+
+==============================================================================
+8. HEALTH CHECK                                                  *gitsuite-health*
 
 `:checkhealth gitsuite` reports:
   - lib.nvim / diff.nvim presence (hard dependencies -- error if missing)

@@ -16,14 +16,19 @@ function M.is_available()
   return package.loaded["gitsigns"] ~= nil
 end
 
+---`callback` (`fun(err?: string)`), when given, is gitsigns' own async
+---completion callback -- called after the git index write actually
+---happened, not merely after the (async) action was requested.
+---@param callback? fun(err?: string)
 ---@return nil
-function M.stage_hunk()
-  require("gitsigns").stage_hunk()
+function M.stage_hunk(callback)
+  require("gitsigns").stage_hunk(nil, nil, callback)
 end
 
+---@param callback? fun(err?: string)
 ---@return nil
-function M.reset_hunk()
-  require("gitsigns").reset_hunk()
+function M.reset_hunk(callback)
+  require("gitsigns").reset_hunk(nil, nil, callback)
 end
 
 ---@return nil
@@ -31,9 +36,10 @@ function M.preview_hunk()
   require("gitsigns").preview_hunk()
 end
 
+---@param callback? fun(err?: string)
 ---@return nil
-function M.stage_buffer()
-  require("gitsigns").stage_buffer()
+function M.stage_buffer(callback)
+  require("gitsigns").stage_buffer(callback)
 end
 
 ---@return nil

@@ -55,6 +55,9 @@ local function checkout(choice, current)
     return
   end
   notify.info("branch: switched to " .. choice)
+
+  local dir = git.repo_root()
+  if dir then require("gitsuite.events").branch_switched(dir, choice) end
 end
 
 ---Switch to another local branch, picked via pickers.nvim's `git_branches`

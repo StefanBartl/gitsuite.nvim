@@ -67,6 +67,64 @@ describe("gitsuite.features.branch", function()
     assert.equals(original_branch, git.current_branch())
   end)
 
+  it("switch() fires GitsuiteBranchSwitched with {dir, branch} after a real checkout", function()
+    -- checkout() is a no-op (and fires nothing) when the choice equals the
+    -- current branch (see the "re-select the current branch" tests above),
+    -- so this needs an actual checkout to something else. Detaching HEAD
+    -- onto the commit it is already on is a real `git checkout <sha>` that
+    -- still leaves the repo pointing at the same tree -- and every branch in
+    -- this worktree besides the current one is checked out in another
+    -- worktree already, so a real branch-to-branch switch is not available
+    -- here.
+    local git = require("lib.nvim.git")
+    local original_branch = git.current_branch()
+    ---@diagnostic disable-next-line: undefined-field
+    assert.is_not_nil(original_branch)
+    local head_sha = git.head_short_hash()
+    ---@diagnostic disable-next-line: undefined-field
+    assert.is_not_nil(head_sha)
+
+    local group = vim.api.nvim_create_augroup("gitsuite_branch_spec_events", { clear = true })
+    local captured
+    vim.api.nvim_create_autocmd("User", {
+      group = group,
+      pattern = "GitsuiteBranchSwitched",
+      callback = function(event)
+        captured = event.data
+      end,
+    })
+
+    local original_select = vim.ui.select
+    vim.ui.select = function(_, _, on_choice)
+      on_choice(head_sha)
+    end
+
+    local ok = pcall(branch.switch)
+
+    vim.ui.select = original_select
+    vim.api.nvim_del_augroup_by_id(group)
+
+    -- Back onto the original branch regardless of what the assertions below find.
+    local restore_ok, restore_out = require("lib.nvim.cross.run_argv").run_blocking_captured({
+      "git",
+      "checkout",
+      original_branch,
+    })
+    ---@diagnostic disable-next-line: undefined-field
+    assert.is_true(restore_ok, restore_out)
+
+    ---@diagnostic disable-next-line: undefined-field
+    assert.is_true(ok)
+    ---@diagnostic disable-next-line: undefined-field
+    assert.is_not_nil(captured)
+    ---@diagnostic disable-next-line: undefined-field
+    assert.equals(head_sha, captured.branch)
+    ---@diagnostic disable-next-line: undefined-field
+    assert.equals(git.repo_root(), captured.dir)
+    ---@diagnostic disable-next-line: undefined-field
+    assert.equals(original_branch, git.current_branch())
+  end)
+
   it(
     "switch() checks out via the picker when gitsuite.integrations.pickers_nvim is available",
     function()

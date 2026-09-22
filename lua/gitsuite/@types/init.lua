@@ -44,3 +44,20 @@
 ---@class GitSuite.Adapter
 ---@field name string             Registry key, matches the module's file name.
 ---@field is_available fun(): boolean  Reads `package.loaded[...]` only (LUA-91), never `require`s the foreign plugin.
+
+--- Payload shapes of the `User` autocmd events `gitsuite.events` fires (D-2:
+--- events, not direct integrations -- see `gitsuite/events.lua`). Every
+--- consumer reads `event.data` in its `autocmd User Gitsuite* callback`.
+
+--- `GitsuiteBranchSwitched` -- after a branch checkout.
+---@class GitSuite.Event.BranchSwitched
+---@field dir string     Repo root the checkout ran in.
+---@field branch string  The branch now checked out.
+
+--- `GitsuiteConflictsResolved` -- after a buffer's last conflict region was resolved.
+---@class GitSuite.Event.ConflictsResolved
+---@field bufnr integer
+
+--- `GitsuiteStatusChanged` -- after a hunk stage/reset actually wrote to git.
+---@class GitSuite.Event.StatusChanged
+---@field dir string  Repo root the change happened in.

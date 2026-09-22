@@ -264,4 +264,74 @@ describe("gitsuite.features.conflict", function()
     ---@diagnostic disable-next-line: undefined-field
     assert.equals(2, vim.api.nvim_win_get_cursor(0)[1])
   end)
+
+  describe("GitsuiteConflictsResolved", function()
+    local group
+    local captured
+
+    before_each(function()
+      captured = nil
+      group = vim.api.nvim_create_augroup("gitsuite_conflict_spec_events", { clear = true })
+      vim.api.nvim_create_autocmd("User", {
+        group = group,
+        pattern = "GitsuiteConflictsResolved",
+        callback = function(event)
+          captured = event.data
+        end,
+      })
+    end)
+
+    after_each(function()
+      pcall(vim.api.nvim_del_augroup_by_id, group)
+    end)
+
+    it("fires with {bufnr} once choose() resolves the buffer's only conflict", function()
+      set_lines({ "<<<<<<< HEAD", "our line", "=======", "their line", ">>>>>>> branch" })
+      vim.api.nvim_win_set_cursor(0, { 1, 0 })
+      conflict.choose("ours")
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_not_nil(captured)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(bufnr, captured.bufnr)
+    end)
+
+    it("does not fire while a second conflict remains in the buffer", function()
+      set_lines({
+        "<<<<<<< HEAD",
+        "a-ours",
+        "=======",
+        "a-theirs",
+        ">>>>>>> branch",
+        "between",
+        "<<<<<<< HEAD",
+        "b-ours",
+        "=======",
+        "b-theirs",
+        ">>>>>>> branch",
+      })
+      vim.api.nvim_win_set_cursor(0, { 2, 0 }) -- inside the FIRST conflict
+      conflict.choose("ours")
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_nil(captured)
+    end)
+
+    it("does not fire when choose() refuses (ambiguous region)", function()
+      set_lines({
+        "<<<<<<< HEAD",
+        "Title",
+        "=======",
+        "our text",
+        "=======",
+        "their text",
+        ">>>>>>> other",
+      })
+      vim.api.nvim_win_set_cursor(0, { 2, 0 })
+      pcall(conflict.choose, "ours")
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_nil(captured)
+    end)
+  end)
 end)

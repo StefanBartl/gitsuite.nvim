@@ -8,6 +8,7 @@
 --- ("what changed here") without gitsigns.
 
 local adapter = require("gitsuite.adapter")
+local git = require("lib.nvim.git")
 local notify = require("gitsuite.util.notify")
 
 local M = {}
@@ -29,13 +30,36 @@ local function unavailable(action)
   )
 end
 
+---@internal
+---@param bufnr integer
+---@return string|nil
+local function repo_root_of(bufnr)
+  local path = vim.api.nvim_buf_get_name(bufnr)
+  if path == "" then return nil end
+  return git.repo_root({ dir = vim.fs.dirname(path) })
+end
+
+---@internal
+--- A gitsigns action callback (`fun(err?: string)`): fires
+--- `GitsuiteStatusChanged` for `dir` once the write actually completed,
+--- unless gitsigns reported an error.
+---@param dir string|nil
+---@return fun(err?: string)
+local function on_status_changed(dir)
+  return function(err)
+    if err or not dir then return end
+    require("gitsuite.events").status_changed(dir)
+  end
+end
+
 ---@return nil
 function M.stage()
   if not gitsigns_available() then
     unavailable("stage")
     return
   end
-  require("gitsuite.adapter.gitsigns").stage_hunk()
+  local dir = repo_root_of(vim.api.nvim_get_current_buf())
+  require("gitsuite.adapter.gitsigns").stage_hunk(on_status_changed(dir))
 end
 
 ---@return nil
@@ -44,7 +68,8 @@ function M.reset()
     unavailable("reset")
     return
   end
-  require("gitsuite.adapter.gitsigns").reset_hunk()
+  local dir = repo_root_of(vim.api.nvim_get_current_buf())
+  require("gitsuite.adapter.gitsigns").reset_hunk(on_status_changed(dir))
 end
 
 ---@return nil
@@ -63,7 +88,8 @@ function M.stage_buffer()
     unavailable("stage-buffer")
     return
   end
-  require("gitsuite.adapter.gitsigns").stage_buffer()
+  local dir = repo_root_of(vim.api.nvim_get_current_buf())
+  require("gitsuite.adapter.gitsigns").stage_buffer(on_status_changed(dir))
 end
 
 ---@return nil
@@ -72,7 +98,9 @@ function M.reset_buffer()
     unavailable("reset-buffer")
     return
   end
+  local dir = repo_root_of(vim.api.nvim_get_current_buf())
   require("gitsuite.adapter.gitsigns").reset_buffer()
+  if dir then require("gitsuite.events").status_changed(dir) end
 end
 
 ---@return nil

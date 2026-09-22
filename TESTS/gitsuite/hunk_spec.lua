@@ -37,4 +37,93 @@ describe("gitsuite.features.hunk", function()
     ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
   end)
+
+  describe("GitsuiteStatusChanged, with a faked gitsigns.nvim", function()
+    local git = require("lib.nvim.git")
+    local group
+    local captured
+    local real_gitsigns
+
+    before_each(function()
+      real_gitsigns = package.loaded["gitsigns"]
+      group = vim.api.nvim_create_augroup("gitsuite_hunk_spec_events", { clear = true })
+      captured = nil
+      vim.api.nvim_create_autocmd("User", {
+        group = group,
+        pattern = "GitsuiteStatusChanged",
+        callback = function(event)
+          captured = event.data
+        end,
+      })
+    end)
+
+    after_each(function()
+      pcall(vim.api.nvim_del_augroup_by_id, group)
+      package.loaded["gitsigns"] = real_gitsigns
+    end)
+
+    -- gitsigns.stage_hunk/reset_hunk/stage_buffer are async with an optional
+    -- `fun(err?: string)` completion callback (see adapter/gitsigns.lua's
+    -- docstring); this fake calls it synchronously, close enough to check
+    -- that gitsuite wires the callback through and only fires on success.
+    local function fake_gitsigns(err)
+      return {
+        stage_hunk = function(_range, _opts, callback)
+          if callback then callback(err) end
+        end,
+        reset_hunk = function(_range, _opts, callback)
+          if callback then callback(err) end
+        end,
+        stage_buffer = function(callback)
+          if callback then callback(err) end
+        end,
+        reset_buffer = function() end,
+        toggle_deleted = function() end,
+      }
+    end
+
+    local expected_dir = git.repo_root()
+
+    local async_actions = { "stage", "reset", "stage_buffer" }
+    for _, action in ipairs(async_actions) do
+      it(
+        ("%s() fires with {dir} once gitsigns' callback reports success"):format(action),
+        function()
+          package.loaded["gitsigns"] = fake_gitsigns(nil)
+          hunk[action]()
+
+          ---@diagnostic disable-next-line: undefined-field
+          assert.is_not_nil(captured)
+          ---@diagnostic disable-next-line: undefined-field
+          assert.equals(expected_dir, captured.dir)
+        end
+      )
+
+      it(("%s() does not fire when gitsigns reports an error"):format(action), function()
+        package.loaded["gitsigns"] = fake_gitsigns("boom")
+        hunk[action]()
+
+        ---@diagnostic disable-next-line: undefined-field
+        assert.is_nil(captured)
+      end)
+    end
+
+    it("reset_buffer() fires with {dir} (gitsigns' own reset_buffer is synchronous)", function()
+      package.loaded["gitsigns"] = fake_gitsigns(nil)
+      hunk.reset_buffer()
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_not_nil(captured)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(expected_dir, captured.dir)
+    end)
+
+    it("toggle_deleted() does not fire GitsuiteStatusChanged", function()
+      package.loaded["gitsigns"] = fake_gitsigns(nil)
+      hunk.toggle_deleted()
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_nil(captured)
+    end)
+  end)
 end)

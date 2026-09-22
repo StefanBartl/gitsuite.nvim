@@ -162,7 +162,8 @@ function M.choose(keep)
 
   local replacement = collect_replacement(bufnr, region, keep)
   vim.api.nvim_buf_set_lines(bufnr, region.start_line, region.end_line + 1, false, replacement)
-  M.refresh(bufnr)
+  local remaining = M.refresh(bufnr)
+  if #remaining == 0 then require("gitsuite.events").conflicts_resolved(bufnr) end
 end
 
 ---Jump to the next conflict marker after the cursor.
