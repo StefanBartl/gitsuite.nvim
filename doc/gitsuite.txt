@@ -13,7 +13,8 @@ CONTENTS                                                   *gitsuite-contents*
   5. Configuration ............... |gitsuite-config|
   6. Adapters ..................... |gitsuite-adapters|
   7. Events ....................... |gitsuite-events|
-  8. Health check ................. |gitsuite-health|
+  8. Statusline ................... |gitsuite-statusline|
+  9. Health check ................. |gitsuite-health|
 
 ==============================================================================
 1. INTRODUCTION                                                *gitsuite-intro*
@@ -146,7 +147,22 @@ whole buffer) actually writes to git, fired from gitsigns' own completion
 callback rather than merely after the (async) action was requested.
 
 ==============================================================================
-8. HEALTH CHECK                                                  *gitsuite-health*
+8. STATUSLINE                                                *gitsuite-statusline*
+
+`require("gitsuite.statusline").status(bufnr?)` returns an ambient
+merge-conflict indicator for the current (or given) buffer, e.g. `"MERGE 2"`
+-- `""` when the buffer has no conflicts, `features.conflict` is off, or
+`bufnr` is invalid. Cached per buffer by `nvim_buf_get_changedtick`, safe to
+call unconditionally on every statusline redraw -- no process runs in the
+render path. `lualine_component` is `status` under another name, for
+`sections = { lualine_x = { require("gitsuite.statusline").lualine_component } }`.
+ui.nvim ships a ready-made adapter, `ui.statusline.modules.gitsuite_conflict`
+(add `gitsuite_conflict` to your `order`). See docs/statusline.md for the
+full wiring (heirline, the native statusline) and why the cache is keyed by
+`changedtick` rather than |GitsuiteConflictsResolved|.
+
+==============================================================================
+9. HEALTH CHECK                                                  *gitsuite-health*
 
 `:checkhealth gitsuite` reports:
   - lib.nvim / diff.nvim presence (hard dependencies -- error if missing)
