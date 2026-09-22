@@ -21,6 +21,26 @@ local ACTIONS = {
     feature = "ui",
     label = "[gitsuite.nvim] Open lazygit",
   },
+  hunk_inline = {
+    command_args = "hunk inline",
+    feature = "hunk",
+    label = "[gitsuite.nvim] Toggle inline diff",
+  },
+  diffview_open = {
+    command_args = "ui diffview open",
+    feature = "ui",
+    label = "[gitsuite.nvim] Open diffview",
+  },
+  diffview_close = {
+    command_args = "ui diffview close",
+    feature = "ui",
+    label = "[gitsuite.nvim] Close diffview",
+  },
+  diff_history = {
+    command_args = "diff history",
+    feature = "diff",
+    label = "[gitsuite.nvim] Diff history",
+  },
 }
 
 ---Declare and bind the default keymaps.

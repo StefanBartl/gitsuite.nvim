@@ -52,4 +52,22 @@ function M.toggle_deleted()
   require("gitsigns").toggle_deleted()
 end
 
+---Toggle inline diff: invert word_diff & linehl, then preview the hunk under
+---the cursor inline (temporary) -- the old `:ToggleInlineDiff` combo from
+---`nvim-config`'s `bindings/mappings/git.lua` (GS-08), moved here as an
+---adapter method. Falls back to the popup preview on a gitsigns version
+---without `preview_hunk_inline` (added later than `toggle_word_diff`/
+---`toggle_linehl`).
+---@return nil
+function M.toggle_inline_diff()
+  local gs = require("gitsigns")
+  gs.toggle_word_diff()
+  gs.toggle_linehl()
+  if type(gs.preview_hunk_inline) == "function" then
+    gs.preview_hunk_inline()
+  else
+    gs.preview_hunk()
+  end
+end
+
 return M

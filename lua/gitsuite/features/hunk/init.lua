@@ -112,4 +112,16 @@ function M.toggle_deleted()
   require("gitsuite.adapter.gitsigns").toggle_deleted()
 end
 
+---Toggle inline diff: invert word_diff & linehl, preview the hunk under the
+---cursor inline. A display toggle, not a git write -- unlike stage/reset,
+---does not fire `GitsuiteStatusChanged`.
+---@return nil
+function M.inline()
+  if not gitsigns_available() then
+    unavailable("inline")
+    return
+  end
+  require("gitsuite.adapter.gitsigns").toggle_inline_diff()
+end
+
 return M

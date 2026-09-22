@@ -16,8 +16,12 @@
 ---@field git string  Name of the compound user command (default "Git").
 
 ---@class GitSuite.Config.Keymaps
----@field blame_full string|string[]|false  Default mapping for `:Git blame full`.
----@field ui_lazygit string|string[]|false  Default mapping for `:Git ui lazygit`.
+---@field blame_full     string|string[]|false  Default mapping for `:Git blame full`.
+---@field ui_lazygit     string|string[]|false  Default mapping for `:Git ui lazygit`.
+---@field hunk_inline    string|string[]|false  Default mapping for `:Git hunk inline`.
+---@field diffview_open  string|string[]|false  Default mapping for `:Git ui diffview open`.
+---@field diffview_close string|string[]|false  Default mapping for `:Git ui diffview close`.
+---@field diff_history   string|string[]|false  Default mapping for `:Git diff history`.
 
 ---@class GitSuite.Config.Browse
 ---@field hosts table<string, "github"|"gitlab"|"codeberg">  Self-hosted instances, keyed by hostname.

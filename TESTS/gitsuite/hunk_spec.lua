@@ -23,7 +23,7 @@ describe("gitsuite.features.hunk", function()
     pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
   end)
 
-  local actions = { "stage", "reset", "stage_buffer", "reset_buffer", "toggle_deleted" }
+  local actions = { "stage", "reset", "stage_buffer", "reset_buffer", "toggle_deleted", "inline" }
   for _, action in ipairs(actions) do
     it(("%s() reports 'not installed', does not crash, without gitsigns"):format(action), function()
       local ok = pcall(hunk[action])
@@ -79,6 +79,10 @@ describe("gitsuite.features.hunk", function()
         end,
         reset_buffer = function() end,
         toggle_deleted = function() end,
+        toggle_word_diff = function() end,
+        toggle_linehl = function() end,
+        preview_hunk_inline = function() end,
+        preview_hunk = function() end,
       }
     end
 
@@ -124,6 +128,75 @@ describe("gitsuite.features.hunk", function()
 
       ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(captured)
+    end)
+
+    it(
+      "inline() toggles word_diff, linehl and previews inline, does not fire GitsuiteStatusChanged",
+      function()
+        local calls = {}
+        package.loaded["gitsigns"] = {
+          toggle_word_diff = function()
+            calls[#calls + 1] = "toggle_word_diff"
+          end,
+          toggle_linehl = function()
+            calls[#calls + 1] = "toggle_linehl"
+          end,
+          preview_hunk_inline = function()
+            calls[#calls + 1] = "preview_hunk_inline"
+          end,
+          preview_hunk = function()
+            calls[#calls + 1] = "preview_hunk"
+          end,
+        }
+
+        hunk.inline()
+
+        ---@diagnostic disable-next-line: undefined-field
+        assert.same({ "toggle_word_diff", "toggle_linehl", "preview_hunk_inline" }, calls)
+        ---@diagnostic disable-next-line: undefined-field
+        assert.is_nil(captured)
+      end
+    )
+
+    it("inline() falls back to preview_hunk when preview_hunk_inline is unavailable", function()
+      local calls = {}
+      package.loaded["gitsigns"] = {
+        toggle_word_diff = function()
+          calls[#calls + 1] = "toggle_word_diff"
+        end,
+        toggle_linehl = function()
+          calls[#calls + 1] = "toggle_linehl"
+        end,
+        preview_hunk = function()
+          calls[#calls + 1] = "preview_hunk"
+        end,
+      }
+
+      hunk.inline()
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.same({ "toggle_word_diff", "toggle_linehl", "preview_hunk" }, calls)
+    end)
+
+    it(":Git hunk inline routes to inline()", function()
+      require("gitsuite.bindings.usrcmds").register({ commands = { git = "Git" } })
+      local calls = {}
+      package.loaded["gitsigns"] = {
+        toggle_word_diff = function()
+          calls[#calls + 1] = "toggle_word_diff"
+        end,
+        toggle_linehl = function()
+          calls[#calls + 1] = "toggle_linehl"
+        end,
+        preview_hunk_inline = function()
+          calls[#calls + 1] = "preview_hunk_inline"
+        end,
+      }
+
+      vim.cmd("Git hunk inline")
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.same({ "toggle_word_diff", "toggle_linehl", "preview_hunk_inline" }, calls)
     end)
   end)
 end)

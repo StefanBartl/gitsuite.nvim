@@ -13,7 +13,13 @@ end
 
 ---@return nil
 function M.open()
-  require("diffview").open()
+  require("diffview").open({})
+end
+
+---Close the current diffview tab.
+---@return nil
+function M.close()
+  require("diffview").close()
 end
 
 return M

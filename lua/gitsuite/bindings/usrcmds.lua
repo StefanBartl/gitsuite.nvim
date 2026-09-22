@@ -126,6 +126,13 @@ local function build_routes()
         require("gitsuite.features.hunk").toggle_deleted()
       end,
     },
+    {
+      path = { "hunk", "inline" },
+      desc = "Toggle inline diff: invert word_diff & linehl, preview current hunk inline",
+      run = function()
+        require("gitsuite.features.hunk").inline()
+      end,
+    },
 
     -- blame: own implementation, native `git blame --porcelain`
     {
@@ -251,10 +258,17 @@ local function build_routes()
       end,
     },
     {
-      path = { "ui", "diffview" },
+      path = { "ui", "diffview", "open" },
       desc = "Open diffview",
       run = function()
-        require("gitsuite.features.ui").diffview()
+        require("gitsuite.features.ui").diffview_open()
+      end,
+    },
+    {
+      path = { "ui", "diffview", "close" },
+      desc = "Close the current diffview",
+      run = function()
+        require("gitsuite.features.ui").diffview_close()
       end,
     },
 

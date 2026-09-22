@@ -1,8 +1,9 @@
 ---@module 'gitsuite.features.ui'
---- `:Git ui lazygit|neogit|diffview` -- TUI launchers. lazygit is
---- gitsuite.nvim's own (`features/ui/lazygit/`, a float + the real
+--- `:Git ui lazygit|neogit|diffview {open|close}` -- TUI launchers. lazygit
+--- is gitsuite.nvim's own (`features/ui/lazygit/`, a float + the real
 --- `lazygit` binary); neogit and diffview are thin adapters (Schicht 3,
---- never nachbauen).
+--- never nachbauen). diffview's file-history is not exposed here -- moved
+--- onto diff.nvim's own `:Git diff history` (GS-08).
 
 local adapter = require("gitsuite.adapter")
 local notify = require("gitsuite.util.notify")
@@ -31,18 +32,32 @@ function M.neogit()
   a.open()
 end
 
----Open diffview.
----@return nil
-function M.diffview()
+---@internal
+---@return GitSuite.Adapter|nil
+local function diffview_adapter()
   local a = adapter.resolve("diffview")
   if not a then
     notify.error(
       'ui diffview: diffview.nvim is not installed -- install "sindrets/diffview.nvim" to use :Git ui diffview'
     )
-    return
   end
+  return a
+end
+
+---Open diffview.
+---@return nil
+function M.diffview_open()
+  local a = diffview_adapter()
   ---@diagnostic disable-next-line: undefined-field
-  a.open()
+  if a then a.open() end
+end
+
+---Close the current diffview.
+---@return nil
+function M.diffview_close()
+  local a = diffview_adapter()
+  ---@diagnostic disable-next-line: undefined-field
+  if a then a.close() end
 end
 
 return M

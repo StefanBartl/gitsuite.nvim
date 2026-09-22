@@ -9,6 +9,10 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 | --- | --- | --- |
 | `<leader>gb` | `blame_full` | `:Git blame full` |
 | `<leader>lg` | `ui_lazygit` | `:Git ui lazygit` |
+| `<leader>di` | `hunk_inline` | `:Git hunk inline` |
+| `<leader>dv` | `diffview_open` | `:Git ui diffview open` |
+| `<leader>dc` | `diffview_close` | `:Git ui diffview close` |
+| `<leader>dh` | `diff_history` | `:Git diff history` |
 
 ## User commands
 
@@ -46,6 +50,7 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 | `:Git diff last` | Diff the current file against the previous commit |
 | `:Git diff rev {rev}` | Diff the current file against an arbitrary revision |
 | `:Git diff split` | Open the diff view |
+| `:Git hunk inline` | Toggle inline diff: invert word_diff & linehl, preview current hunk inline |
 | `:Git hunk preview` | Preview the hunk under the cursor |
 | `:Git hunk reset` | Reset the hunk under the cursor |
 | `:Git hunk reset-buffer` | Reset every hunk in the current buffer |
@@ -54,7 +59,8 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 | `:Git hunk toggle-deleted` | Toggle showing deleted lines inline |
 | `:Git status quickfix` | Export repo status to the quickfix list |
 | `:Git status repo` | Show repo status (branch, ahead/behind, dirty) |
-| `:Git ui diffview` | Open diffview |
+| `:Git ui diffview close` | Close the current diffview |
+| `:Git ui diffview open` | Open diffview |
 | `:Git ui lazygit [{dir:DIR}]` | Open lazygit in a floating terminal (optionally for the repo containing <dir>) |
 | `:Git ui neogit` | Open neogit |
 

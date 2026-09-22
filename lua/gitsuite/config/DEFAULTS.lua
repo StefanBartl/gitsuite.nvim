@@ -23,6 +23,10 @@ local DEFAULTS = {
   keymaps = {
     blame_full = "<leader>gb",
     ui_lazygit = "<leader>lg",
+    hunk_inline = "<leader>di",
+    diffview_open = "<leader>dv",
+    diffview_close = "<leader>dc",
+    diff_history = "<leader>dh",
   },
   browse = {
     -- Additional self-hosted GitHub/GitLab/Codeberg(Gitea) instances, keyed

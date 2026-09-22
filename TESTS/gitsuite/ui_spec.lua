@@ -39,10 +39,81 @@ describe("gitsuite.features.ui", function()
     assert.is_true(ok)
   end)
 
-  it("diffview() reports 'not installed', does not crash, without diffview", function()
-    local ok = pcall(ui.diffview)
+  it("diffview_open() reports 'not installed', does not crash, without diffview", function()
+    local ok = pcall(ui.diffview_open)
     ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
+  end)
+
+  it("diffview_close() reports 'not installed', does not crash, without diffview", function()
+    local ok = pcall(ui.diffview_close)
+    ---@diagnostic disable-next-line: undefined-field
+    assert.is_true(ok)
+  end)
+
+  describe("diffview_open()/diffview_close(), with a faked diffview.nvim", function()
+    local real_diffview
+
+    before_each(function()
+      real_diffview = package.loaded["diffview"]
+    end)
+
+    after_each(function()
+      package.loaded["diffview"] = real_diffview
+    end)
+
+    it("diffview_open() opens with no extra args", function()
+      local calls = {}
+      package.loaded["diffview"] = {
+        open = function(args)
+          calls[#calls + 1] = { "open", args }
+        end,
+        close = function()
+          calls[#calls + 1] = { "close" }
+        end,
+      }
+
+      ui.diffview_open()
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.same({ { "open", {} } }, calls)
+    end)
+
+    it("diffview_close() closes the current view", function()
+      local calls = {}
+      package.loaded["diffview"] = {
+        open = function(args)
+          calls[#calls + 1] = { "open", args }
+        end,
+        close = function()
+          calls[#calls + 1] = { "close" }
+        end,
+      }
+
+      ui.diffview_close()
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.same({ { "close" } }, calls)
+    end)
+
+    it(":Git ui diffview open|close route to diffview_open()/diffview_close()", function()
+      require("gitsuite.bindings.usrcmds").register({ commands = { git = "Git" } })
+      local calls = {}
+      package.loaded["diffview"] = {
+        open = function(args)
+          calls[#calls + 1] = { "open", args }
+        end,
+        close = function()
+          calls[#calls + 1] = { "close" }
+        end,
+      }
+
+      vim.cmd("Git ui diffview open")
+      vim.cmd("Git ui diffview close")
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.same({ { "open", {} }, { "close" } }, calls)
+    end)
   end)
 
   -- lazygit(repo_dir): still no real process. `lazygit` is pretended present
