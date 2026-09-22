@@ -6,6 +6,7 @@
 -- consumer without gitsigns installed will see too. preview()'s fallback
 -- onto diff.nvim's real :Diff target=git:HEAD is the one path that still
 -- does real work without gitsigns.
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.features.hunk", function()
   local hunk
   local bufnr
@@ -27,14 +28,12 @@ describe("gitsuite.features.hunk", function()
   for _, action in ipairs(actions) do
     it(("%s() reports 'not installed', does not crash, without gitsigns"):format(action), function()
       local ok = pcall(hunk[action])
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
     end)
   end
 
   it("preview() falls back to diff.nvim's :Diff target=git:HEAD without gitsigns", function()
     local ok = pcall(hunk.preview)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
   end)
 
@@ -97,9 +96,7 @@ describe("gitsuite.features.hunk", function()
           package.loaded["gitsigns"] = fake_gitsigns(nil)
           hunk[action]()
 
-          ---@diagnostic disable-next-line: undefined-field
           assert.is_not_nil(captured)
-          ---@diagnostic disable-next-line: undefined-field
           assert.equals(expected_dir, captured.dir)
         end
       )
@@ -108,7 +105,6 @@ describe("gitsuite.features.hunk", function()
         package.loaded["gitsigns"] = fake_gitsigns("boom")
         hunk[action]()
 
-        ---@diagnostic disable-next-line: undefined-field
         assert.is_nil(captured)
       end)
     end
@@ -124,7 +120,6 @@ describe("gitsuite.features.hunk", function()
         package.loaded["gitsigns"] = fake_gitsigns(nil)
         hunk[action]()
 
-        ---@diagnostic disable-next-line: undefined-field
         assert.is_nil(captured)
       end)
     end
@@ -133,7 +128,6 @@ describe("gitsuite.features.hunk", function()
       package.loaded["gitsigns"] = fake_gitsigns(nil)
       hunk.toggle_deleted()
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(captured)
     end)
 
@@ -158,9 +152,7 @@ describe("gitsuite.features.hunk", function()
 
         hunk.inline()
 
-        ---@diagnostic disable-next-line: undefined-field
         assert.same({ "toggle_word_diff", "toggle_linehl", "preview_hunk_inline" }, calls)
-        ---@diagnostic disable-next-line: undefined-field
         assert.is_nil(captured)
       end
     )
@@ -181,7 +173,6 @@ describe("gitsuite.features.hunk", function()
 
       hunk.inline()
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({ "toggle_word_diff", "toggle_linehl", "preview_hunk" }, calls)
     end)
 
@@ -202,7 +193,6 @@ describe("gitsuite.features.hunk", function()
 
       vim.cmd("Git hunk inline")
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({ "toggle_word_diff", "toggle_linehl", "preview_hunk_inline" }, calls)
     end)
   end)

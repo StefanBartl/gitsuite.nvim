@@ -1,6 +1,7 @@
 -- TESTS/gitsuite/diff_spec.lua -- gitsuite.features.diff, a thin alias onto
 -- diff.nvim's real public API. Exercised against this repo's own tracked
 -- README.md (real git history: several commits touch it by now).
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.features.diff", function()
   local diff
   local bufnr
@@ -19,19 +20,16 @@ describe("gitsuite.features.diff", function()
 
   it("head() opens a diff against HEAD without error", function()
     local ok = pcall(diff.head)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
   end)
 
   it("last() opens a diff against HEAD~1 without error", function()
     local ok = pcall(diff.last)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
   end)
 
   it("rev() opens a diff against an explicit revision without error", function()
     local ok = pcall(diff.rev, "HEAD")
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
   end)
 
@@ -43,26 +41,22 @@ describe("gitsuite.features.diff", function()
     -- it), so this legitimately errors here. `pcall` just proves that
     -- error is contained, not that it silently corrupts the running nvim.
     local ok = pcall(diff.split)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_boolean(ok)
   end)
 
   it("history() does not error", function()
     local ok = pcall(diff.history)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
   end)
 
   it("close() closes an open diff without error, is a no-op with none open", function()
     diff.head()
     local ok = pcall(diff.close)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
 
     -- Nothing left open (head() above already got closed): a second call
     -- must not error just because there is nothing to close.
     local ok2 = pcall(diff.close)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok2)
   end)
 end)

@@ -1,6 +1,7 @@
 -- TESTS/gitsuite/lazygit_bridge_spec.lua -- the nvr bridge lazygit's O/<C-o>
 -- custom commands call into (badd/replace). Real file operations against
 -- this repo's own tracked files, no fixture needed.
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.features.ui.lazygit bridge", function()
   local badd
   local replace
@@ -16,31 +17,23 @@ describe("gitsuite.features.ui.lazygit bridge", function()
     it("adds a repo-relative path as a background buffer, not focused", function()
       local before_win = vim.api.nvim_get_current_win()
       local ok = badd.run("README.md")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(before_win, vim.api.nvim_get_current_win(), "badd never changes focus")
 
       local bufnr = vim.fn.bufnr(vim.fn.getcwd() .. "/README.md")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(bufnr > 0, "the buffer now exists in the buffer list")
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, vim.fn.bufloaded(bufnr), "badd does not load the buffer's content")
     end)
 
     it("returns false, does not raise, for an unreadable path", function()
       local ok, result = pcall(badd.run, "this/file/does/not/exist.md")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_false(result)
     end)
 
     it("returns false, does not raise, for an empty/nil path", function()
       local ok, result = pcall(badd.run, "")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_false(result)
     end)
   end)
@@ -54,11 +47,9 @@ describe("gitsuite.features.ui.lazygit bridge", function()
       vim.bo.buftype = "nofile"
 
       local ok = replace.run("README.md")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok, "falls back to badd, which succeeds")
 
       local bufnr = vim.fn.bufnr(vim.fn.getcwd() .. "/README.md")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(bufnr > 0, "README.md was added as a background buffer instead")
     end)
 
@@ -70,12 +61,10 @@ describe("gitsuite.features.ui.lazygit bridge", function()
       local win = vim.api.nvim_get_current_win()
 
       local ok = replace.run("README.md")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
       -- vim.fs.normalize on both sides: nvim_buf_get_name can come back with
       -- OS-native separators (backslashes on Windows) while getcwd() here
       -- returns forward slashes -- same file, different string.
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(
         vim.fs.normalize(vim.fn.getcwd() .. "/README.md"),
         vim.fs.normalize(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)))
@@ -92,13 +81,10 @@ describe("gitsuite.features.ui.lazygit bridge", function()
       local original_buf = vim.api.nvim_win_get_buf(win)
 
       local ok = replace.run("README.md")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok, "falls back to badd, which succeeds")
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(original_buf, vim.api.nvim_win_get_buf(win), "the modified buffer is untouched")
 
       local bufnr = vim.fn.bufnr(vim.fn.getcwd() .. "/README.md")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(bufnr > 0, "README.md was added as a background buffer instead")
 
       vim.bo[original_buf].modified = false -- so :bdelete/test teardown never prompts

@@ -4,6 +4,7 @@
 -- gitsigns), so it is faked via `package.loaded["filetree.refs"]` -- this
 -- suite is about what relink() computes and calls, not filetree.nvim's own
 -- reference engine (that belongs to filetree.nvim's own test suite).
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.features.status.relink", function()
   local relink
   local git = require("lib.nvim.git")
@@ -32,11 +33,8 @@ describe("gitsuite.features.status.relink", function()
     package.preload["filetree.refs"] = orig_preload
     package.loaded["filetree.refs"] = real_refs
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok, "must not raise, just report an error")
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(1, #seen)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_truthy(seen[1]:find("filetree.nvim is not installed", 1, true))
   end)
 
@@ -48,7 +46,6 @@ describe("gitsuite.features.status.relink", function()
       repo = vim.fn.tempname() .. "-gitsuite-relink"
       vim.fn.mkdir(repo, "p")
       local init = vim.system({ "git", "-C", repo, "init", "-q" }):wait()
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, init.code, "fixture: git init failed: " .. tostring(init.stderr))
       vim.system({ "git", "-C", repo, "config", "user.email", "test@example.com" }):wait()
       vim.system({ "git", "-C", repo, "config", "user.name", "Test" }):wait()
@@ -78,7 +75,6 @@ describe("gitsuite.features.status.relink", function()
       vim.fn.writefile({ "content" }, repo .. "/plain.md")
       relink.relink()
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(captured.scan, "scan() was never called")
     end)
 
@@ -86,35 +82,25 @@ describe("gitsuite.features.status.relink", function()
       vim.fn.writefile({ "# Hello" }, repo .. "/old.md")
       vim.system({ "git", "-C", repo, "add", "old.md" }):wait()
       local commit = vim.system({ "git", "-C", repo, "commit", "-q", "-m", "init" }):wait()
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, commit.code, "fixture: git commit failed: " .. tostring(commit.stderr))
 
       local mv = vim.system({ "git", "-C", repo, "mv", "old.md", "new.md" }):wait()
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, mv.code, "fixture: git mv failed: " .. tostring(mv.stderr))
 
       relink.relink()
 
       local root = git.repo_root()
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_not_nil(root)
       local old_abs = vim.fs.joinpath(root, "old.md")
       local new_abs = vim.fs.joinpath(root, "new.md")
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_not_nil(captured.scan, "scan() was called")
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({ old_abs }, captured.scan.paths)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals("rename", captured.scan.opts.op)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals("ask", captured.scan.opts.mode)
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_not_nil(captured.handle_result, "handle_result() was called")
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({ [old_abs] = new_abs }, captured.handle_result.moves)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals("ask", captured.handle_result.opts.mode)
     end)
   end)

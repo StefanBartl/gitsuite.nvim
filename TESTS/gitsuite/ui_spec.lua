@@ -9,6 +9,7 @@
 -- gitsigns/open.nvim.
 -- The one exception is the lazygit(repo_dir) block, which pretends lazygit
 -- is present but stubs `jobstart`, so it still never starts a process.
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.features.ui", function()
   local ui
 
@@ -29,13 +30,11 @@ describe("gitsuite.features.ui", function()
     local ok = pcall(ui.lazygit)
 
     vim.fn.executable = original_executable
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
   end)
 
   it("neogit() reports 'not installed', does not crash, without neogit", function()
     local ok = pcall(ui.neogit)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
   end)
 
@@ -53,9 +52,7 @@ describe("gitsuite.features.ui", function()
       local ok = pcall(ui.diffview_open)
 
       package.loaded["diff"] = real_diff
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({ { "run", "" } }, calls)
     end
   )
@@ -74,9 +71,7 @@ describe("gitsuite.features.ui", function()
       local ok = pcall(ui.diffview_close)
 
       package.loaded["diff"] = real_diff
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({ { "clear" } }, calls)
     end
   )
@@ -105,7 +100,6 @@ describe("gitsuite.features.ui", function()
 
       ui.diffview_open()
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({ { "open", {} } }, calls)
     end)
 
@@ -122,7 +116,6 @@ describe("gitsuite.features.ui", function()
 
       ui.diffview_close()
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({ { "close" } }, calls)
     end)
 
@@ -141,7 +134,6 @@ describe("gitsuite.features.ui", function()
       vim.cmd("Git ui diffview open")
       vim.cmd("Git ui diffview close")
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({ { "open", {} }, { "close" } }, calls)
     end)
   end)
@@ -163,7 +155,6 @@ describe("gitsuite.features.ui", function()
     local function git_init(dir)
       vim.fn.mkdir(dir, "p")
       local res = vim.system({ "git", "init", "-q", dir }):wait()
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, res.code, "git init: " .. tostring(res.stderr))
     end
 
@@ -210,13 +201,9 @@ describe("gitsuite.features.ui", function()
 
     ---@param pattern string
     local function assert_error_and_no_float(pattern)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #errors, "exactly one error is reported")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_truthy(errors[1]:find(pattern, 1, true), errors[1])
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, #spawned, "no process is started")
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(#wins_before, #vim.api.nvim_list_wins(), "no float is left open")
     end
 
@@ -244,18 +231,12 @@ describe("gitsuite.features.ui", function()
 
       ui.lazygit(repo .. "/sub/deep")
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, #errors, table.concat(errors, "\n"))
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #spawned)
       local argv = spawned[1].argv
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({ "lazygit", "-p" }, { argv[1], argv[2] })
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(real(repo), real(argv[3]), "-p is the repo root, not the subdirectory")
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(real(repo), real(spawned[1].opts.cwd), "the process cwd is the repo root")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(real(repo) ~= real(original_cwd), "not the repo Neovim happens to be in")
     end)
 
@@ -266,11 +247,8 @@ describe("gitsuite.features.ui", function()
 
       ui.lazygit()
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, #errors, table.concat(errors, "\n"))
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #spawned)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(real(repo), real(spawned[1].argv[3]))
     end)
 
@@ -286,20 +264,15 @@ describe("gitsuite.features.ui", function()
       git_init(repo)
 
       vim.cmd("Git ui lazygit " .. vim.fn.fnameescape(vim.fs.normalize(repo)))
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, #errors, table.concat(errors, "\n"))
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #spawned)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(real(repo), real(spawned[1].argv[3]), "the <dir> argument reaches lazygit")
 
       -- No argument: the cwd's repo (this suite runs inside the gitsuite checkout).
       spawned = {}
       vim.cmd("stopinsert")
       vim.cmd("Git ui lazygit")
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #spawned)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(real(original_cwd), real(spawned[1].argv[3]))
     end)
   end)

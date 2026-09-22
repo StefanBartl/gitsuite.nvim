@@ -1,5 +1,6 @@
 -- TESTS/gitsuite/init_spec.lua -- gitsuite's top-level require("gitsuite")
 -- .setup() entry point.
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite", function()
   before_each(function()
     package.loaded["gitsuite"] = nil
@@ -17,12 +18,10 @@ describe("gitsuite", function()
       -- ui.nvim adapter (which deliberately checks package.loaded rather
       -- than requiring the module itself, precisely to avoid forcing an
       -- early load) rendered "" no matter what the buffer held.
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(package.loaded["gitsuite.statusline"])
 
       require("gitsuite").setup({})
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals("table", type(package.loaded["gitsuite.statusline"]))
     end
   )
@@ -35,9 +34,7 @@ describe("gitsuite", function()
       require("gitsuite").setup({})
     end)
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(statusline_after_first, package.loaded["gitsuite.statusline"])
   end)
 end)

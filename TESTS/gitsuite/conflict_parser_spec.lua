@@ -1,6 +1,7 @@
 -- TESTS/gitsuite/conflict_parser_spec.lua -- pure conflict-marker parsing.
 -- The one module in gitsuite.nvim with real correctness risk: exact
 -- row-offset assertions throughout, not just "found N regions".
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.features.conflict.parser", function()
   local parser = require("gitsuite.features.conflict.parser")
 
@@ -16,44 +17,26 @@ describe("gitsuite.features.conflict.parser", function()
       "line after", -- 8 (row 7)
     }
     local regions = parser.parse(lines)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(1, #regions)
     local r = regions[1]
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("merge", r.style)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(1, r.start_line)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("HEAD", r.ours_label)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(2, r.ours_first)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(3, r.ours_last)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(r.base_first)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(4, r.sep_line)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(5, r.theirs_first)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(5, r.theirs_last)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("feature-branch", r.theirs_label)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(6, r.end_line)
 
     -- Cross-check every row against the actual source lines.
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("<<<<<<< HEAD", lines[r.start_line + 1])
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("our line 1", lines[r.ours_first + 1])
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("our line 2", lines[r.ours_last + 1])
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("=======", lines[r.sep_line + 1])
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("their line 1", lines[r.theirs_first + 1])
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(">>>>>>> feature-branch", lines[r.end_line + 1])
   end)
 
@@ -69,29 +52,18 @@ describe("gitsuite.features.conflict.parser", function()
       ">>>>>>> feature-branch", -- row 7
     }
     local regions = parser.parse(lines)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(1, #regions)
     local r = regions[1]
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("diff3", r.style)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(1, r.ours_first)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(1, r.ours_last)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(3, r.base_first)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(4, r.base_last)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(5, r.sep_line)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(6, r.theirs_first)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(6, r.theirs_last)
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("base line 1", lines[r.base_first + 1])
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("base line 2", lines[r.base_last + 1])
   end)
 
@@ -110,11 +82,8 @@ describe("gitsuite.features.conflict.parser", function()
       ">>>>>>> theirs",
     }
     local regions = parser.parse(lines)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(1, #regions)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("diff3", regions[1].style)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("original", lines[regions[1].base_first + 1])
   end)
 
@@ -135,13 +104,9 @@ describe("gitsuite.features.conflict.parser", function()
       "after",
     }
     local regions = parser.parse(lines)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(2, #regions)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("a-ours", lines[regions[1].ours_first + 1])
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("b-ours", lines[regions[2].ours_first + 1])
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(
       regions[2].start_line > regions[1].end_line,
       "regions are in buffer order, non-overlapping"
@@ -157,16 +122,13 @@ describe("gitsuite.features.conflict.parser", function()
     }
     local r = parser.parse(lines)[1]
     -- ours_first > ours_last signals "empty", per the module's own contract.
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(r.ours_first > r.ours_last)
   end)
 
   it("skips an unclosed <<<<<<< (no ======= before EOF), does not raise", function()
     local lines = { "<<<<<<< HEAD", "dangling", "no closing markers here" }
     local ok, regions = pcall(parser.parse, lines)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(0, #regions)
   end)
 
@@ -181,20 +143,16 @@ describe("gitsuite.features.conflict.parser", function()
       ">>>>>>> branch",
     }
     local regions = parser.parse(lines)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(1, #regions, "only the well-formed conflict is reported")
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("real ours", lines[regions[1].ours_first + 1])
   end)
 
   it("returns an empty list for a buffer with no conflict markers", function()
     local regions = parser.parse({ "just", "some", "ordinary", "lines" })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(0, #regions)
   end)
 
   it("returns an empty list for an empty buffer", function()
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(0, #parser.parse({}))
   end)
 
@@ -215,7 +173,6 @@ describe("gitsuite.features.conflict.parser", function()
 
     it("outside any conflict never starts a region", function()
       local regions = parser.parse({ "Title", "=======", "text", "=======", "more" })
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, #regions)
     end)
 
@@ -234,20 +191,13 @@ describe("gitsuite.features.conflict.parser", function()
           ">>>>>>> other",
         }
         local regions = parser.parse(lines)
-        ---@diagnostic disable-next-line: undefined-field
         assert.equals(1, #regions)
         local r = regions[1]
-        ---@diagnostic disable-next-line: undefined-field
         assert.is_falsy(r.ambiguous)
-        ---@diagnostic disable-next-line: undefined-field
         assert.equals("diff3", r.style)
-        ---@diagnostic disable-next-line: undefined-field
         assert.same({ "Title", "=======", "our text" }, slice(lines, r.ours_first, r.ours_last))
-        ---@diagnostic disable-next-line: undefined-field
         assert.same({ "base text" }, slice(lines, r.base_first, r.base_last))
-        ---@diagnostic disable-next-line: undefined-field
         assert.same({ "their text" }, slice(lines, r.theirs_first, r.theirs_last))
-        ---@diagnostic disable-next-line: undefined-field
         assert.equals(6, r.sep_line)
       end
     )
@@ -265,10 +215,8 @@ describe("gitsuite.features.conflict.parser", function()
         ">>>>>>> other",
       }
       local regions = parser.parse(lines)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #regions)
       local r = regions[1]
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(
         r.ambiguous,
         "two candidates after the base marker: which one ends the base section is not decidable"
@@ -277,9 +225,7 @@ describe("gitsuite.features.conflict.parser", function()
       -- `|||||||`) -- base_first is set on the ambiguous region too, so a
       -- caller that disambiguates `separators` down to one can reconstruct
       -- a concrete region without re-deriving it.
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(3, r.base_first)
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({ 4, 6 }, r.separators)
     end)
 
@@ -294,25 +240,16 @@ describe("gitsuite.features.conflict.parser", function()
         ">>>>>>> other",
       }
       local regions = parser.parse(lines)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #regions, "the conflict is still reported, it is not silently dropped")
       local r = regions[1]
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(r.ambiguous)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, r.start_line)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(6, r.end_line)
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({ 2, 4 }, r.separators)
       -- No section is claimed: a guessed boundary is exactly the bug.
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(r.ours_first)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(r.theirs_first)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(r.sep_line)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(r.base_first, "merge style: no base marker exists to be unambiguous about")
     end)
 
@@ -326,14 +263,10 @@ describe("gitsuite.features.conflict.parser", function()
         ">>>>>>> other",
       }
       local regions = parser.parse(lines)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #regions)
       local r = regions[1]
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_falsy(r.ambiguous)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals("merge", r.style)
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({ "|||||||", "their text" }, slice(lines, r.theirs_first, r.theirs_last))
     end)
   end)
@@ -363,26 +296,16 @@ describe("gitsuite.features.conflict.parser", function()
 
     it("is one region: the outer conflict, the inner markers stay inside its base", function()
       local regions = parser.parse(lines)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #regions)
       local r = regions[1]
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals("diff3", r.style)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, r.start_line)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(13, r.end_line)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(11, r.sep_line)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(4, r.base_first)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(10, r.base_last)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_falsy(r.ambiguous)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals("ours", lines[r.ours_first + 1])
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals("theirs", lines[r.theirs_first + 1])
     end)
 
@@ -395,9 +318,7 @@ describe("gitsuite.features.conflict.parser", function()
         ">>>>>>> other",
       })
       local regions = parser.parse(more)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(2, #regions)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals("second ours", more[regions[2].ours_first + 1])
     end)
 
@@ -410,7 +331,6 @@ describe("gitsuite.features.conflict.parser", function()
         "theirs",
         ">>>>>>> other",
       })
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, #regions)
     end)
   end)
@@ -433,22 +353,14 @@ describe("gitsuite.features.conflict.parser", function()
 
     it("is not ambiguous: only a run of the same length is a marker", function()
       local regions = parser.parse(lines)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #regions)
       local r = regions[1]
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_falsy(r.ambiguous)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(4, r.sep_line)
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({ "Title", "=======", "our text" }, vim.list_slice(lines, 2, 4))
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, r.ours_first)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(3, r.ours_last)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(5, r.theirs_first)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(7, r.theirs_last)
     end)
 
@@ -465,7 +377,6 @@ describe("gitsuite.features.conflict.parser", function()
         "theirs",
         ">>>>>>>>>> other",
       })
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(2, #regions)
     end)
   end)
@@ -478,11 +389,8 @@ describe("gitsuite.features.conflict.parser", function()
       "their line\r",
       ">>>>>>> feature\r",
     })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(1, #regions)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("HEAD", regions[1].ours_label)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("feature", regions[1].theirs_label)
   end)
 end)

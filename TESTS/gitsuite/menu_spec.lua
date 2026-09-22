@@ -3,6 +3,7 @@
 -- so `adapter.resolve("gitsigns")` correctly reports "not installed" without
 -- faking anything for the "no gitsigns" cases; a faked `gitsigns` module
 -- covers the "installed" ones.
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.integrations.menu", function()
   local menu
   local real_gitsigns
@@ -34,26 +35,16 @@ describe("gitsuite.integrations.menu", function()
   it("without gitsigns: only Blame and Diff entries are offered", function()
     local items = menu.items()
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(find(items, "Stage Hunk"))
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(find(items, "Reset Hunk"))
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(find(items, "Stage Buffer"))
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(find(items, "Reset Buffer"))
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(find(items, "Toggle Deleted"))
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(find(items, "Preview Hunk"))
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(find(items, "Blame Line"))
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(find(items, "Toggle Current Line Blame"))
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(find(items, "Diff Against HEAD"))
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(find(items, "Diff Last Commit"))
   end)
 
@@ -74,7 +65,6 @@ describe("gitsuite.integrations.menu", function()
       "Toggle Deleted",
     }
     for _, name in ipairs(expected) do
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_not_nil(find(items, name), name .. " missing")
     end
   end)
@@ -97,13 +87,11 @@ describe("gitsuite.integrations.menu", function()
 
     local items = menu.items()
     local blame_line = find(items, "Blame Line")
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(blame_line)
     blame_line.cmd()
 
     vim.cmd = original_cmd
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.same({ "MyGit blame line" }, calls)
   end)
 
@@ -114,25 +102,19 @@ describe("gitsuite.integrations.menu", function()
 
     local items = menu.items()
     local blame_line = find(items, "Blame Line")
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(blame_line)
 
     local ok = pcall(blame_line.cmd)
     pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(git.repo_root())
   end)
 
   it("submenu() wraps items() as one 'Git' fly-out entry", function()
     local sub = menu.submenu()
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(sub)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("Git", sub.name)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(#sub.items > 0)
   end)
 end)

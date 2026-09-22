@@ -2,6 +2,7 @@
 -- impure shell: scan/highlight/choose/navigate) against real scratch
 -- buffers with synthetic conflict markers. No git state needed -- this
 -- operates purely on buffer text.
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.features.conflict", function()
   local conflict
   local bufnr
@@ -39,7 +40,6 @@ describe("gitsuite.features.conflict", function()
     it("without color_my_ascii.nvim: a fenced-looking conflict still counts", function()
       package.loaded["color_my_ascii.api.fences"] = nil
       set_lines({ "<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> branch" })
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(conflict.has_conflicts(bufnr))
     end)
 
@@ -52,7 +52,6 @@ describe("gitsuite.features.conflict", function()
         end,
       }
       set_lines({ "<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> branch" })
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_false(conflict.has_conflicts(bufnr))
     end)
 
@@ -65,7 +64,6 @@ describe("gitsuite.features.conflict", function()
           end,
         }
         set_lines({ "<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> branch" })
-        ---@diagnostic disable-next-line: undefined-field
         assert.is_true(conflict.has_conflicts(bufnr))
       end
     )
@@ -73,11 +71,9 @@ describe("gitsuite.features.conflict", function()
 
   it("has_conflicts() is false for an ordinary buffer, true once markers are added", function()
     set_lines({ "just", "ordinary", "lines" })
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_false(conflict.has_conflicts(bufnr))
 
     set_lines({ "<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> branch" })
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(conflict.has_conflicts(bufnr))
   end)
 
@@ -96,11 +92,9 @@ describe("gitsuite.features.conflict", function()
 
     it("is still a conflict: has_conflicts() and next() see it", function()
       set_lines(lines)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(conflict.has_conflicts(bufnr))
       vim.api.nvim_win_set_cursor(0, { 1, 0 })
       conflict.next()
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(2, vim.api.nvim_win_get_cursor(0)[1])
     end)
 
@@ -112,11 +106,9 @@ describe("gitsuite.features.conflict", function()
       local rows = {}
       for _, mark in ipairs(marks) do
         rows[#rows + 1] = mark[2]
-        ---@diagnostic disable-next-line: undefined-field
         assert.equals("GitSuiteConflictMarker", mark[4].hl_group)
       end
       table.sort(rows)
-      ---@diagnostic disable-next-line: undefined-field
       assert.same(
         { 1, 3, 5, 7 },
         rows,
@@ -137,9 +129,7 @@ describe("gitsuite.features.conflict", function()
         conflict.choose("ours")
         vim.ui.select = original_select
 
-        ---@diagnostic disable-next-line: undefined-field
         assert.same({ 3, 5 }, offered, "both candidate rows are offered, in order")
-        ---@diagnostic disable-next-line: undefined-field
         assert.same(
           { "before", "Title", "after" },
           get_lines(),
@@ -157,7 +147,6 @@ describe("gitsuite.features.conflict", function()
         conflict.choose("ours")
         vim.ui.select = original_select
 
-        ---@diagnostic disable-next-line: undefined-field
         assert.same(
           { "before", "Title", "=======", "our text", "after" },
           get_lines(),
@@ -175,9 +164,7 @@ describe("gitsuite.features.conflict", function()
         local ok = pcall(conflict.choose, "ours")
         vim.ui.select = original_select
 
-        ---@diagnostic disable-next-line: undefined-field
         assert.is_true(ok)
-        ---@diagnostic disable-next-line: undefined-field
         assert.same(lines, get_lines())
       end)
 
@@ -205,17 +192,13 @@ describe("gitsuite.features.conflict", function()
           vim.notify = original_notify
           vim.ui.select = original_select
 
-          ---@diagnostic disable-next-line: undefined-field
           assert.is_true(ok, "refusing is a message, not an error")
-          ---@diagnostic disable-next-line: undefined-field
           assert.same(
             { "before", "<<<<<<< HEAD", "Title", "=======", "our text", "EDITED" },
             get_lines(),
             "the concurrent edit is left untouched, not overwritten"
           )
-          ---@diagnostic disable-next-line: undefined-field
           assert.equals(1, #seen)
-          ---@diagnostic disable-next-line: undefined-field
           assert.is_truthy(seen[1]:find("buffer changed", 1, true))
         end
       )
@@ -255,15 +238,10 @@ describe("gitsuite.features.conflict", function()
         vim.notify = original_notify
         vim.ui.select = original_select
 
-        ---@diagnostic disable-next-line: undefined-field
         assert.is_true(ok, "refusing is a message, not an error")
-        ---@diagnostic disable-next-line: undefined-field
         assert.is_false(select_called, "no prompt: one candidate separator can't be chosen among")
-        ---@diagnostic disable-next-line: undefined-field
         assert.same(base_ambiguous, get_lines())
-        ---@diagnostic disable-next-line: undefined-field
         assert.equals(1, #seen)
-        ---@diagnostic disable-next-line: undefined-field
         assert.is_truthy(seen[1]:find("ambiguous", 1, true))
       end
     )
@@ -275,7 +253,6 @@ describe("gitsuite.features.conflict", function()
     local ns = vim.api.nvim_create_namespace("gitsuite_conflict")
     local marks = vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, {})
     -- start marker, ours, sep marker, theirs, end marker = 5
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(5, #marks)
   end)
 
@@ -291,7 +268,6 @@ describe("gitsuite.features.conflict", function()
     })
     vim.api.nvim_win_set_cursor(0, { 3, 0 }) -- cursor inside the conflict
     conflict.choose("ours")
-    ---@diagnostic disable-next-line: undefined-field
     assert.same({ "before", "our line", "after" }, get_lines())
   end)
 
@@ -299,7 +275,6 @@ describe("gitsuite.features.conflict", function()
     set_lines({ "<<<<<<< HEAD", "our line", "=======", "their line", ">>>>>>> branch" })
     vim.api.nvim_win_set_cursor(0, { 1, 0 })
     conflict.choose("theirs")
-    ---@diagnostic disable-next-line: undefined-field
     assert.same({ "their line" }, get_lines())
   end)
 
@@ -307,7 +282,6 @@ describe("gitsuite.features.conflict", function()
     set_lines({ "<<<<<<< HEAD", "our line", "=======", "their line", ">>>>>>> branch" })
     vim.api.nvim_win_set_cursor(0, { 2, 0 })
     conflict.choose("both")
-    ---@diagnostic disable-next-line: undefined-field
     assert.same({ "our line", "their line" }, get_lines())
   end)
 
@@ -323,7 +297,6 @@ describe("gitsuite.features.conflict", function()
     })
     vim.api.nvim_win_set_cursor(0, { 4, 0 })
     conflict.choose("none")
-    ---@diagnostic disable-next-line: undefined-field
     assert.same({ "before", "after" }, get_lines())
   end)
 
@@ -339,7 +312,6 @@ describe("gitsuite.features.conflict", function()
     })
     vim.api.nvim_win_set_cursor(0, { 1, 0 })
     conflict.choose("base")
-    ---@diagnostic disable-next-line: undefined-field
     assert.same({ "base line" }, get_lines())
   end)
 
@@ -350,9 +322,7 @@ describe("gitsuite.features.conflict", function()
       set_lines(original)
       vim.api.nvim_win_set_cursor(0, { 1, 0 })
       local ok = pcall(conflict.choose, "base")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok, "must not raise, just report an error")
-      ---@diagnostic disable-next-line: undefined-field
       assert.same(
         original,
         get_lines(),
@@ -366,9 +336,7 @@ describe("gitsuite.features.conflict", function()
     set_lines(original)
     vim.api.nvim_win_set_cursor(0, { 2, 0 })
     local ok = pcall(conflict.choose, "ours")
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
-    ---@diagnostic disable-next-line: undefined-field
     assert.same(original, get_lines())
   end)
 
@@ -389,7 +357,6 @@ describe("gitsuite.features.conflict", function()
     vim.api.nvim_win_set_cursor(0, { 2, 0 }) -- inside the FIRST conflict
     conflict.choose("ours")
     local lines = get_lines()
-    ---@diagnostic disable-next-line: undefined-field
     assert.same(
       { "a-ours", "between", "<<<<<<< HEAD", "b-ours", "=======", "b-theirs", ">>>>>>> branch" },
       lines
@@ -413,22 +380,17 @@ describe("gitsuite.features.conflict", function()
     })
     vim.api.nvim_win_set_cursor(0, { 1, 0 })
     conflict.next()
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(2, vim.api.nvim_win_get_cursor(0)[1])
 
     conflict.next()
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(8, vim.api.nvim_win_get_cursor(0)[1])
 
     -- No third conflict: cursor stays put, does not raise.
     local ok = pcall(conflict.next)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(8, vim.api.nvim_win_get_cursor(0)[1])
 
     conflict.prev()
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(2, vim.api.nvim_win_get_cursor(0)[1])
   end)
 
@@ -457,9 +419,7 @@ describe("gitsuite.features.conflict", function()
       vim.api.nvim_win_set_cursor(0, { 1, 0 })
       conflict.choose("ours")
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_not_nil(captured)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(bufnr, captured.bufnr)
     end)
 
@@ -480,7 +440,6 @@ describe("gitsuite.features.conflict", function()
       vim.api.nvim_win_set_cursor(0, { 2, 0 }) -- inside the FIRST conflict
       conflict.choose("ours")
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(captured)
     end)
 
@@ -502,7 +461,6 @@ describe("gitsuite.features.conflict", function()
       pcall(conflict.choose, "ours")
       vim.ui.select = original_select
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(captured)
     end)
   end)
@@ -537,9 +495,7 @@ describe("gitsuite.features.conflict", function()
       vim.notify = original_notify
       package.preload["insights.conflicts"] = orig_preload
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, done_count)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_truthy(seen[1] and seen[1]:find("insights.nvim is not installed", 1, true))
     end)
 
@@ -553,7 +509,6 @@ describe("gitsuite.features.conflict", function()
       conflict.list(function(count)
         done_count = count
       end)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(3, done_count)
     end)
 
@@ -564,7 +519,6 @@ describe("gitsuite.features.conflict", function()
         end,
       }
       local ok = pcall(conflict.list)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
     end)
   end)

@@ -1,5 +1,6 @@
 -- TESTS/gitsuite/blame_spec.lua -- gitsuite.features.blame against this
 -- repo's own tracked README.md (real git history, no fixture needed).
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.features.blame", function()
   local blame
   local bufnr
@@ -18,41 +19,34 @@ describe("gitsuite.features.blame", function()
 
   it("line() does not error on a real tracked file", function()
     local ok = pcall(blame.line)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
   end)
 
   it("line() reports an error, not a crash, on an unnamed buffer", function()
     vim.cmd("enew")
     local ok = pcall(blame.line)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok, "must not raise even without a file")
     vim.cmd("bdelete!")
   end)
 
   it("toggle() sets a buffer-local flag and an extmark, toggling again clears both", function()
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(vim.b[bufnr].gitsuite_blame_active)
 
     -- The refresh is async (LUA-15: a blocking call on every CursorHold
     -- would freeze the UI) -- the first extmark lands after the underlying
     -- git job completes, not synchronously when toggle() returns.
     blame.toggle()
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(vim.b[bufnr].gitsuite_blame_active)
     local ns = vim.api.nvim_create_namespace("gitsuite_blame")
     vim.wait(2000, function()
       return #vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, {}) > 0
     end)
     local marks = vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, {})
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(#marks > 0, "toggle() on must place at least one extmark")
 
     blame.toggle()
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(vim.b[bufnr].gitsuite_blame_active)
     marks = vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, {})
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(0, #marks, "toggle() off must clear its own extmarks")
   end)
 
@@ -77,7 +71,6 @@ describe("gitsuite.features.blame", function()
       vim.wait(1500)
 
       local marks = vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, {})
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(
         0,
         #marks,
@@ -93,23 +86,18 @@ describe("gitsuite.features.blame", function()
     blame.full()
 
     local blame_win = vim.api.nvim_get_current_win()
-    ---@diagnostic disable-next-line: undefined-field
     assert.are_not.equal(src_win, blame_win, "full() opens a new window, not the source one")
 
     local blame_bufnr = vim.api.nvim_win_get_buf(blame_win)
     local lines = vim.api.nvim_buf_get_lines(blame_bufnr, 0, -1, false)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(expected, #lines, "one blame line per source line")
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(vim.wo[blame_win].scrollbind)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(vim.wo[src_win].scrollbind)
 
     -- Closing the blame window must clear scrollbind on the source window
     -- again (BufWinLeave cleanup), not leave it stuck bound forever.
     vim.api.nvim_win_close(blame_win, true)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_false(vim.wo[src_win].scrollbind)
   end)
 end)
@@ -129,7 +117,6 @@ describe("gitsuite.features.blame.for_location", function()
       { "git", "-c", "user.name=" .. author, "-c", "user.email=" .. author .. "@example.test" }
     vim.list_extend(argv, args)
     local res = vim.system(argv, { cwd = repo }):wait()
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(0, res.code, table.concat(args, " ") .. ": " .. tostring(res.stderr))
   end
 
@@ -156,84 +143,60 @@ describe("gitsuite.features.blame.for_location", function()
   end)
 
   it("returns the author, sha and summary of one line -- with no buffer open", function()
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(-1, vim.fn.bufnr(repo .. "/sub dir/a b.txt"), "the fixture is not open in Neovim")
 
     local first, err1 = blame.for_location(repo .. "/sub dir", "a b.txt", 1)
     local second, err2 = blame.for_location(repo .. "/sub dir", "a b.txt", 2)
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(err1)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(err2)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("Alice", first.author)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("first commit", first.summary)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(1, first.line)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_truthy(first.sha:match("^%x+$") and #first.sha == 40)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("Bob", second.author)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("second commit", second.summary)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(2, second.line)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_number(second.author_time)
   end)
 
   it("marks an uncommitted line with the all-zero sha", function()
     local entry = blame.for_location(repo .. "/sub dir", "a b.txt", 3)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_truthy(entry.sha:match("^0+$"))
   end)
 
   it("takes an absolute path and any directory inside the repo", function()
     local entry, err = blame.for_location(repo, repo .. "/sub dir/a b.txt", 1)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(err)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("Alice", entry.author)
   end)
 
   it("reports git failures as (nil, err): line past the end, untracked file, no repo", function()
     local past, err_past = blame.for_location(repo .. "/sub dir", "a b.txt", 99)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(past)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_truthy(err_past and err_past ~= "")
 
     vim.fn.writefile({ "x" }, repo .. "/untracked.txt")
     local untracked, err_untracked = blame.for_location(repo, "untracked.txt", 1)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(untracked)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_truthy(err_untracked and err_untracked ~= "")
 
     local outside = vim.fn.tempname()
     vim.fn.mkdir(outside, "p")
     local none, err_none = blame.for_location(outside, "a.txt", 1)
     vim.fn.delete(outside, "rf")
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(none)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_truthy(err_none and err_none ~= "")
   end)
 
   it("rejects an invalid location without running git", function()
     for _, bad in ipairs({ 0, -1, 1.5 }) do
       local entry, err = blame.for_location(repo, "untracked.txt", bad)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(entry)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_truthy(err and err:find("invalid location", 1, true), tostring(bad))
     end
     local entry, err = blame.for_location(repo, "", 1)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(entry)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_truthy(err and err:find("invalid location", 1, true))
   end)
 
@@ -242,18 +205,13 @@ describe("gitsuite.features.blame.for_location", function()
     local handle = blame.for_location(repo .. "/sub dir", "a b.txt", 2, function(entry, err)
       got, got_err, called = entry, err, true
     end)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_function(handle.stop)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_false(called, "the callback never runs synchronously")
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(vim.wait(5000, function()
       return called
     end, 10))
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(got_err)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("Bob", got.author)
   end)
 
@@ -267,18 +225,13 @@ describe("gitsuite.features.blame.for_location", function()
       blame.for_location(repo, "a b.txt", 0, function(entry, err)
         results.invalid = { entry, err }
       end)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(results.invalid, "invalid input is reported asynchronously too")
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(vim.wait(5000, function()
         return results.missing ~= nil and results.invalid ~= nil
       end, 10))
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(results.missing[1])
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_truthy(results.missing[2] and results.missing[2] ~= "")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_truthy(results.invalid[2]:find("invalid location", 1, true))
     end
   )
@@ -298,14 +251,11 @@ describe("gitsuite.features.blame.for_location", function()
     blame.line()
     pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(2, #notes)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_truthy(
       notes[1]:find("Bob", 1, true) and notes[1]:find("second commit", 1, true),
       notes[1]
     )
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_truthy(notes[2]:find("uncommitted", 1, true), notes[2])
   end)
 end)

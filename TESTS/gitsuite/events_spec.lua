@@ -3,6 +3,7 @@
 -- a real `autocmd User Gitsuite*` (the same mechanism a consumer plugin
 -- would use) and checks both that the event fires and what `event.data`
 -- carries -- not just that the call doesn't error.
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.events", function()
   local events
   local group
@@ -29,11 +30,8 @@ describe("gitsuite.events", function()
 
     events.branch_switched("/repo/root", "feature/x")
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(captured)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("/repo/root", captured.dir)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("feature/x", captured.branch)
   end)
 
@@ -49,9 +47,7 @@ describe("gitsuite.events", function()
 
     events.conflicts_resolved(42)
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(captured)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(42, captured.bufnr)
   end)
 
@@ -67,9 +63,7 @@ describe("gitsuite.events", function()
 
     events.status_changed("/repo/root")
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(captured)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("/repo/root", captured.dir)
   end)
 
@@ -92,9 +86,7 @@ describe("gitsuite.events", function()
 
     events.conflicts_resolved(1)
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_false(branch_fired)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_false(status_fired)
   end)
 end)

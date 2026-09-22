@@ -1,4 +1,5 @@
 -- TESTS/gitsuite/adapter_spec.lua -- adapter registry (register/resolve/resolve_first/list).
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.adapter", function()
   local adapter
 
@@ -15,9 +16,7 @@ describe("gitsuite.adapter", function()
       end,
     })
     local a = adapter.resolve("fake_available")
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(a)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("fake_available", a.name)
   end)
 
@@ -28,17 +27,14 @@ describe("gitsuite.adapter", function()
         return false
       end,
     })
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(adapter.resolve("fake_unavailable"))
   end)
 
   it("returns nil for an unknown adapter name, no error", function()
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(adapter.resolve("definitely_not_registered"))
   end)
 
   it("the native adapter is always resolvable inside a git repo (this repo)", function()
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(adapter.resolve("native"))
   end)
 
@@ -56,9 +52,7 @@ describe("gitsuite.adapter", function()
       end,
     })
     local a, name = adapter.resolve_first({ "fake_a", "fake_b" })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("fake_b", name)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("fake_b", a.name)
   end)
 
@@ -70,9 +64,7 @@ describe("gitsuite.adapter", function()
       end,
     })
     local a, name = adapter.resolve_first({ "fake_c" })
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(a)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_nil(name)
   end)
 
@@ -88,7 +80,6 @@ describe("gitsuite.adapter", function()
     for _, n in ipairs(names) do
       if n == "fake_listed" then found = true end
     end
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(found)
   end)
 end)

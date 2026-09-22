@@ -1,5 +1,6 @@
 -- TESTS/gitsuite/branch_spec.lua -- gitsuite.features.branch against this
 -- repo's own real git state (branch "main"), no fixture needed.
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.features.branch", function()
   local branch
 
@@ -10,20 +11,17 @@ describe("gitsuite.features.branch", function()
 
   it("list() does not error and reports at least the 'main' branch", function()
     local ok = pcall(branch.list)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
   end)
 
   it("current() does not error", function()
     local ok = pcall(branch.current)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
   end)
 
   it("current() reports the real current branch via lib.nvim.git", function()
     local git = require("lib.nvim.git")
     local expected = git.current_branch()
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(expected, "this checkout is not in detached HEAD")
   end)
 
@@ -40,14 +38,12 @@ describe("gitsuite.features.branch", function()
     local ok = pcall(branch.switch)
 
     vim.ui.select = original_select
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
   end)
 
   it("switch() checks out a real branch when one is chosen", function()
     local git = require("lib.nvim.git")
     local original_branch = git.current_branch()
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(original_branch)
 
     local original_select = vim.ui.select
@@ -61,9 +57,7 @@ describe("gitsuite.features.branch", function()
     local ok = pcall(branch.switch)
     vim.ui.select = original_select
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(original_branch, git.current_branch())
   end)
 
@@ -78,10 +72,8 @@ describe("gitsuite.features.branch", function()
     -- here.
     local git = require("lib.nvim.git")
     local original_branch = git.current_branch()
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(original_branch)
     local head_sha = git.head_short_hash()
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(head_sha)
 
     local group = vim.api.nvim_create_augroup("gitsuite_branch_spec_events", { clear = true })
@@ -110,18 +102,12 @@ describe("gitsuite.features.branch", function()
       "checkout",
       original_branch,
     })
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(restore_ok, restore_out)
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_not_nil(captured)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(head_sha, captured.branch)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(git.repo_root(), captured.dir)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(original_branch, git.current_branch())
   end)
 
@@ -134,7 +120,6 @@ describe("gitsuite.features.branch", function()
       -- on_confirm callback through to a real checkout.
       local git = require("lib.nvim.git")
       local original_branch = git.current_branch()
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_not_nil(original_branch)
 
       package.loaded["gitsuite.integrations.pickers_nvim"] = {
@@ -158,11 +143,8 @@ describe("gitsuite.features.branch", function()
       vim.ui.select = original_select
       package.loaded["gitsuite.integrations.pickers_nvim"] = nil
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_false(select_called)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(original_branch, git.current_branch())
     end
   )
@@ -173,7 +155,6 @@ describe("gitsuite.features.branch", function()
     function()
       local git = require("lib.nvim.git")
       local original_branch = git.current_branch()
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_not_nil(original_branch)
 
       package.loaded["gitsuite.integrations.pickers_nvim"] = {
@@ -190,9 +171,7 @@ describe("gitsuite.features.branch", function()
 
       package.loaded["gitsuite.integrations.pickers_nvim"] = nil
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(original_branch, git.current_branch())
     end
   )
@@ -212,10 +191,8 @@ describe("gitsuite.features.branch", function()
     local function detach_and_restore_setup()
       local git = require("lib.nvim.git")
       local original_branch = git.current_branch()
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_not_nil(original_branch)
       local head_sha = git.head_short_hash()
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_not_nil(head_sha)
       return original_branch, head_sha
     end
@@ -223,7 +200,6 @@ describe("gitsuite.features.branch", function()
     ---@param original_branch string
     local function restore(original_branch)
       local ok, out = run_argv.run_blocking_captured({ "git", "checkout", original_branch })
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok, out)
     end
 
@@ -254,9 +230,7 @@ describe("gitsuite.features.branch", function()
 
       restore(original_branch)
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
-      ---@diagnostic disable-next-line: undefined-field
       assert.same({}, calls)
     end)
 
@@ -284,21 +258,13 @@ describe("gitsuite.features.branch", function()
 
       restore(original_branch)
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(2, #events)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals("save", events[1].fn)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(events[1].name, "save(nil) -- sessions.nvim auto-resolves the name")
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(original_branch, events[1].branch, "save() ran BEFORE HEAD moved")
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals("load", events[2].fn)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(events[2].name)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(events[2].branch, "load() ran AFTER HEAD moved (now detached, no branch)")
     end)
 
@@ -322,7 +288,6 @@ describe("gitsuite.features.branch", function()
 
       restore(original_branch)
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
     end)
   end)

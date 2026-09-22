@@ -5,6 +5,7 @@
 -- `package.loaded["insights.todos"]` -- this suite is about what gates.lua
 -- computes and filters, not insights.nvim's own scanner (that belongs to
 -- insights.nvim's own test suite). `lint`/`spell` need no soft dependency.
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.features.status.gates", function()
   local gates
   local original_cwd, repo
@@ -21,7 +22,6 @@ describe("gitsuite.features.status.gates", function()
     repo = vim.fn.tempname() .. "-gitsuite-gates"
     vim.fn.mkdir(repo, "p")
     local init = run("git", "init", "-q")
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(0, init.code, "fixture: git init failed: " .. tostring(init.stderr))
     run("git", "config", "user.email", "test@example.com")
     run("git", "config", "user.name", "Test")
@@ -61,11 +61,8 @@ describe("gitsuite.features.status.gates", function()
       package.preload["insights.todos"] = orig_preload
       package.loaded["insights.todos"] = real_todos
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok, "must not raise, just report an error")
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #seen)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_truthy(seen[1]:find("insights.nvim is not installed", 1, true))
     end)
 
@@ -84,7 +81,6 @@ describe("gitsuite.features.status.gates", function()
       gates.todos()
       package.loaded["insights.todos"] = nil
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, scan_calls)
     end)
 
@@ -101,7 +97,6 @@ describe("gitsuite.features.status.gates", function()
           -- (from vim.fn.tempname()) on Windows. Use what was actually
           -- passed, so this fixture stays self-consistent either way.
           local root = opts.cwd
-          ---@diagnostic disable-next-line: undefined-field
           assert.is_not_nil(root)
           return {
             {
@@ -126,10 +121,8 @@ describe("gitsuite.features.status.gates", function()
       package.loaded["insights.todos"] = nil
 
       local items = vim.fn.getqflist({ items = 0 }).items
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #items, "only the changed file's TODO made it into the quickfix list")
       local name = vim.fn.bufname(items[1].bufnr)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_truthy(name:find("changed%.lua$"))
       vim.cmd("cclose")
     end)
@@ -142,7 +135,6 @@ describe("gitsuite.features.status.gates", function()
       run("git", "commit", "-q", "-m", "init")
 
       local ok = pcall(gates.lint)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
     end)
 
@@ -169,11 +161,8 @@ describe("gitsuite.features.status.gates", function()
       vim.diagnostic.reset(ns, bufnr)
 
       local items = vim.fn.getqflist({ items = 0 }).items
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #items, "the open file's diagnostic made it into the quickfix list")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_truthy(items[1].text:find("boom", 1, true))
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_truthy(
         table.concat(seen, "\n"):find("1 changed file", 1, true),
         "notifies that the unopened file was skipped"
@@ -189,7 +178,6 @@ describe("gitsuite.features.status.gates", function()
       run("git", "commit", "-q", "-m", "init")
 
       local ok = pcall(gates.spell)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
     end)
 
@@ -202,13 +190,11 @@ describe("gitsuite.features.status.gates", function()
       vim.o.spelllang = original_spelllang
 
       local items = vim.fn.getqflist({ items = 0 }).items
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(#items > 0, "at least one misspelling was found")
       local words = {}
       for _, item in ipairs(items) do
         words[item.text] = true
       end
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(words["tset"] or words["speling"], "the actual misspelled words are reported")
       vim.cmd("cclose")
     end)
@@ -222,7 +208,6 @@ describe("gitsuite.features.status.gates", function()
       vim.o.spelllang = original_spelllang
 
       local items = vim.fn.getqflist({ items = 0 }).items
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, #items)
     end)
 
@@ -242,10 +227,8 @@ describe("gitsuite.features.status.gates", function()
       local ok = pcall(gates.spell)
       vim.o.spelllang = original_spelllang
 
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok, "a binary changed file must not error the gate")
       local items = vim.fn.getqflist({ items = 0 }).items
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, #items, "binary content is skipped, not flagged")
     end)
   end)

@@ -2,6 +2,7 @@
 -- scratch buffers with synthetic conflict markers, same fixture style as
 -- conflict_spec.lua. No git state needed -- this operates purely on buffer
 -- text plus nvim_buf_get_changedtick.
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.statusline", function()
   local statusline
   local bufnr
@@ -25,7 +26,6 @@ describe("gitsuite.statusline", function()
 
   it("is empty for a buffer with no conflicts", function()
     set_lines({ "just", "ordinary", "lines" })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("", statusline.status(bufnr))
   end)
 
@@ -37,7 +37,6 @@ describe("gitsuite.statusline", function()
       "theirs",
       ">>>>>>> branch",
     })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("MERGE 1", statusline.status(bufnr))
   end)
 
@@ -55,7 +54,6 @@ describe("gitsuite.statusline", function()
       "theirs2",
       ">>>>>>> branch",
     })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("MERGE 2", statusline.status(bufnr))
   end)
 
@@ -67,13 +65,11 @@ describe("gitsuite.statusline", function()
       "theirs",
       ">>>>>>> branch",
     })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("MERGE 1", statusline.status(bufnr))
 
     -- Resolve the conflict directly (bypassing conflict.choose(), which
     -- would itself bump changedtick) to prove the cached text -- not a
     -- fresh scan -- is what a same-changedtick call returns.
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("MERGE 1", statusline.status(bufnr))
   end)
 
@@ -85,11 +81,9 @@ describe("gitsuite.statusline", function()
       "theirs",
       ">>>>>>> branch",
     })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("MERGE 1", statusline.status(bufnr))
 
     set_lines({ "resolved" })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("", statusline.status(bufnr))
   end)
 
@@ -112,13 +106,11 @@ describe("gitsuite.statusline", function()
       "theirs2",
       ">>>>>>> branch",
     })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("MERGE 2", statusline.status(bufnr))
 
     vim.api.nvim_win_set_cursor(0, { 1, 0 })
     conflict.choose("ours")
 
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("MERGE 1", statusline.status(bufnr))
   end)
 
@@ -131,20 +123,16 @@ describe("gitsuite.statusline", function()
       "theirs",
       ">>>>>>> branch",
     })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("", statusline.status(bufnr))
   end)
 
   it("is empty for an invalid buffer number, does not error", function()
     local ok, result = pcall(statusline.status, 999999)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("", result)
   end)
 
   it("lualine_component is status under another name", function()
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(statusline.status, statusline.lualine_component)
   end)
 
@@ -156,32 +144,26 @@ describe("gitsuite.statusline", function()
       "theirs",
       ">>>>>>> branch",
     })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("MERGE 1", statusline.status(bufnr))
 
     require("gitsuite.config").setup({ features = { conflict = false } })
     -- Same changedtick as above: without invalidate(), the cache alone
     -- would still (wrongly) hand back the stale "MERGE 1".
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("MERGE 1", statusline.status(bufnr))
 
     statusline.invalidate(bufnr)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("", statusline.status(bufnr))
   end)
 
   it("registers a BufDelete/BufWipeout autocmd that drops a deleted buffer's cache", function()
     local autocmds = vim.api.nvim_get_autocmds({ group = "gitsuite_statusline" })
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(#autocmds > 0)
 
     local events = {}
     for _, au in ipairs(autocmds) do
       events[au.event] = true
     end
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(events["BufDelete"] or false)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(events["BufWipeout"] or false)
 
     set_lines({
@@ -191,13 +173,11 @@ describe("gitsuite.statusline", function()
       "theirs",
       ">>>>>>> branch",
     })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("MERGE 1", statusline.status(bufnr))
 
     -- Real delete, not invalidate(): proves the autocmd itself fires and
     -- does not error, not just that the underlying function works.
     local ok = pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
   end)
 end)

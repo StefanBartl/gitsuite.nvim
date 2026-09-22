@@ -14,6 +14,7 @@ local STUBBED = {
   "telescope.actions.state",
 }
 
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.integrations.pickers_nvim", function()
   local pickers_nvim
   local saved
@@ -35,14 +36,12 @@ describe("gitsuite.integrations.pickers_nvim", function()
   end)
 
   it("available() is false when pickers.nvim is not installed", function()
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_false(pickers_nvim.available())
   end)
 
   it("available() is true once both pickers.nvim modules load", function()
     package.loaded["pickers.engines"] = {}
     package.loaded["pickers.builtins"] = {}
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(pickers_nvim.available())
   end)
 
@@ -57,7 +56,6 @@ describe("gitsuite.integrations.pickers_nvim", function()
         error("must not run")
       end,
     }
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_false(pickers_nvim.branch_picker(function() end))
   end)
 
@@ -72,7 +70,6 @@ describe("gitsuite.integrations.pickers_nvim", function()
         error("must not run")
       end,
     }
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_false(pickers_nvim.branch_picker(function() end))
   end)
 
@@ -90,13 +87,10 @@ describe("gitsuite.integrations.pickers_nvim", function()
     }
 
     local chosen
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(pickers_nvim.branch_picker(function(branch)
       chosen = branch
     end))
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("git_branches", captured.name)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("snacks", captured.engine_name)
 
     local closed = false
@@ -106,9 +100,7 @@ describe("gitsuite.integrations.pickers_nvim", function()
       end,
     }
     captured.opts.confirm(fake_picker, { branch = "feature/x" })
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(closed)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("feature/x", chosen)
   end)
 
@@ -124,7 +116,6 @@ describe("gitsuite.integrations.pickers_nvim", function()
         captured = opts
       end,
     }
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(pickers_nvim.branch_picker(function() end))
 
     local chosen
@@ -135,7 +126,6 @@ describe("gitsuite.integrations.pickers_nvim", function()
       chosen = branch
     end)
     captured.confirm({ close = function() end }, { commit = "abc1234" })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("abc1234", chosen)
   end)
 
@@ -171,7 +161,6 @@ describe("gitsuite.integrations.pickers_nvim", function()
       }
 
       local chosen
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(pickers_nvim.branch_picker(function(branch)
         chosen = branch
       end))
@@ -180,13 +169,10 @@ describe("gitsuite.integrations.pickers_nvim", function()
       local ok = captured.attach_mappings(0, function()
         map_calls = map_calls + 1
       end)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_true(ok)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_function(replaced)
 
       replaced() -- simulate <CR> after select_default was replaced
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals("feature/y", chosen)
     end
   )
@@ -205,17 +191,14 @@ describe("gitsuite.integrations.pickers_nvim", function()
     }
 
     local chosen
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(pickers_nvim.branch_picker(function(branch)
       chosen = branch
     end))
 
     captured.actions["enter"]({ "* main                d2b2b7b some message" })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("main", chosen)
 
     captured.actions["enter"]({ "  feature/z            aaaa111 other message" })
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("feature/z", chosen)
   end)
 end)

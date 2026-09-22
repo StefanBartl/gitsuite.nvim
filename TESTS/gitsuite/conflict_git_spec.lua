@@ -16,6 +16,7 @@
 
 local FILE = "conflicted file.txt" -- a space on purpose
 
+---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 describe("gitsuite.features.conflict against real `git merge` conflicts", function()
   local conflict
   local repo
@@ -45,7 +46,6 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
     vim.list_extend(argv, args)
     local res = vim.system(argv, { cwd = repo, text = true }):wait()
     if not allow_fail then
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(0, res.code, "git " .. table.concat(args, " ") .. ": " .. tostring(res.stderr))
     end
     return res.stdout or "", res.code
@@ -133,7 +133,6 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
     write_bytes(path, join(version(fixture, "ours"), eol))
     git({ "commit", "-q", "-am", "ours" }, autocrlf)
     local _, code = git({ "-c", "merge.conflictStyle=" .. style, "merge", "other" }, autocrlf, true)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(code ~= 0, "fixture: the merge must conflict, otherwise this proves nothing")
     return path
   end
@@ -241,7 +240,6 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
           for _, seg in ipairs(case.fixture) do
             if seg.ours then n_conflicts = n_conflicts + 1 end
           end
-          ---@diagnostic disable-next-line: undefined-field
           assert.equals(
             n_conflicts,
             count_markers(conflicted),
@@ -251,16 +249,11 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
           -- The parser sees exactly the conflicts git wrote, none ambiguous.
           local bufnr = open(path)
           local regions = conflict.scan(bufnr)
-          ---@diagnostic disable-next-line: undefined-field
           assert.equals(n_conflicts, #regions, "one region per `<<<<<<<` git wrote")
           for _, r in ipairs(regions) do
-            ---@diagnostic disable-next-line: undefined-field
             assert.is_falsy(r.ambiguous)
-            ---@diagnostic disable-next-line: undefined-field
             assert.equals(style == "merge" and "merge" or "diff3", r.style)
-            ---@diagnostic disable-next-line: undefined-field
             assert.equals("HEAD", r.ours_label)
-            ---@diagnostic disable-next-line: undefined-field
             assert.equals("other", r.theirs_label)
           end
 
@@ -276,7 +269,6 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
 
           -- Independent expectation, computed from the fixture, not from git.
           for _, keep in ipairs({ "ours", "theirs", "both", "none" }) do
-            ---@diagnostic disable-next-line: undefined-field
             assert.equals(
               expected(case.fixture, keep, ending.eol),
               resolved_bytes(keep),
@@ -284,7 +276,6 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
             )
           end
           if style ~= "merge" then
-            ---@diagnostic disable-next-line: undefined-field
             assert.equals(
               expected(case.fixture, "base", ending.eol),
               resolved_bytes("base"),
@@ -297,7 +288,6 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
             local mine = resolved_bytes(side)
             write_bytes(path, conflicted)
             git({ "checkout", "--" .. side, "--", FILE }, ending.autocrlf)
-            ---@diagnostic disable-next-line: undefined-field
             assert.equals(
               read_bytes(path),
               mine,
@@ -346,9 +336,7 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
       local bufnr = open(path)
 
       local regions = conflict.scan(bufnr)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #regions, "the setext underlines outside the conflict are not regions")
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_falsy(regions[1].ambiguous)
 
       resolve_all(bufnr, "ours")
@@ -356,9 +344,7 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
       local mine = read_bytes(path)
       write_bytes(path, conflicted)
       git({ "checkout", "--ours", "--", FILE }, false)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(read_bytes(path), mine)
-      ---@diagnostic disable-next-line: undefined-field
       assert.same(with("ours line"), vim.split(mine, "\n", { trimempty = true }))
     end)
 
@@ -386,14 +372,10 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
           local bufnr = open(path)
 
           local regions = conflict.scan(bufnr)
-          ---@diagnostic disable-next-line: undefined-field
           assert.equals(1, #regions, "the conflict is reported, not silently dropped")
           local r = regions[1]
-          ---@diagnostic disable-next-line: undefined-field
           assert.is_true(r.ambiguous, "which `=======` ends our side cannot be told from the text")
-          ---@diagnostic disable-next-line: undefined-field
           assert.is_true(#r.separators >= 2)
-          ---@diagnostic disable-next-line: undefined-field
           assert.is_true(conflict.has_conflicts(bufnr), "keymaps and the statusline still see it")
 
           -- Cancelling the prompt each time: this test is about every
@@ -413,13 +395,11 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
             conflict.choose(keep)
             vim.ui.select = original_select
 
-            ---@diagnostic disable-next-line: undefined-field
             assert.same(
               r.separators,
               offered,
               ("choose('%s'): every candidate separator is offered"):format(keep)
             )
-            ---@diagnostic disable-next-line: undefined-field
             assert.equals(
               conflicted,
               table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n") .. "\n",
@@ -437,10 +417,8 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
         local bufnr = open(path)
 
         local regions = conflict.scan(bufnr)
-        ---@diagnostic disable-next-line: undefined-field
         assert.equals(2, #regions, "the underline between the two conflicts is a common line")
         for _, r in ipairs(regions) do
-          ---@diagnostic disable-next-line: undefined-field
           assert.is_falsy(r.ambiguous)
         end
 
@@ -451,7 +429,6 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
           local mine = read_bytes(path)
           write_bytes(path, conflicted)
           git({ "checkout", "--" .. side, "--", FILE }, false)
-          ---@diagnostic disable-next-line: undefined-field
           assert.equals(read_bytes(path), mine, ("choose('%s') matches git"):format(side))
         end
       end)
@@ -462,7 +439,6 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
     it("a raised conflict-marker-size makes the same conflict unambiguous", function()
       local path = make_conflict(setext, "merge", "\n", false, "*.txt conflict-marker-size=10\n")
       local conflicted = read_bytes(path)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_truthy(
         conflicted:find("<<<<<<<<<< HEAD", 1, true),
         "fixture: git wrote long markers"
@@ -470,9 +446,7 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
 
       local bufnr = open(path)
       local regions = conflict.scan(bufnr)
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #regions)
-      ---@diagnostic disable-next-line: undefined-field
       assert.is_falsy(regions[1].ambiguous)
 
       for _, side in ipairs({ "ours", "theirs" }) do
@@ -482,7 +456,6 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
         local mine = read_bytes(path)
         write_bytes(path, conflicted)
         git({ "checkout", "--" .. side, "--", FILE }, false)
-        ---@diagnostic disable-next-line: undefined-field
         assert.equals(read_bytes(path), mine, ("choose('%s') matches git"):format(side))
       end
     end)
@@ -527,11 +500,9 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
     g({ "commit", "-q", "-am", "m2 edit" })
 
     local _, code = g({ "-c", "merge.conflictStyle=diff3", "merge", "m1" }, true)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(code ~= 0, "fixture: the criss-cross merge must conflict")
     local conflicted = read_bytes(path)
     local markers = count_markers(conflicted)
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(
       markers >= 2,
       "fixture: git must nest the virtual ancestor's conflict inside the base section"
@@ -539,11 +510,8 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
 
     local bufnr = open(path)
     local regions = conflict.scan(bufnr)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals(1, #regions, "the nested markers belong to the outer conflict's base")
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_falsy(regions[1].ambiguous)
-    ---@diagnostic disable-next-line: undefined-field
     assert.equals("diff3", regions[1].style)
 
     -- git wrote the inner conflict with LONGER markers; they are base text.
@@ -553,7 +521,6 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
     for _, line in ipairs(base) do
       if line:match("^<<<<<<<<<") then inner_start = true end
     end
-    ---@diagnostic disable-next-line: undefined-field
     assert.is_true(inner_start, "the nested conflict's markers are inside the base section")
 
     for _, side in ipairs({ "ours", "theirs" }) do
@@ -564,7 +531,6 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
       local mine = read_bytes(path)
       write_bytes(path, conflicted)
       g({ "checkout", "--" .. side, "--", FILE })
-      ---@diagnostic disable-next-line: undefined-field
       assert.equals(read_bytes(path), mine, ("choose('%s') matches `git checkout`"):format(side))
     end
   end)
