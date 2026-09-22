@@ -11,6 +11,7 @@
   "workspace.ignoreDir": [
     ".claude",
     "**/.claude",
+    ".deps",
     ".git",
     "doc",
     "docs"
