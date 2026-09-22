@@ -166,4 +166,34 @@ describe("gitsuite.features.branch", function()
       assert.equals(original_branch, git.current_branch())
     end
   )
+
+  it(
+    "switch() refuses a picker choice that is not a local branch (e.g. a remote-tracking "
+      .. "ref telescope/fzf-lua list by default) instead of detaching HEAD onto it",
+    function()
+      local git = require("lib.nvim.git")
+      local original_branch = git.current_branch()
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_not_nil(original_branch)
+
+      package.loaded["gitsuite.integrations.pickers_nvim"] = {
+        available = function()
+          return true
+        end,
+        branch_picker = function(on_confirm)
+          on_confirm("origin/definitely-not-a-local-branch")
+          return true
+        end,
+      }
+
+      local ok = pcall(branch.switch)
+
+      package.loaded["gitsuite.integrations.pickers_nvim"] = nil
+
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_true(ok)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(original_branch, git.current_branch())
+    end
+  )
 end)

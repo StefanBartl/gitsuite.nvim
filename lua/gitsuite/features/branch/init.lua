@@ -72,10 +72,28 @@ function M.switch()
     return
   end
   local current = git.current_branch()
+  local is_local = {}
+  for _, b in ipairs(branches) do
+    is_local[b] = true
+  end
 
   local ok_req, pickers_nvim = pcall(require, "gitsuite.integrations.pickers_nvim")
   if ok_req and pickers_nvim.available() then
     local started = pickers_nvim.branch_picker(function(choice)
+      -- Telescope's and fzf-lua's own `git_branches` picker list
+      -- remote-tracking branches by default (an engine-level default,
+      -- unrelated to gitsuite) -- vim.ui.select below only ever offers
+      -- `local_branches()`. Reject anything the picker returned that is not
+      -- one of those local branches instead of silently detaching HEAD onto
+      -- a remote ref while reporting "switched to <choice>".
+      if not is_local[choice] then
+        notify.error(
+          ("branch: %q is not a local branch -- remote-tracking refs are not supported by switch()"):format(
+            choice
+          )
+        )
+        return
+      end
       checkout(choice, current)
     end)
     if started then return end
