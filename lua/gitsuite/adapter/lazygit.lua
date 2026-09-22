@@ -4,7 +4,7 @@
 --- spawn and the `nvr` bridge (`features/ui/lazygit/`, phase 3), so
 --- availability is a plain `executable()` check, not `package.loaded`.
 
----@type GitSuite.Adapter
+---@class GitSuite.Adapter.Lazygit: GitSuite.Adapter
 local M = { name = "lazygit" }
 
 ---@return boolean

@@ -5,7 +5,7 @@
 --- native implementation stays usable even with zero adapter plugins
 --- installed, the same property `filetree.nvim` has over netrw.
 
----@type GitSuite.Adapter
+---@class GitSuite.Adapter.Native: GitSuite.Adapter
 local M = { name = "native" }
 
 ---Always available: this adapter only depends on `git` itself, not on any
