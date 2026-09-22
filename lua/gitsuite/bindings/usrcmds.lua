@@ -294,6 +294,13 @@ local function build_routes()
         require("gitsuite.features.status").quickfix()
       end,
     },
+    {
+      path = { "status", "relink" },
+      desc = "Fix references (Markdown links, etc.) to files git status reports as renamed",
+      run = function()
+        require("gitsuite.features.status.relink").relink()
+      end,
+    },
   }
 end
 

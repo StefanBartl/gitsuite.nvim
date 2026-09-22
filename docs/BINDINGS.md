@@ -59,6 +59,7 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 | `:Git hunk stage-buffer` | Stage every hunk in the current buffer |
 | `:Git hunk toggle-deleted` | Toggle showing deleted lines inline |
 | `:Git status quickfix` | Export repo status to the quickfix list |
+| `:Git status relink` | Fix references (Markdown links, etc.) to files git status reports as renamed |
 | `:Git status repo` | Show repo status (branch, ahead/behind, dirty) |
 | `:Git ui diffview close` | Close the current diffview |
 | `:Git ui diffview open` | Open diffview |
