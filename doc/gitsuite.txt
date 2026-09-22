@@ -38,6 +38,10 @@ which subcommands are implemented versus still a stub.
 - StefanBartl/lib.nvim (hard dependency)
 - StefanBartl/diff.nvim (hard dependency, used by `:Git diff *`)
 
+See docs/requirements.md for the optional tools (gitsigns, diffview,
+neogit, lazygit, nvr, open.nvim, pickers.nvim) and exactly what each one
+backs versus what falls back without it.
+
 ==============================================================================
 3. INSTALLATION                                          *gitsuite-installation*
 >lua
@@ -50,6 +54,8 @@ which subcommands are implemented versus still a stub.
     end,
   }
 <
+See docs/installation.md for packer.nvim, vim-plug and mini.deps variants.
+
 ==============================================================================
 4. COMMANDS                                                  *gitsuite-commands*
 
@@ -106,7 +112,8 @@ conflicts around an unchanged underline apart).
   })
 <
 Set a `keymaps.*` entry to `false` to disable that default mapping without
-disabling the underlying feature.
+disabling the underlying feature. See docs/configuration.md for every key
+explained individually.
 
 ==============================================================================
 6. ADAPTERS                                                    *gitsuite-adapters*

@@ -33,18 +33,32 @@ staging UI, diffview, the real `lazygit` TUI in a float).
 
 ## Documentation
 
-- [Bindings cheatsheet](docs/BINDINGS.md) — every `:Git` subcommand and
-  keymap, generated from the same route tree that drives dispatch and
-  completion.
-- [lazygit config.yml reference](docs/lazygit-config.yml) — the
-  `customCommands` that let lazygit's `O`/`<C-o>` open files in the parent
-  Neovim from inside the `:Git ui lazygit` float.
+Start at [docs/README.md](docs/README.md) — what's where, and which
+question each page answers.
+
+**The Basics**
+
+- [Requirements](docs/requirements.md) — hard dependencies, optional tools, and what each one backs.
+- [Installation](docs/installation.md) — a spec per plugin manager.
+- [Quickstart](docs/quickstart.md) — the first thing to run after installing.
+
+**Configuration**
+
+- [What you get with the defaults](docs/what-you-get.md) — the handful of things that matter on day one.
+- [All options](docs/configuration.md) — every `setup()` option and its default.
+- [Commands](docs/commands.md) / [Bindings cheatsheet](docs/BINDINGS.md)
+
+**The Rest**
+
+- [Around it](docs/around-it.md) — how this plugin's scope differs from the plugins it sits next to or replaces.
+- [What it does and what not](docs/scope.md)
+- [Why it does it that way](docs/architecture.md)
+- [Health check](docs/health.md) — what `:checkhealth gitsuite` reports, line by line.
+- [Cross-platform notes](docs/cross-platform.md)
+- [Contributing](docs/CONTRIBUTING.md)
+- [Feedback](https://github.com/StefanBartl/gitsuite.nvim/issues)
 
 `:help gitsuite` is the same reference inside the editor.
-
-More documentation (requirements, installation, quickstart, full
-configuration reference, architecture) lands next — every subcommand works
-today, but the doc set beyond the two pages above is still catching up.
 
 ---
 
