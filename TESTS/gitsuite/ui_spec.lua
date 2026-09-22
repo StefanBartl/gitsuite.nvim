@@ -39,17 +39,47 @@ describe("gitsuite.features.ui", function()
     assert.is_true(ok)
   end)
 
-  it("diffview_open() reports 'not installed', does not crash, without diffview", function()
-    local ok = pcall(ui.diffview_open)
-    ---@diagnostic disable-next-line: undefined-field
-    assert.is_true(ok)
-  end)
+  it(
+    "diffview_open() falls back to diff.nvim's split() (:Diff, no args) without diffview.nvim",
+    function()
+      local calls = {}
+      local real_diff = package.loaded["diff"]
+      package.loaded["diff"] = {
+        run = function(raw_args)
+          calls[#calls + 1] = { "run", raw_args }
+        end,
+      }
 
-  it("diffview_close() reports 'not installed', does not crash, without diffview", function()
-    local ok = pcall(ui.diffview_close)
-    ---@diagnostic disable-next-line: undefined-field
-    assert.is_true(ok)
-  end)
+      local ok = pcall(ui.diffview_open)
+
+      package.loaded["diff"] = real_diff
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_true(ok)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.same({ { "run", "" } }, calls)
+    end
+  )
+
+  it(
+    "diffview_close() falls back to diff.nvim's clear() (:DiffClear) without diffview.nvim",
+    function()
+      local calls = {}
+      local real_diff = package.loaded["diff"]
+      package.loaded["diff"] = {
+        clear = function()
+          calls[#calls + 1] = { "clear" }
+        end,
+      }
+
+      local ok = pcall(ui.diffview_close)
+
+      package.loaded["diff"] = real_diff
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_true(ok)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.same({ { "clear" } }, calls)
+    end
+  )
 
   describe("diffview_open()/diffview_close(), with a faked diffview.nvim", function()
     local real_diffview

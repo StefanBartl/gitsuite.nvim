@@ -45,6 +45,7 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 | `:Git conflict prev` | Jump to the previous conflict marker in this buffer |
 | `:Git conflict refresh` | Re-scan the current buffer for conflict markers |
 | `:Git conflict theirs` | Resolve the conflict under the cursor: keep theirs |
+| `:Git diff close` | Close every open diff view and leave diff mode (diff.nvim :DiffClear) |
 | `:Git diff head` | Diff the current file against HEAD |
 | `:Git diff history` | Show file history (diff.nvim :DiffHistory) |
 | `:Git diff last` | Diff the current file against the previous commit |

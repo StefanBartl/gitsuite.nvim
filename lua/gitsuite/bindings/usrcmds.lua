@@ -194,6 +194,13 @@ local function build_routes()
         require("gitsuite.features.diff").history()
       end,
     },
+    {
+      path = { "diff", "close" },
+      desc = "Close every open diff view and leave diff mode (diff.nvim :DiffClear)",
+      run = function()
+        require("gitsuite.features.diff").close()
+      end,
+    },
 
     -- branch: extracted from ui.nvim's git_clickable statusline module
     {

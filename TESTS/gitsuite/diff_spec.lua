@@ -52,4 +52,17 @@ describe("gitsuite.features.diff", function()
     ---@diagnostic disable-next-line: undefined-field
     assert.is_true(ok)
   end)
+
+  it("close() closes an open diff without error, is a no-op with none open", function()
+    diff.head()
+    local ok = pcall(diff.close)
+    ---@diagnostic disable-next-line: undefined-field
+    assert.is_true(ok)
+
+    -- Nothing left open (head() above already got closed): a second call
+    -- must not error just because there is nothing to close.
+    local ok2 = pcall(diff.close)
+    ---@diagnostic disable-next-line: undefined-field
+    assert.is_true(ok2)
+  end)
 end)

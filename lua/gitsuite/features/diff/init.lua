@@ -38,4 +38,12 @@ function M.history()
   require("diff").diff_history("")
 end
 
+---Close every open diff.nvim view and leave diff mode (diff.nvim's own
+---`:DiffClear`). Used as `:Git ui diffview close`'s fallback when
+---diffview.nvim is not installed (GS-08/interactive-review fix).
+---@return nil
+function M.close()
+  require("diff").clear()
+end
+
 return M

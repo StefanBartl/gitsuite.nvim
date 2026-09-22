@@ -4,6 +4,14 @@
 --- `lazygit` binary); neogit and diffview are thin adapters (Schicht 3,
 --- never nachbauen). diffview's file-history is not exposed here -- moved
 --- onto diff.nvim's own `:Git diff history` (GS-08).
+---
+--- `diffview {open|close}` never hard-requires sindrets/diffview.nvim
+--- (interactive-review fix after GS-08): diffview.nvim was always meant to
+--- be optional richer tooling, not a second required diff backend next to
+--- diff.nvim, gitsuite's own hard dependency -- a plugin without diffview.nvim
+--- installed falls back onto `gitsuite.features.diff`'s own `split()`/
+--- `close()` instead of erroring "not installed" for two keymaps
+--- (`<leader>dv`/`<leader>dc`) that already have a perfectly good backend.
 
 local adapter = require("gitsuite.adapter")
 local notify = require("gitsuite.util.notify")
@@ -32,32 +40,32 @@ function M.neogit()
   a.open()
 end
 
----@internal
----@return GitSuite.Adapter|nil
-local function diffview_adapter()
-  local a = adapter.resolve("diffview")
-  if not a then
-    notify.error(
-      'ui diffview: diffview.nvim is not installed -- install "sindrets/diffview.nvim" to use :Git ui diffview'
-    )
-  end
-  return a
-end
-
----Open diffview.
+---Open diffview.nvim's multi-file review UI when it is installed;
+---otherwise diff.nvim's own interactive diff picker (`:Git diff split`) --
+---diffview.nvim is optional, richer tooling, never a required second diff
+---backend.
 ---@return nil
 function M.diffview_open()
-  local a = diffview_adapter()
-  ---@diagnostic disable-next-line: undefined-field
-  if a then a.open() end
+  local a = adapter.resolve("diffview")
+  if a then
+    ---@diagnostic disable-next-line: undefined-field
+    a.open()
+    return
+  end
+  require("gitsuite.features.diff").split()
 end
 
----Close the current diffview.
+---Close the current diffview.nvim view when it is installed; otherwise
+---close diff.nvim's own diff (`:Git diff close`).
 ---@return nil
 function M.diffview_close()
-  local a = diffview_adapter()
-  ---@diagnostic disable-next-line: undefined-field
-  if a then a.close() end
+  local a = adapter.resolve("diffview")
+  if a then
+    ---@diagnostic disable-next-line: undefined-field
+    a.close()
+    return
+  end
+  require("gitsuite.features.diff").close()
 end
 
 return M
