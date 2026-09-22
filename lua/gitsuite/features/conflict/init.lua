@@ -134,28 +134,40 @@ local function collect_replacement(bufnr, region, keep)
   return out
 end
 
----Resolve the conflict region under the cursor by keeping `keep`.
+---@internal
+--- A concrete region for the separator at `sep_row` (a 0-indexed row taken
+--- from an ambiguous region's own `separators`), reusing whatever `region`
+--- already knows -- `base_first`, when the base marker itself was
+--- unambiguous (see `parser.lua`'s `GitSuite.Conflict.Region` doc).
+---@param region GitSuite.Conflict.Region
+---@param sep_row integer
+---@return GitSuite.Conflict.Region
+local function reconstruct_from_separator(region, sep_row)
+  return {
+    style = region.style,
+    ambiguous = false,
+    start_line = region.start_line,
+    ours_label = region.ours_label,
+    ours_first = region.start_line + 1,
+    ours_last = (region.base_first or (sep_row + 1)) - 2,
+    base_first = region.base_first,
+    base_last = region.base_first and (sep_row - 1) or nil,
+    sep_line = sep_row,
+    theirs_first = sep_row + 1,
+    theirs_last = region.end_line - 1,
+    theirs_label = region.theirs_label,
+    end_line = region.end_line,
+  }
+end
+
+---@internal
+--- Resolve a concrete (non-ambiguous) `region` by keeping `keep`. Shared by
+--- `M.choose()`'s direct path and its ambiguous-region-disambiguated path.
+---@param bufnr integer
+---@param region GitSuite.Conflict.Region
 ---@param keep "ours"|"theirs"|"both"|"base"|"none"
 ---@return nil
-function M.choose(keep)
-  local bufnr = vim.api.nvim_get_current_buf()
-  local cursor_row = vim.api.nvim_win_get_cursor(0)[1] - 1
-
-  local region = region_at_cursor(bufnr, cursor_row)
-  if not region then
-    notify.error("conflict: no conflict region under the cursor")
-    return
-  end
-  if region.ambiguous then
-    -- A wrong guess here moves lines from one side to the other, i.e. loses
-    -- code in a merge; refusing costs the user one manual edit.
-    notify.error(
-      ("conflict: ambiguous separator -- %d lines read `=======`, so where our side ends cannot be told from the text. Resolve this one by hand (git's `conflict-marker-size` attribute avoids this for the next merge)"):format(
-        #region.separators
-      )
-    )
-    return
-  end
+local function resolve_concrete(bufnr, region, keep)
   if keep == "base" and not region.base_first then
     notify.error("conflict: no base section here (not a diff3/zdiff3-style conflict)")
     return
@@ -164,7 +176,9 @@ function M.choose(keep)
   -- ERR-30 (TOCTOU): re-verify the marker rows this region was scanned at
   -- still hold the markers they held then, immediately before mutating --
   -- refuse rather than blindly overwrite if the buffer changed in between
-  -- (an autocmd, another choose action, manual edits).
+  -- (an autocmd, another choose action, manual edits -- including, on the
+  -- ambiguous-region path, whatever ran while `vim.ui.select`'s prompt was
+  -- open).
   local start_marker =
     vim.api.nvim_buf_get_lines(bufnr, region.start_line, region.start_line + 1, false)[1]
   local end_marker =
@@ -183,6 +197,57 @@ function M.choose(keep)
   vim.api.nvim_buf_set_lines(bufnr, region.start_line, region.end_line + 1, false, replacement)
   local remaining = M.refresh(bufnr)
   if #remaining == 0 then require("gitsuite.events").conflicts_resolved(bufnr) end
+end
+
+---Resolve the conflict region under the cursor by keeping `keep`.
+---
+---An ambiguous region (an `=======` line that could be text, e.g. a
+---Markdown setext heading underline -- see the module doc) with more than
+---one candidate separator asks which one is real via `vim.ui.select`
+---(GS-28) instead of refusing outright: safe because the user decides, sees
+---a line-before/line-after preview of each candidate, and the parser itself
+---still never guesses. Exactly one candidate means the *base* marker is
+---what is actually ambiguous, not the separator -- nothing a separator
+---choice could resolve, so that case still refuses.
+---@param keep "ours"|"theirs"|"both"|"base"|"none"
+---@return nil
+function M.choose(keep)
+  local bufnr = vim.api.nvim_get_current_buf()
+  local cursor_row = vim.api.nvim_win_get_cursor(0)[1] - 1
+
+  local region = region_at_cursor(bufnr, cursor_row)
+  if not region then
+    notify.error("conflict: no conflict region under the cursor")
+    return
+  end
+
+  if region.ambiguous then
+    if not region.separators or #region.separators <= 1 then
+      -- A wrong guess here moves lines from one side to the other, i.e. loses
+      -- code in a merge; refusing costs the user one manual edit.
+      notify.error(
+        ("conflict: ambiguous separator -- %d lines read `=======`, so where our side ends cannot be told from the text. Resolve this one by hand (git's `conflict-marker-size` attribute avoids this for the next merge)"):format(
+          region.separators and #region.separators or 0
+        )
+      )
+      return
+    end
+
+    vim.ui.select(region.separators, {
+      prompt = "conflict: ambiguous separator -- pick the real `=======` line",
+      format_item = function(row)
+        local before = vim.api.nvim_buf_get_lines(bufnr, row - 1, row, false)[1] or ""
+        local after = vim.api.nvim_buf_get_lines(bufnr, row + 1, row + 2, false)[1] or ""
+        return ("line %d  -- before: %q  after: %q"):format(row + 1, before, after)
+      end,
+    }, function(choice)
+      if not choice then return end -- cancelled (<Esc>): leave the buffer untouched
+      resolve_concrete(bufnr, reconstruct_from_separator(region, choice), keep)
+    end)
+    return
+  end
+
+  resolve_concrete(bufnr, region, keep)
 end
 
 ---Jump to the next conflict marker after the cursor.

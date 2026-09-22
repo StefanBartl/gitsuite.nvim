@@ -42,18 +42,21 @@ local BYTE_LT, BYTE_EQ, BYTE_GT, BYTE_PIPE = 60, 61, 62, 124 -- `<`, `=`, `>`, `
 ---deleted the whole block), not a parser bug -- callers must handle it,
 ---not assume `first <= last`.
 ---
----When `ambiguous` is true only `start_line`, `end_line`, the labels and
----`separators` are set: the section fields are `nil` on purpose.
+---When `ambiguous` is true only `start_line`, `end_line`, the labels,
+---`separators` and (when the base marker itself is unambiguous) `base_first`
+---are set: `ours_first`/`ours_last`/`sep_line`/`theirs_first`/`theirs_last`/
+---`base_last` are `nil` on purpose -- there is no single separator yet to
+---measure them from.
 ---@class GitSuite.Conflict.Region
 ---@field style "merge"|"diff3"        "diff3" covers both `diff3` and `zdiff3` merge.conflictStyle output -- both use identical markers, differing only in how much unchanged base context git includes.
----@field ambiguous boolean|nil         True when the separator cannot be told from the text (see the module doc); the section fields below are then nil.
+---@field ambiguous boolean|nil         True when the separator cannot be told from the text (see the module doc); most section fields below are then nil (see above).
 ---@field separators integer[]|nil      Only when `ambiguous`: the rows of every `=======` line that could be the separator.
 ---@field start_line integer            Row of the `<<<<<<<` marker.
 ---@field ours_label string             Text after `<<<<<<<` (branch/ref name).
 ---@field ours_first integer|nil
 ---@field ours_last integer|nil
----@field base_first integer|nil        nil unless style == "diff3".
----@field base_last integer|nil
+---@field base_first integer|nil        nil unless style == "diff3" (set on an ambiguous region too when the base marker itself is unambiguous -- see above).
+---@field base_last integer|nil         nil on an ambiguous region even when `base_first` is set: it depends on which separator is picked.
 ---@field sep_line integer|nil          Row of the `=======` marker.
 ---@field theirs_first integer|nil
 ---@field theirs_last integer|nil
@@ -153,6 +156,12 @@ local function parse_region(lines, n, start_idx, size, ours_label)
       ours_label = ours_label,
       theirs_label = theirs_label,
       end_line = end_idx - 1,
+      -- Set only when the base marker ITSELF is unambiguous (exactly one
+      -- `|||||||` before the last separator) -- the same row convention as
+      -- a resolved region's own `base_first` (GS-28: lets a caller that
+      -- disambiguates `separators` down to one reconstruct a concrete
+      -- region without re-deriving this).
+      base_first = (base_idx and base_candidates == 1) and base_idx or nil,
     }
     return ambiguous, end_idx
   end

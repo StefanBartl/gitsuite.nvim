@@ -267,11 +267,20 @@ describe("gitsuite.features.conflict.parser", function()
       local regions = parser.parse(lines)
       ---@diagnostic disable-next-line: undefined-field
       assert.equals(1, #regions)
+      local r = regions[1]
       ---@diagnostic disable-next-line: undefined-field
       assert.is_true(
-        regions[1].ambiguous,
+        r.ambiguous,
         "two candidates after the base marker: which one ends the base section is not decidable"
       )
+      -- GS-28: the base marker itself is NOT ambiguous here (exactly one
+      -- `|||||||`) -- base_first is set on the ambiguous region too, so a
+      -- caller that disambiguates `separators` down to one can reconstruct
+      -- a concrete region without re-deriving it.
+      ---@diagnostic disable-next-line: undefined-field
+      assert.equals(3, r.base_first)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.same({ 4, 6 }, r.separators)
     end)
 
     it("merge style: one in a side makes the separator ambiguous, and says so", function()
@@ -303,6 +312,8 @@ describe("gitsuite.features.conflict.parser", function()
       assert.is_nil(r.theirs_first)
       ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(r.sep_line)
+      ---@diagnostic disable-next-line: undefined-field
+      assert.is_nil(r.base_first, "merge style: no base marker exists to be unambiguous about")
     end)
 
     it("merge style: a `|||||||` line in their side is content, not a base marker", function()

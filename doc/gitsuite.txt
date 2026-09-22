@@ -93,12 +93,18 @@ A line that is exactly `=======` can be text (the underline of a Markdown
 setext heading). In a merge-style conflict that makes the separator
 impossible to tell from the text: the region is still highlighted (markers and
 every candidate line only), found by `:Git conflict next|prev` and counted by
-`has_conflicts()`, but `:Git conflict ours|theirs|both|base|none` refuse with a
-message instead of guessing where our side ends. Resolve such a conflict by
-hand; `*.md conflict-marker-size=10` in `.gitattributes` avoids it for the next
-merge. diff3/zdiff3 are affected only if the base section itself holds such a
-line (the `|||||||` marker otherwise tells the sides apart, and git keeps
-conflicts around an unchanged underline apart).
+`has_conflicts()`. With more than one candidate, `:Git conflict
+ours|theirs|both|base|none` asks which `=======` is the real one via
+`vim.ui.select` (a line-before/line-after preview per candidate) instead of
+guessing where our side ends -- the parser itself still never guesses, only
+the user does, with the buffer content in front of them. With exactly one
+candidate the *base* marker itself is what is ambiguous instead (two or more
+`|||||||` before it), which no separator choice can resolve -- that case still
+refuses with a message; `*.md conflict-marker-size=10` in `.gitattributes`
+avoids either case for the next merge. diff3/zdiff3 are otherwise affected
+only if the base section itself holds a `=======`-looking line (the
+`|||||||` marker otherwise tells the sides apart, and git keeps conflicts
+around an unchanged underline apart).
 
 ==============================================================================
 5. CONFIGURATION                                                *gitsuite-config*

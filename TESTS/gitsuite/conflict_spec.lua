@@ -124,28 +124,110 @@ describe("gitsuite.features.conflict", function()
       )
     end)
 
-    it("choose() refuses, says why, and leaves the buffer untouched", function()
-      set_lines(lines)
-      local seen = {}
-      local original_notify = vim.notify
-      vim.notify = function(msg)
-        seen[#seen + 1] = tostring(msg)
-      end
-      vim.api.nvim_win_set_cursor(0, { 3, 0 })
-      local ok = pcall(conflict.choose, "ours")
-      vim.notify = original_notify
+    describe("choose() (GS-28: asks which `=======` is real, via vim.ui.select)", function()
+      it("offers both candidate rows and resolves with the one picked", function()
+        set_lines(lines)
+        local offered
+        local original_select = vim.ui.select
+        vim.ui.select = function(items, _opts, on_choice)
+          offered = items
+          on_choice(items[1]) -- row 3: "Title" / "======= / our text" split
+        end
+        vim.api.nvim_win_set_cursor(0, { 3, 0 })
+        conflict.choose("ours")
+        vim.ui.select = original_select
 
-      ---@diagnostic disable-next-line: undefined-field
-      assert.is_true(ok, "refusing is a message, not an error")
-      ---@diagnostic disable-next-line: undefined-field
-      assert.same(lines, get_lines())
-      ---@diagnostic disable-next-line: undefined-field
-      assert.equals(1, #seen)
-      ---@diagnostic disable-next-line: undefined-field
-      assert.is_truthy(seen[1]:find("ambiguous", 1, true))
-      ---@diagnostic disable-next-line: undefined-field
-      assert.is_truthy(seen[1]:find("2 lines", 1, true), "it says how many candidates there are")
+        ---@diagnostic disable-next-line: undefined-field
+        assert.same({ 3, 5 }, offered, "both candidate rows are offered, in order")
+        ---@diagnostic disable-next-line: undefined-field
+        assert.same(
+          { "before", "Title", "after" },
+          get_lines(),
+          "picking the first candidate treats row 3 as the separator"
+        )
+      end)
+
+      it("a different pick resolves the region differently", function()
+        set_lines(lines)
+        local original_select = vim.ui.select
+        vim.ui.select = function(items, _opts, on_choice)
+          on_choice(items[2]) -- row 5: the other split
+        end
+        vim.api.nvim_win_set_cursor(0, { 3, 0 })
+        conflict.choose("ours")
+        vim.ui.select = original_select
+
+        ---@diagnostic disable-next-line: undefined-field
+        assert.same(
+          { "before", "Title", "=======", "our text", "after" },
+          get_lines(),
+          "picking the second candidate treats row 5 as the separator instead"
+        )
+      end)
+
+      it("a cancelled prompt (nil choice) leaves the buffer untouched", function()
+        set_lines(lines)
+        local original_select = vim.ui.select
+        vim.ui.select = function(_items, _opts, on_choice)
+          on_choice(nil)
+        end
+        vim.api.nvim_win_set_cursor(0, { 3, 0 })
+        local ok = pcall(conflict.choose, "ours")
+        vim.ui.select = original_select
+
+        ---@diagnostic disable-next-line: undefined-field
+        assert.is_true(ok)
+        ---@diagnostic disable-next-line: undefined-field
+        assert.same(lines, get_lines())
+      end)
     end)
+
+    it(
+      "choose() still refuses outright when only the BASE marker is ambiguous (one separator candidate)",
+      function()
+        -- Two `|||||||` markers before a single `=======`: which is the real
+        -- base is ambiguous, but there is only one separator candidate --
+        -- nothing a separator choice could resolve, so no prompt is offered.
+        local base_ambiguous = {
+          "<<<<<<< HEAD",
+          "ours",
+          "||||||| base1",
+          "b1",
+          "||||||| base2",
+          "b2",
+          "=======",
+          "theirs",
+          ">>>>>>> branch",
+        }
+        set_lines(base_ambiguous)
+        local select_called = false
+        local original_select = vim.ui.select
+        vim.ui.select = function(_items, _opts, on_choice)
+          select_called = true
+          on_choice(nil)
+        end
+        local seen = {}
+        local original_notify = vim.notify
+        vim.notify = function(msg)
+          seen[#seen + 1] = tostring(msg)
+        end
+        vim.api.nvim_win_set_cursor(0, { 1, 0 })
+        local ok = pcall(conflict.choose, "ours")
+        vim.notify = original_notify
+        vim.ui.select = original_select
+
+        ---@diagnostic disable-next-line: undefined-field
+        assert.is_true(ok, "refusing is a message, not an error")
+        ---@diagnostic disable-next-line: undefined-field
+        assert.is_false(select_called, "no prompt: one candidate separator can't be chosen among")
+        ---@diagnostic disable-next-line: undefined-field
+        assert.same(base_ambiguous, get_lines())
+        ---@diagnostic disable-next-line: undefined-field
+        assert.equals(1, #seen)
+        ---@diagnostic disable-next-line: undefined-field
+        assert.is_truthy(seen[1]:find("ambiguous", 1, true))
+      end
+    )
   end)
 
   it("refresh() places one extmark per marker/content section", function()
@@ -363,7 +445,7 @@ describe("gitsuite.features.conflict", function()
       assert.is_nil(captured)
     end)
 
-    it("does not fire when choose() refuses (ambiguous region)", function()
+    it("does not fire when choose() on an ambiguous region is cancelled", function()
       set_lines({
         "<<<<<<< HEAD",
         "Title",
@@ -374,7 +456,12 @@ describe("gitsuite.features.conflict", function()
         ">>>>>>> other",
       })
       vim.api.nvim_win_set_cursor(0, { 2, 0 })
+      local original_select = vim.ui.select
+      vim.ui.select = function(_items, _opts, on_choice)
+        on_choice(nil)
+      end
       pcall(conflict.choose, "ours")
+      vim.ui.select = original_select
 
       ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(captured)
