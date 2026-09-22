@@ -125,6 +125,11 @@ function M.items()
   -- "Diff Against HEAD", not "Diff This": gitsigns' diffthis() compares
   -- against the index by default, gitsuite's diff.head() against HEAD --
   -- close enough to replace, not close enough to relabel as the same thing.
+  --
+  -- Neither entry gets an rtxt hint: neither :Git diff head nor :Git diff
+  -- last has a default keymap of its own, and "dh"/"dc" specifically would
+  -- have been actively misleading here -- gitsuite's real <leader>dh/<leader>dc
+  -- are bound to diff_history/diffview_close, two different commands.
   contextmenu.group(
     out,
     contextmenu.heading("Diff"),
@@ -132,14 +137,14 @@ function M.items()
       true,
       "Diff Against HEAD",
       route("diff head"),
-      "dh",
+      nil,
       { icon = icon("F0EC", "d") }
     ),
     contextmenu.entry(
       true,
       "Diff Last Commit",
       route("diff last"),
-      "dc",
+      nil,
       { icon = icon("F1DA", "h") }
     ),
     contextmenu.entry(
