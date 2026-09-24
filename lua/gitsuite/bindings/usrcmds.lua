@@ -248,11 +248,20 @@ local function build_routes()
       end,
     },
 
-    -- ui: TUI launchers -- lazygit float owned by gitsuite, neogit/diffview are thin adapters
+    -- ui: TUI launchers -- lazygit float owned by gitsuite, neogit/diffview are thin adapters.
+    -- `check` on lazygit/neogit is the same "is it actually there" test their
+    -- own run() already applies -- also read by composer.complete, so `:Git ui
+    -- <Tab>` never offers a launcher that isn't installed (bug: it used to
+    -- list all three unconditionally). diffview has none: it degrades to
+    -- diff.nvim's own split instead of erroring "not installed", so it is
+    -- never truly unavailable -- see `features/ui/init.lua`'s diffview_open/close.
     {
       path = { "ui", "lazygit" },
       args = { { name = "dir", type = "DIR", optional = true } },
       desc = "Open lazygit in a floating terminal (optionally for the repo containing <dir>)",
+      check = function()
+        return vim.fn.executable("lazygit") == 1, 'the "lazygit" executable is not on $PATH'
+      end,
       run = function(ctx)
         require("gitsuite.features.ui").lazygit(ctx.args.dir)
       end,
@@ -260,6 +269,10 @@ local function build_routes()
     {
       path = { "ui", "neogit" },
       desc = "Open neogit",
+      check = function()
+        return require("gitsuite.adapter").resolve("neogit") ~= nil,
+          'neogit is not installed -- install "NeogitOrg/neogit" to use :Git ui neogit'
+      end,
       run = function()
         require("gitsuite.features.ui").neogit()
       end,

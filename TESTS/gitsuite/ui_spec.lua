@@ -276,4 +276,60 @@ describe("gitsuite.features.ui", function()
       assert.equals(real(original_cwd), real(spawned[1].argv[3]))
     end)
   end)
+
+  -- Bug regression: `:Git ui <Tab>` used to list lazygit/neogit unconditionally,
+  -- including when the binary/plugin behind them isn't actually available --
+  -- composer.complete now reads each route's own `check` (usrcmds.lua) to
+  -- decide, the same test its `run` already applies.
+  describe(":Git ui <Tab> completion", function()
+    local original_executable = vim.fn.executable
+
+    before_each(function()
+      require("gitsuite.bindings.usrcmds").register({ commands = { git = "Git" } })
+    end)
+
+    after_each(function()
+      vim.fn.executable = original_executable
+    end)
+
+    it("omits lazygit and neogit when neither is available", function()
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.fn.executable = function(name)
+        if name == "lazygit" then return 0 end
+        return original_executable(name)
+      end
+
+      local candidates = vim.fn.getcompletion("Git ui ", "cmdline")
+
+      assert.is_falsy(vim.tbl_contains(candidates, "lazygit"))
+      assert.is_falsy(vim.tbl_contains(candidates, "neogit"))
+      -- diffview has no `check` (it degrades to diff.nvim's split, never
+      -- "not installed" -- see features/ui/init.lua) -- always offered.
+      assert.is_truthy(vim.tbl_contains(candidates, "diffview"))
+    end)
+
+    it("offers lazygit once the executable is on $PATH", function()
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.fn.executable = function(name)
+        if name == "lazygit" then return 1 end
+        return original_executable(name)
+      end
+
+      local candidates = vim.fn.getcompletion("Git ui ", "cmdline")
+
+      assert.is_truthy(vim.tbl_contains(candidates, "lazygit"))
+      -- neogit's own check reads package.loaded (LUA-91: never `require`d to
+      -- probe) -- this suite never loads it, so it stays excluded here too.
+      assert.is_falsy(vim.tbl_contains(candidates, "neogit"))
+    end)
+
+    it("offers neogit once it is loaded (package.loaded set)", function()
+      package.loaded["neogit"] = { open = function() end }
+
+      local candidates = vim.fn.getcompletion("Git ui ", "cmdline")
+
+      package.loaded["neogit"] = nil
+      assert.is_truthy(vim.tbl_contains(candidates, "neogit"))
+    end)
+  end)
 end)
