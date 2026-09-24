@@ -290,6 +290,13 @@ describe("gitsuite.features.ui", function()
 
     after_each(function()
       vim.fn.executable = original_executable
+      -- Unconditional, not just the one test that sets it: if a case errors
+      -- between the set and its own cleanup, an inline reset never runs, and
+      -- `scripts/test.sh` runs every spec file in ONE nvim process
+      -- (`sequential = true`) -- a leaked package.loaded["neogit"] would
+      -- silently flip "not installed" assertions in whatever spec happens to
+      -- run after this file.
+      package.loaded["neogit"] = nil
     end)
 
     it("omits lazygit and neogit when neither is available", function()
@@ -328,7 +335,6 @@ describe("gitsuite.features.ui", function()
 
       local candidates = vim.fn.getcompletion("Git ui ", "cmdline")
 
-      package.loaded["neogit"] = nil
       assert.is_truthy(vim.tbl_contains(candidates, "neogit"))
     end)
   end)
