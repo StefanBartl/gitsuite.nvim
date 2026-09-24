@@ -23,6 +23,9 @@
 [![Lua](https://img.shields.io/badge/Lua-5.1%2FLuaJIT-2C2D72?logo=lua&logoColor=white)](https://www.lua.org)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 [![CI](https://github.com/StefanBartl/gitsuite.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/StefanBartl/gitsuite.nvim/actions/workflows/ci.yml)
+[![wkd](https://img.shields.io/badge/wkd-family-c6ff3d)](https://stefanbartl.github.io/wkd/p/gitsuite/)
+
+> Part of the [wkd](https://stefanbartl.github.io/wkd/) family — see this plugin's [page](https://stefanbartl.github.io/wkd/p/gitsuite/) on the site.
 
 One `:Git <scope> <action>` command tree for everything git in Neovim — own
 implementation where that pays off (merge-conflict resolution, blame,
