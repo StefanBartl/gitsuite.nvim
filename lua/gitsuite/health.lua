@@ -81,6 +81,38 @@ function M.check()
     local cfg = require("gitsuite.config").get()
     composer.checkhealth(cfg.commands.git)
   end
+
+  ---------------------------------------------------------------------------
+  -- dashboard.extra_paths (repositories shown on `:Git dashboard`'s default
+  -- page outside the normal dashboard.base_dir/$REPOS_DIR scan). Moved from
+  -- reposcope.nvim along with the dashboard itself.
+  ---------------------------------------------------------------------------
+  vim.health.start("gitsuite: dashboard")
+  local extra_paths = require("gitsuite.config").get().dashboard.extra_paths or {}
+  if #extra_paths == 0 then
+    vim.health.info("dashboard.extra_paths is empty (no extra repositories configured)")
+  else
+    local repos_util = require("gitsuite.features.dashboard.repos")
+    local expand = require("lib.nvim.cross.fs.expand_path")
+    local bad = {}
+    for _, raw in ipairs(extra_paths) do
+      local resolved = vim.fn.fnamemodify(expand(raw), ":p"):gsub("[\\/]+$", "")
+      if not repos_util.is_git_repo(resolved) then bad[#bad + 1] = raw end
+    end
+    if #bad == 0 then
+      vim.health.ok(
+        ("dashboard.extra_paths: %d configured repositor%s resolve to real git repositories"):format(
+          #extra_paths,
+          #extra_paths == 1 and "y" or "ies"
+        )
+      )
+    else
+      vim.health.warn(
+        "dashboard.extra_paths entries that are not git repositories: " .. table.concat(bad, ", "),
+        { "Check the path exists and has a .git directory/file" }
+      )
+    end
+  end
 end
 
 return M

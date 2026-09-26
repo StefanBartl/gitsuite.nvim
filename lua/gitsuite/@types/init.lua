@@ -29,6 +29,17 @@
 ---@class GitSuite.Config.Branch
 ---@field sessions boolean  GS-24, opt-in, default false: save the current branch's window/tab layout (sessions.nvim, optional soft dep) before a `branch.switch()` checkout, load the target branch's layout after. Off by default -- an automatic load can discard unsaved buffers.
 
+--- One named page `:Git dashboard` can flip to with `<C-l>`/`<Right>` /
+--- `<C-h>`/`<Left>`, alongside the default (unnamed) `base_dir` page.
+---@class GitSuite.Config.Dashboard.Group
+---@field name string    Shown in the dashboard's title/winbar when this page is active.
+---@field paths string[] Each entry is a repository itself, or a directory scanned for its immediate git-repository children.
+
+---@class GitSuite.Config.Dashboard
+---@field base_dir    string  Directory `:Git dashboard`/`:Git dashboard update` scan by default. Defaults to `$REPOS_DIR`.
+---@field extra_paths string[]  Repositories merged onto the default page's scan; each entry must itself be a repository.
+---@field groups      GitSuite.Config.Dashboard.Group[]  Additional named pages, see `GitSuite.Config.Dashboard.Group`.
+
 --- The **resolved** configuration, as `config.get()` returns it: DEFAULTS
 --- deep-merged with the user's `setup()` table. Every field below is
 --- therefore always present.
@@ -38,6 +49,8 @@
 ---@field keymaps  GitSuite.Config.Keymaps
 ---@field browse   GitSuite.Config.Browse
 ---@field branch   GitSuite.Config.Branch
+---@field dashboard GitSuite.Config.Dashboard
+---@field progress_style string  Indicator style for `:Git dashboard`/`:Git dashboard update`; "auto" (default), "notify", "statusline", "fidget", "float" or "kit".
 
 --- The partial shape a caller hands to `require("gitsuite").setup(opts)`.
 ---@class GitSuite.Opts
@@ -46,6 +59,8 @@
 ---@field keymaps?  table
 ---@field browse?   table
 ---@field branch?   table
+---@field dashboard? table
+---@field progress_style? string
 
 --- One entry in `gitsuite.adapter`'s registry. Built-in adapter modules
 --- (`adapter/gitsigns.lua`, `adapter/native.lua`, ...) each return a table

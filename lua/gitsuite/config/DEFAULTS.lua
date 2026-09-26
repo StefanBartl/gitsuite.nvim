@@ -40,6 +40,29 @@ local DEFAULTS = {
     -- -- an automatic load can discard unsaved buffers.
     sessions = false,
   },
+  dashboard = {
+    -- Placeholder, overwritten in config/init.lua right after this table is
+    -- required (via lib.nvim's env snapshot, `$REPOS_DIR`) -- kept out of
+    -- this table so requiring DEFAULTS.lua alone stays pure data.
+    base_dir = "",
+    -- Repository paths shown on the default dashboard page in addition to
+    -- whatever `base_dir`'s scan finds -- e.g. a Neovim config, which is a
+    -- git repository of its own but never itself a checkout cloned into
+    -- `base_dir`. Each entry must itself be a repository; one that isn't is
+    -- reported and skipped (see docs/configuration.md).
+    extra_paths = {},
+    -- Named pages the dashboard can flip between (`<C-l>`/`<Right>` next,
+    -- `<C-h>`/`<Left>` previous, alongside the default `base_dir` page).
+    -- Each entry is `{ name = string, paths = string[] }`; a path is either
+    -- a repository itself or a directory scanned for its immediate
+    -- git-repository children (the same rule `extra_paths`' entries do NOT
+    -- get -- see docs/configuration.md).
+    groups = {},
+  },
+  -- Indicator style for `:Git dashboard`/`:Git dashboard update` over many
+  -- repositories; "auto" picks fidget.nvim when installed, else `vim.notify`.
+  -- Needs lib.nvim (always present), no-op otherwise.
+  progress_style = "auto",
 }
 
 return DEFAULTS

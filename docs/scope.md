@@ -25,17 +25,23 @@ noted:
   a thin pass-through to the real plugin/binary.
 - **`status`** — repository status (branch, ahead/behind, dirty) and a
   quickfix export of the same, via `lib.nvim.git.status_porcelain`.
+- **`dashboard`** — the one deliberate exception to "one repository per
+  command" below: a multi-repo git-status panel (branch, ahead/behind,
+  dirty, last-commit age) across a whole directory of clones, or a
+  configured set of named pages (`dashboard.groups`), with row/marked-set/
+  whole-page push, pull and fetch. Moved here from reposcope.nvim, which
+  stays scoped to GitHub/GitLab/Codeberg discovery.
 
 ## Does not
 
 - **No staging UI.** neogit owns that; `:Git ui neogit` opens it, nothing
   here reimplements it.
 - **No side-by-side diff engine.** diffview.nvim and `diff.nvim` own that.
-- **No interactive rebase, no commit editor, no push/pull/fetch UI.**
-  Outside every one of the eight families above — `lazygit` or the
-  terminal is the intended tool for those.
-- **No cross-repository view.** gitsuite.nvim operates on the one
-  repository the current buffer belongs to; see
+- **No interactive rebase, no commit editor.** Outside every one of the
+  nine families above — `lazygit` or the terminal is the intended tool for
+  those.
+- **`dashboard` is the one cross-repository view.** Every other family
+  operates on the one repository the current buffer belongs to; see
   [around-it.md](around-it.md) for the contrast with reposcope.nvim.
 - **No git-hosting API integration** (issues, PRs, CI status). `:Git
   browse *` only ever builds a URL and hands it to a browser opener —

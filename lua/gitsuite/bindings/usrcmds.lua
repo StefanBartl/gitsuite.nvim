@@ -338,13 +338,96 @@ local function build_routes()
         require("gitsuite.features.status.gates").spell()
       end,
     },
+
+    -- dashboard: multi-repo git status/action panel, moved from
+    -- reposcope.nvim's `:Reposcope dashboard`/`:Reposcope update` -- git
+    -- tooling belongs here, not in a repository-discovery plugin.
+    {
+      path = { "dashboard" },
+      args = { { name = "dir", type = "GITSUITE_DASHBOARD_DIR", optional = true } },
+      flags = {
+        {
+          name = "out",
+          type = "STRING",
+          enum = { "popup", "buffer", "split", "vsplit", "clipboard", "path" },
+        },
+        { name = "to", type = "PATH" },
+      },
+      desc = "Show the git dashboard of every repository in dir/$REPOS_DIR (or one repository); <C-l>/<C-h> flip through dashboard.groups",
+      run = function(ctx)
+        require("gitsuite.features.dashboard").show(ctx.args.dir, ctx.flags.out, ctx.flags.to)
+      end,
+    },
+    {
+      path = { "dashboard", "update" },
+      args = { { name = "dir", type = "GITSUITE_DASHBOARD_DIR", optional = true } },
+      desc = "Update (fetch + ff-only pull) every repository in dir/$REPOS_DIR, headless",
+      run = function(ctx)
+        local notify = require("gitsuite.util.notify").notify
+        notify("Updating repositories...", vim.log.levels.INFO)
+        require("gitsuite.features.dashboard").update_all(ctx.args.dir, function(updated, errors)
+          if #errors > 0 then
+            notify(
+              ("Updated %d, %d failed:\n\n%s"):format(updated, #errors, table.concat(errors, "\n")),
+              vim.log.levels.WARN
+            )
+          else
+            notify(
+              ("Updated %d repositor%s"):format(updated, updated == 1 and "y" or "ies"),
+              vim.log.levels.INFO
+            )
+          end
+        end)
+      end,
+    },
   }
+end
+
+---`dir`'s completion for `dashboard`/`dashboard update`: real directory
+---listings plus `$REPOS_DIR` offered up front when resolvable. Validation is
+---otherwise the built-in `DIR` type's (expand, then must be an existing
+---directory) -- only completion candidates are extended.
+---@return string[]
+local function fixed_dir_keywords()
+  local env = require("lib.nvim.system.env").get()
+  local keywords = {}
+  if env.repo_base and env.repo_base ~= "" then keywords[#keywords + 1] = "$REPOS_DIR" end
+  return keywords
+end
+
+---Registers `GITSUITE_DASHBOARD_DIR` (idempotent -- safe to call from
+---`M.register` on every `setup()`).
+---@return nil
+local function register_dashboard_dir_type()
+  local is_dir = require("lib.nvim.fs.is_dir")
+  local expand_path = require("lib.nvim.cross.fs.expand_path")
+
+  composer.register_type("GITSUITE_DASHBOARD_DIR", {
+    validate = function(raw)
+      local expanded = expand_path(raw)
+      if not is_dir(vim.fn.fnamemodify(expanded, ":p")) then
+        return false, nil, ("'%s' is not a directory"):format(raw)
+      end
+      return true, expanded, nil
+    end,
+    complete = function(arg_lead)
+      local candidates = {}
+      for _, kw in ipairs(fixed_dir_keywords()) do
+        if arg_lead == "" or kw:sub(1, #arg_lead) == arg_lead then
+          candidates[#candidates + 1] = kw
+        end
+      end
+      vim.list_extend(candidates, vim.fn.getcompletion(arg_lead, "dir"))
+      return candidates
+    end,
+  })
 end
 
 ---Register `:Git` (or the configured command name) with the full route tree.
 ---Idempotent at the nvim level (re-creates cleanly).
 ---@param cfg GitSuite.Config
 function M.register(cfg)
+  register_dashboard_dir_type()
   composer.verb(cfg.commands.git, {
     desc = "[gitsuite.nvim] :" .. cfg.commands.git .. " <scope> <action> -- see docs/BINDINGS.md",
     routes = build_routes(),

@@ -6,6 +6,14 @@
 
 local DEFAULTS = require("gitsuite.config.DEFAULTS")
 
+-- Resolved here, not inline in DEFAULTS.lua, so requiring that module alone
+-- stays pure data (no env read at require time) -- same reasoning
+-- reposcope.nvim's `clone.std_dir` follows. Via lib.nvim's env snapshot, not
+-- a bare `os.getenv`, so this agrees with whatever `$REPOS_DIR`
+-- Tab-completion elsewhere in the ecosystem already resolves to.
+DEFAULTS.dashboard.base_dir = require("lib.nvim.system.env").get().repo_base
+  or DEFAULTS.dashboard.base_dir
+
 local M = {}
 
 ---@type GitSuite.Config|nil
@@ -23,6 +31,13 @@ end
 ---@return boolean
 local function is_string(v)
   return type(v) == "string" and v ~= ""
+end
+
+---@internal
+---@param v any
+---@return boolean
+local function is_string_or_empty(v)
+  return type(v) == "string"
 end
 
 ---Schema for `setup()`'s top-level and one-level-nested keys (ERR-50/ERR-22):
@@ -58,6 +73,12 @@ local KNOWN = {
   branch = {
     sessions = { ok = is_boolean, expect = "a boolean" },
   },
+  dashboard = {
+    base_dir = { ok = is_string_or_empty, expect = "a string" },
+    extra_paths = true,
+    groups = true,
+  },
+  progress_style = { ok = is_string, expect = "a non-empty string" },
 }
 
 ---@internal
