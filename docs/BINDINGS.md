@@ -45,6 +45,8 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 | `:Git conflict prev` | Jump to the previous conflict marker in this buffer |
 | `:Git conflict refresh` | Re-scan the current buffer for conflict markers |
 | `:Git conflict theirs` | Resolve the conflict under the cursor: keep theirs |
+| `:Git dashboard [{dir:GITSUITE_DASHBOARD_DIR}] [--out=<popup\|buffer\|split\|vsplit\|clipboard\|path>] [--to=<value>]` | Show the git dashboard of every repository in dir/$REPOS_DIR (or one repository); <C-l>/<C-h> flip through dashboard.groups |
+| `:Git dashboard update [{dir:GITSUITE_DASHBOARD_DIR}]` | Update (fetch + ff-only pull) every repository in dir/$REPOS_DIR, headless |
 | `:Git diff close` | Close every open diff view and leave diff mode (diff.nvim :DiffClear) |
 | `:Git diff head` | Diff the current file against HEAD |
 | `:Git diff history` | Show file history (diff.nvim :DiffHistory) |
@@ -68,6 +70,41 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 | `:Git ui diffview open` | Open diffview |
 | `:Git ui lazygit [{dir:DIR}]` | Open lazygit in a floating terminal (optionally for the repo containing <dir>) |
 | `:Git ui neogit` | Open neogit |
+
+`--out` ∈ `popup | buffer | split | vsplit | clipboard | path`
+
+## Dashboard keys (component-local)
+
+Not part of the table above — `:Git dashboard`'s own row/mark/batch/page
+keys, set on its buffer only, declared in one table in
+[`features/dashboard/view.lua`](../lua/gitsuite/features/dashboard/view.lua)
+(which also generates the panel's `winbar` legend and the `?` cheatsheet,
+so the three can't drift apart), moved here unchanged from reposcope.nvim's
+former `:Reposcope dashboard`.
+
+| Key | Mode | Action |
+| --- | --- | --- |
+| `<CR>`, `<2-LeftMouse>` | n | Confirm, then open the repository's `README.md`. `q` in the README returns to the dashboard on the same row |
+| `m` | n, x | Toggle the mark on the row; in Visual mode mark every row the selection spans |
+| `M` | n | Mark every repository, or clear all marks when everything is already marked |
+| `p` / `P` / `f` | n | Push / pull (`--ff-only`) / fetch the marked repositories, or the row under the cursor when nothing is marked |
+| `gp` / `gP` / `gf` | n | Push / pull / fetch **every** repository on the current page, marks ignored |
+| `gu` | n | Update every repository on the current page: `fetch --all --prune` + `pull --ff-only` |
+| `S` | n | Full `git status --short` plus the last five commits, in a nested popup |
+| `L` | n | Open `:Git ui lazygit` for the repository under the cursor |
+| `s` | n | Cycle sort order: discovery → name → state (worst first) → last-commit age → discovery |
+| `r` / `R` | n | Re-read the row under the cursor / re-scan the current page |
+| `<C-l>`, `<Right>` / `<C-h>`, `<Left>` | n | Switch to the next / previous configured `dashboard.groups` page (see [configuration.md](configuration.md#dashboard)) |
+| `a` | n | Add a repository or directory path to the current page (`vim.ui.input`), persisted outside `setup()` |
+| `x` | n | Remove the repository under the cursor from the current page — never touches disk |
+| `y` | n | Yank the repository's path |
+| `?` | n | List every one of these keys |
+
+Every batch (`p`/`P`/`f` with marks set, the `g` forms, and switching to a
+page with no repositories yet) is confirmed or reported before it runs;
+each push/pull/fetch/update runs through `lib.nvim.progress` (`progress_style`,
+see [configuration.md](configuration.md)) so a statusline component can show
+it, and re-reads just its own row afterwards rather than re-scanning the page.
 
 ## Internal (not typed by hand)
 

@@ -99,6 +99,61 @@ naming (`branch_aware`, on by default there) does the actual per-branch
 bookkeeping; this only calls `save`/`load` at the right two moments.
 Silently inert without `sessions.nvim` installed.
 
+## `dashboard`
+
+```lua
+dashboard = {
+  base_dir = "",     -- directory :Git dashboard/:Git dashboard update scan by default; "" -> $REPOS_DIR
+  extra_paths = {},  -- repos merged onto the default page's scan; each entry must itself be a repository
+  groups = {},       -- additional named pages, see below
+},
+```
+
+Unlike every other family, `dashboard` operates across a whole directory
+of repositories rather than the one the current buffer belongs to — see
+[scope.md](scope.md#dashboard-the-one-multi-repo-scope). There is
+deliberately no `features.dashboard` flag: the scope is always registered.
+
+`base_dir` defaults to `$REPOS_DIR` (via `lib.nvim.system.env`) when unset.
+If it resolves to a repository itself, only that one is reported; otherwise
+its immediate subdirectories are scanned (non-recursive). `extra_paths`
+adds repositories outside that scan — e.g. a Neovim config, which is a git
+repo of its own but never a checkout cloned into `base_dir` — each entry
+must itself be a repository; one that isn't is reported and skipped.
+
+```lua
+dashboard = {
+  groups = {
+    { name = "personal plugins", paths = { "$REPOS_DIR" } },
+    { name = "notes", paths = { "~/notes", "~/wiki.nvim" } },
+  },
+},
+```
+
+Each `groups` entry is a named page `:Git dashboard` can flip to with
+`<C-l>`/`<Right>` (next) and `<C-h>`/`<Left>` (previous), alongside the
+default (unnamed) `base_dir` page. A group's `paths` apply the more
+permissive rule `base_dir` itself uses: each entry is either a repository,
+or a directory whose immediate git-repository children are all included —
+unlike `extra_paths`, which never scans a plain directory. The `a`/`x` keys
+inside the dashboard add/remove paths per page at runtime, layered on top
+of this config without ever rewriting it — see
+[BINDINGS.md](BINDINGS.md#dashboard-keys-component-local).
+
+## `progress_style`
+
+```lua
+progress_style = "auto", -- "auto" | "notify" | "statusline" | "fidget" | "float" | "kit"
+```
+
+Indicator style for `:Git dashboard`/`:Git dashboard update` over many
+repositories — both walk a whole directory and run `git` once or twice per
+repository, which adds up to a wait long enough to look like a hang without
+one. Backed by
+[`lib.nvim.progress`](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/progress/README.md);
+`lib.nvim` is a hard dependency of gitsuite.nvim already, so this is never a
+no-op in practice.
+
 ## See also
 
 - [What you get with the defaults](what-you-get.md) — the short version of this page.
