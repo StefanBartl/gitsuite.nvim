@@ -37,7 +37,8 @@ frozen yet: breaking changes are still possible.
 - Neovim >= 0.10
 - `git` on `$PATH`
 - StefanBartl/lib.nvim (hard dependency)
-- StefanBartl/diff.nvim (hard dependency, used by `:Git diff *`)
+- StefanBartl/diff.nvim (hard dependency, used by `:Git diff *`/`:Git hunk *`)
+- StefanBartl/ui.nvim (hard dependency, used by `:Git dashboard`)
 
 See docs/requirements.md for the optional tools (gitsigns, diffview,
 neogit, lazygit, nvr, open.nvim, pickers.nvim) and exactly what each one
@@ -48,7 +49,7 @@ backs versus what falls back without it.
 >lua
   {
     "StefanBartl/gitsuite.nvim",
-    dependencies = { "StefanBartl/lib.nvim", "StefanBartl/diff.nvim" },
+    dependencies = { "StefanBartl/lib.nvim", "StefanBartl/diff.nvim", "StefanBartl/ui.nvim" },
     cmd = "Git",
     config = function(_, opts)
       require("gitsuite").setup(opts)
@@ -107,6 +108,18 @@ only if the base section itself holds a `=======`-looking line (the
 `|||||||` marker otherwise tells the sides apart, and git keeps conflicts
 around an unchanged underline apart).
 
+                                                        *gitsuite-dashboard*
+`:Git dashboard [dir] [--out=...] [--to=...]` and `:Git dashboard update
+[dir]` are the one multi-repo exception -- every other scope above
+operates on the current buffer's repository, `dashboard` reads the git
+status of every repository in `dir`/`dashboard.base_dir` ($REPOS_DIR by
+default), or a configured `dashboard.groups` page. Row/marked-set/whole-
+page push, pull and fetch (`p`/`P`/`f`/`gp`/`gP`/`gf`/`gu`), page
+navigation (`<C-l>`/`<C-h>`), and per-page path add/remove (`a`/`x`) --
+moved here from reposcope.nvim's former `:Reposcope dashboard`/`update`.
+See docs/BINDINGS.md for the full key table, docs/configuration.md for
+`dashboard.*`, and docs/scope.md for why this one scope is different.
+
 ==============================================================================
 5. CONFIGURATION                                                *gitsuite-config*
 >lua
@@ -116,11 +129,14 @@ around an unchanged underline apart).
     commands = { git = "Git" },
     keymaps = { blame_full = "<leader>gb", ui_lazygit = "<leader>lg" },
     browse = { hosts = {} },
+    dashboard = { base_dir = "", extra_paths = {}, groups = {} },
+    progress_style = "auto",
   })
 <
 Set a `keymaps.*` entry to `false` to disable that default mapping without
-disabling the underlying feature. See docs/configuration.md for every key
-explained individually.
+disabling the underlying feature. `dashboard` has no `features.dashboard`
+flag -- the scope is always registered, see |gitsuite-dashboard|. See
+docs/configuration.md for every key explained individually.
 
 ==============================================================================
 6. ADAPTERS                                                    *gitsuite-adapters*

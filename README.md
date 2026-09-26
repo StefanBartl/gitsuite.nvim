@@ -30,7 +30,12 @@
 One `:Git <scope> <action>` command tree for everything git in Neovim — own
 implementation where that pays off (merge-conflict resolution, blame,
 browse), thin adapters where it does not (gitsigns' hunk engine, neogit's
-staging UI, diffview, the real `lazygit` TUI in a float).
+staging UI, diffview, the real `lazygit` TUI in a float). Plus `:Git
+dashboard`, the one deliberate multi-repo exception: a git-status panel
+across a whole folder of clones, with push/pull/fetch per row, per marked
+set, or for the whole folder — moved here from
+[reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim), which
+stays scoped to GitHub/GitLab/Codeberg discovery.
 
 ---
 

@@ -31,10 +31,17 @@ wrappers — fugitive in particular defines its own `:Git`, a hard command
 collision rather than mere redundancy, which is the concrete reason it had
 to go rather than stay installed alongside this plugin.
 
-**reposcope.nvim** — different unit of work entirely. reposcope operates
-across *many* repositories (a workspace/dashboard view); gitsuite.nvim
-operates on *one* repository at a time, the one the current buffer sits
-in. Neither is a narrower version of the other.
+**reposcope.nvim** — different unit of work, with one deliberate exception.
+Every `:Git` scope but `dashboard` operates on *one* repository at a time,
+the one the current buffer sits in; reposcope stays scoped to
+GitHub/GitLab/Codeberg discovery, search and cloning. `:Git dashboard`
+itself — a multi-repo git-status panel with row/marked-set/whole-page
+push, pull and fetch — used to live in reposcope as `:Reposcope dashboard`/
+`update`, built before gitsuite.nvim existed as the dedicated git-tooling
+home; it moved here because a multi-repo *status/action* panel is git
+tooling, not repository *discovery*. See
+[scope.md](scope.md#dashboard-the-one-multi-repo-scope) for the boundary
+this draws.
 
 **insights.nvim** — no dependency in either direction. `insights.conflicts`
 used to run its own two-process conflict scan; it now calls

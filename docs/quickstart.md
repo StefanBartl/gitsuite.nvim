@@ -28,6 +28,18 @@ resolves it, keeping "ours". The default keymap `<leader>gb` runs `:Git
 blame full` (full-file blame), and `<leader>lg` opens the real `lazygit`
 TUI in a float via `:Git ui lazygit` — both work with zero configuration.
 
+If you have a whole folder of clones rather than just the current
+repository:
+
+```vim
+:Git dashboard $REPOS_DIR
+```
+
+Shows a git-status row per repository (branch, ahead/behind, dirty state),
+with `p`/`P`/`f` to push/pull/fetch the one under the cursor or a marked
+set, `gu` to update everything at once. `<Tab>` on the directory argument
+offers `$REPOS_DIR` ahead of real completion when that env var is set.
+
 `<Tab>` completes every `:Git <scope> <action>` at each level, so typing
 `:Git ` and pressing `<Tab>` is itself a way to explore what's there — the
 same route tree also generates [BINDINGS.md](BINDINGS.md), the full

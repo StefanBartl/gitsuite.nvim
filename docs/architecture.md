@@ -2,14 +2,18 @@
 
 ## Own implementation where it pays off, a thin adapter where it doesn't
 
-Each of the eight feature families in [scope.md](scope.md) picked one of
+Each of the nine feature families in [scope.md](scope.md) picked one of
 two shapes on its own merits, not by a blanket rule:
 
-- **Own implementation** for conflict resolution, blame, browse, branch
-  and status — none of gitsigns/fugitive/rhubarb/pickers offered exactly
-  what was needed (a diff3/zdiff3-aware conflict parser; a pure remote-URL
-  grammar; a `git`-only fallback that needs no picker plugin at all), and
-  the actual logic is small enough that owning it beats wrapping it.
+- **Own implementation** for conflict resolution, blame, browse, branch,
+  status and dashboard — none of gitsigns/fugitive/rhubarb/pickers offered
+  exactly what was needed (a diff3/zdiff3-aware conflict parser; a pure
+  remote-URL grammar; a `git`-only fallback that needs no picker plugin at
+  all), and the actual logic is small enough that owning it beats wrapping
+  it. `dashboard` is a special case of this: it *is* an own
+  implementation, just one moved in from reposcope.nvim rather than
+  written for gitsuite.nvim from scratch — see
+  [around-it.md](around-it.md).
 - **Thin adapter** for the hunk engine (gitsigns), diffing (`diff.nvim`)
   and the `ui` launchers (lazygit/neogit/diffview) — each of those is
   years of edge-case work in the plugin it wraps, and reimplementing any
@@ -53,8 +57,12 @@ onto gitsuite.nvim. Concretely:
   `gitsuite.features.branch.switch()` (its own picker), and gitsuite
   contributes a context-menu item list consumable by `ui.contextmenu`.
   Both directions go through a soft, `pcall`-guarded check
-  (`ui.util.soft_require` on ui.nvim's side) — never a hard dependency
-  either way, so neither plugin requires the other to load at all.
+  (`ui.util.soft_require` on ui.nvim's side) — no hard dependency either
+  way for *that* pair. `:Git dashboard`'s popup/confirm dialogs are the
+  one exception: they're built on `ui.kit` directly, a hard dependency
+  gitsuite.nvim did not have before the dashboard moved in from
+  reposcope.nvim (see [requirements.md](requirements.md)) — but it still
+  only points one way, `gitsuite → ui.nvim`, so no cycle opens.
 
 ## Post-action hooks are `User` autocmd events, not direct calls
 

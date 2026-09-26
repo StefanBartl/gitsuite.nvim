@@ -1,8 +1,8 @@
 # Installation
 
 See [requirements.md](requirements.md) for the full dependency table. In
-short: `lib.nvim` and `diff.nvim` are hard dependencies, everything else in
-this page is optional.
+short: `lib.nvim`, `diff.nvim` and `ui.nvim` are hard dependencies,
+everything else in this page is optional.
 
 ## lazy.nvim
 
@@ -14,7 +14,7 @@ this page is optional.
   -- detect before one is read -- this trigger sets up conflict scanning/
   -- highlighting/keymaps without waiting for :Git to be typed first.
   event = { "BufReadPost", "BufNewFile" },
-  dependencies = { "StefanBartl/lib.nvim", "StefanBartl/diff.nvim" },
+  dependencies = { "StefanBartl/lib.nvim", "StefanBartl/diff.nvim", "StefanBartl/ui.nvim" },
   keys = {
     { "<leader>gb", "<cmd>Git blame full<cr>", desc = "[gitsuite.nvim] Blame (full)" },
     { "<leader>lg", "<cmd>Git ui lazygit<cr>", desc = "[gitsuite.nvim] Open lazygit" },
@@ -38,7 +38,7 @@ gitsuite.nvim notice it.
 ```lua
 use({
   "StefanBartl/gitsuite.nvim",
-  requires = { "StefanBartl/lib.nvim", "StefanBartl/diff.nvim" },
+  requires = { "StefanBartl/lib.nvim", "StefanBartl/diff.nvim", "StefanBartl/ui.nvim" },
   config = function()
     require("gitsuite").setup({})
   end,
@@ -50,6 +50,7 @@ use({
 ```vim
 Plug 'StefanBartl/lib.nvim'
 Plug 'StefanBartl/diff.nvim'
+Plug 'StefanBartl/ui.nvim'
 Plug 'StefanBartl/gitsuite.nvim'
 ```
 
@@ -63,7 +64,7 @@ require("gitsuite").setup({})
 local add, now = MiniDeps.add, MiniDeps.now
 add({
   source = "StefanBartl/gitsuite.nvim",
-  depends = { "StefanBartl/lib.nvim", "StefanBartl/diff.nvim" },
+  depends = { "StefanBartl/lib.nvim", "StefanBartl/diff.nvim", "StefanBartl/ui.nvim" },
 })
 now(function()
   require("gitsuite").setup({})

@@ -36,6 +36,15 @@ The handful of things worth knowing before reading anything else.
   nothing *requires* them — the native adapter (plain `git`, via
   `lib.nvim.git`) covers the rest. See [architecture.md](architecture.md).
 
+- **`:Git dashboard` is the one command that isn't about the current
+  repository.** A git-status panel (branch, ahead/behind, dirty,
+  last-commit age) across a whole folder of clones, or a configured set
+  of named pages (`dashboard.groups`) you flip between with
+  `<C-l>`/`<C-h>` — with push/pull/fetch per row, per marked set, or for
+  the whole page. See [configuration.md](configuration.md) for
+  `dashboard.*` and [BINDINGS.md](BINDINGS.md#dashboard-keys-component-local)
+  for its own keys.
+
 - **A rejected `setup()` option never breaks the default.** An unknown key
   or a wrong-typed value is dropped with a warning (surfaced through
   `:checkhealth gitsuite`), and the built-in default underneath still

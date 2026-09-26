@@ -6,12 +6,13 @@ requests very welcome.
 
 ## Getting the repository into a session
 
-Clone `lib.nvim` and `diff.nvim` alongside it (both hard dependencies),
-then add all three to the runtime path:
+Clone `lib.nvim`, `diff.nvim` and `ui.nvim` alongside it (all three hard
+dependencies), then add all four to the runtime path:
 
 ```lua
 vim.opt.rtp:prepend("/path/to/lib.nvim")
 vim.opt.rtp:prepend("/path/to/diff.nvim")
+vim.opt.rtp:prepend("/path/to/ui.nvim")
 vim.opt.rtp:prepend("/path/to/gitsuite.nvim")
 require("gitsuite").setup({})
 ```

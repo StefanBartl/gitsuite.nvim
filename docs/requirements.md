@@ -5,6 +5,7 @@
 | Neovim | **0.10+** — `lib.nvim.git`/`lib.nvim.cross.run_argv` use `vim.system()` unguarded on the paths gitsuite.nvim calls, and `lib.nvim` itself requires 0.10 |
 | [lib.nvim](https://github.com/StefanBartl/lib.nvim) | **required** — the `:Git` command layer is built on `usercmd.composer`, and every feature's git calls go through `lib.nvim.git`/`lib.nvim.cross.run_argv` (argv, no shell). `require("gitsuite")` cannot succeed without it; `:checkhealth gitsuite` reports it missing as an error, not a warning |
 | [diff.nvim](https://github.com/StefanBartl/diff.nvim) | **required** — `:Git diff *` and `:Git hunk *` call into it directly; there is no fallback |
+| [ui.nvim](https://github.com/StefanBartl/ui.nvim) | **required** — `:Git dashboard`'s popup/confirm dialogs are built on its `ui.kit`; there is no fallback. Only loaded when `:Git dashboard` is actually invoked, same as `diff.nvim` for `:Git diff *` |
 | `git` on `$PATH` | **required** — every feature shells out to the real `git` binary (via `lib.nvim.git`); there is no bundled or vendored git |
 
 Optional, each detected at runtime and degrading to a clear error or a
