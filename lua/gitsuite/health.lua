@@ -11,8 +11,9 @@ local M = {}
 function M.check()
   vim.health.start("gitsuite")
 
-  -- lib.nvim and diff.nvim are HARD dependencies (LUA-01) -- gitsuite.nvim
-  -- has no fallback for either, so a missing one is `error`, not `warn`.
+  -- lib.nvim, diff.nvim and ui.nvim are HARD dependencies (LUA-01) --
+  -- gitsuite.nvim has no fallback for any of them, so a missing one is
+  -- `error`, not `warn`.
   if pcall(require, "lib.nvim.bindings.usercmd.composer") then
     vim.health.ok("lib.nvim detected (:Git command layer available)")
   else
@@ -28,6 +29,15 @@ function M.check()
     vim.health.error(
       "diff.nvim not found -- :Git diff * will fail",
       { 'Install "StefanBartl/diff.nvim" as a dependency' }
+    )
+  end
+
+  if pcall(require, "ui.kit") then
+    vim.health.ok("ui.nvim detected (:Git dashboard available)")
+  else
+    vim.health.error(
+      "ui.nvim not found -- :Git dashboard will fail",
+      { 'Install "StefanBartl/ui.nvim" as a dependency' }
     )
   end
 
