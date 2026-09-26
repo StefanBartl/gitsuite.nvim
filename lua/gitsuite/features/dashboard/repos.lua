@@ -36,10 +36,19 @@ local is_windows = require("lib.nvim.cross.platform.is_windows")
 ---comes back unresolved, un-anchored to any drive. Stripping first forces
 ---both spellings through the same code path, so they resolve to the same
 ---string instead of two different ones for the same real path.
+---A path made up of nothing but separators (`/`, `\`) strips down to an
+---empty string, which `fnamemodify`/`expand` resolve to the current working
+---directory rather than the filesystem root -- so that one case falls back
+---to the original, unstripped path instead (verified: `fnamemodify` already
+---resolves a bare `/`/`\`/drive letter to that drive's root correctly on its
+---own, trailing separator or not; the drive-omission quirk above only
+---affects a *multi-segment* path).
 ---@param path string
 ---@return string
 local function to_absolute(path)
-  return (fnamemodify(expand(path:gsub("[\\/]+$", "")), ":p"):gsub("[\\/]+$", ""))
+  local trimmed = path:gsub("[\\/]+$", "")
+  if trimmed == "" then trimmed = path end
+  return (fnamemodify(expand(trimmed), ":p"):gsub("[\\/]+$", ""))
 end
 
 ---Checks whether a directory is a git repository.
@@ -109,6 +118,19 @@ function M.normalize_path(path)
   return key
 end
 
+---@internal
+---Same comparison key as `M.normalize_path`, for a `path` already known to
+---be absolute (returned by `resolve_entry`/`collect_repos` in this same
+---module) -- skips `to_absolute`'s `fnamemodify`/`expand` round-trip a
+---second time on a string that already went through it once.
+---@param path string
+---@return string
+local function comparison_key(path)
+  local key = unify_slashes(path)
+  if is_windows() then key = key:lower() end
+  return key
+end
+
 ---Resolves one configured entry to the repository path(s) it names: itself,
 ---if it is already a repository, or every immediate git-repository child of
 ---it, if it is a plain directory to scan. The one resolution rule every
@@ -142,7 +164,10 @@ function M.resolve_group_repos(entries, existing)
   local out = {}
   for _, raw in ipairs(entries or {}) do
     for _, resolved in ipairs(resolve_entry(raw)) do
-      local key = M.normalize_path(resolved)
+      -- `resolved` came straight out of `resolve_entry` above, already
+      -- absolute -- `comparison_key`, not `M.normalize_path`, so it isn't
+      -- run through `to_absolute`'s fnamemodify/expand a second time.
+      local key = comparison_key(resolved)
       if not seen[key] then
         seen[key] = true
         out[#out + 1] = resolved

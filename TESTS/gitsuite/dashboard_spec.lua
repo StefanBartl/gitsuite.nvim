@@ -79,6 +79,24 @@ describe("gitsuite.features.dashboard", function()
       assert.equals(1, #out)
       assert.is_not_nil(out[1]:find("/b$"))
     end)
+
+    it(
+      "normalize_path: a bare separator resolves to the filesystem root, not vim.fn.getcwd()",
+      function()
+        -- Regression: to_absolute() used to strip a trailing separator
+        -- unconditionally before resolving, so a path made of nothing but
+        -- separators ("/") stripped down to "" first -- and fnamemodify/
+        -- expand resolve "" to the current working directory, not the
+        -- drive/filesystem root.
+        local root_key = repos.normalize_path("/")
+        local cwd_key = repos.normalize_path(vim.fn.getcwd())
+        assert.is_not.equal(
+          cwd_key,
+          root_key,
+          "a bare '/' must not silently resolve to whatever directory nvim happened to start in"
+        )
+      end
+    )
   end)
 
   describe("status.scan_group", function()

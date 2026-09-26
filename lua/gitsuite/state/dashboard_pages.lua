@@ -81,16 +81,18 @@ function M.apply(key, static_paths)
   end
 
   local out = {}
+  ---@type table<string, boolean>
+  local present = {}
   for _, p in ipairs(static_paths or {}) do
-    if not removed[normalize_path(p)] then out[#out + 1] = p end
+    local key_ = normalize_path(p)
+    if not removed[key_] then
+      out[#out + 1] = p
+      present[key_] = true
+    end
   end
 
   -- An added entry that (under some other spelling) is already in `out` is
   -- not appended a second time.
-  local present = {}
-  for _, p in ipairs(out) do
-    present[normalize_path(p)] = true
-  end
   for _, p in ipairs(e.added) do
     local key_ = normalize_path(p)
     if not present[key_] then

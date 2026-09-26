@@ -41,10 +41,39 @@ local function is_string_or_empty(v)
 end
 
 ---@internal
+---A table whose every entry is a non-empty string -- e.g.
+---`dashboard.extra_paths`. Rejecting a wrongly-shaped *entry* here, not just
+---a wrongly-typed outer value, matters because `repos.to_absolute()` (a
+---non-string entry would crash on `:gsub`) and `dashboard_pages.apply()`'s
+---`ipairs` both run over this list unchecked once `setup()` has accepted it.
 ---@param v any
 ---@return boolean
-local function is_table(v)
-  return type(v) == "table"
+local function is_list_of_strings(v)
+  if type(v) ~= "table" then return false end
+  for _, item in ipairs(v) do
+    if type(item) ~= "string" or item == "" then return false end
+  end
+  return true
+end
+
+---@internal
+---A table of `dashboard.groups` entries: each must be `{ name: string,
+---paths?: string[] }`. `paths`, when present, goes through the same
+---`is_list_of_strings` check `extra_paths` does -- `features/dashboard/
+---init.lua`'s `build_pages()` passes it straight to `dashboard_pages.apply()`
+---(`for _, p in ipairs(static_paths or {})`), which raises on anything that
+---isn't a table at all, and would misbehave silently on a table of
+---non-strings.
+---@param v any
+---@return boolean
+local function is_valid_groups(v)
+  if type(v) ~= "table" then return false end
+  for _, group in ipairs(v) do
+    if type(group) ~= "table" then return false end
+    if type(group.name) ~= "string" or group.name == "" then return false end
+    if group.paths ~= nil and not is_list_of_strings(group.paths) then return false end
+  end
+  return true
 end
 
 ---Schema for `setup()`'s top-level and one-level-nested keys (ERR-50/ERR-22):
@@ -82,8 +111,11 @@ local KNOWN = {
   },
   dashboard = {
     base_dir = { ok = is_string_or_empty, expect = "a string" },
-    extra_paths = { ok = is_table, expect = "a table (list of paths)" },
-    groups = { ok = is_table, expect = "a table (list of { name, paths })" },
+    extra_paths = { ok = is_list_of_strings, expect = "a table (list of non-empty path strings)" },
+    groups = {
+      ok = is_valid_groups,
+      expect = "a table (list of { name: non-empty string, paths?: list of strings })",
+    },
   },
   progress_style = { ok = is_string, expect = "a non-empty string" },
 }

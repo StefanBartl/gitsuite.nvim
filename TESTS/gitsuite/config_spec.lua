@@ -56,6 +56,37 @@ describe("gitsuite.config", function()
   end)
 
   it(
+    "drops a dashboard.extra_paths entry that isn't a string, not just a non-table value",
+    function()
+      config.setup({ dashboard = { extra_paths = { "~/repos/foo", 42 } } })
+      local c = config.get()
+      assert.same(
+        {},
+        c.dashboard.extra_paths,
+        "the default applies -- a non-string entry would crash inside repos.to_absolute()"
+      )
+      local issues = config.issues()
+      assert.is_not_nil(table.concat(issues, "\n"):find("dashboard.extra_paths", 1, true))
+    end
+  )
+
+  it("drops a dashboard.groups entry whose paths isn't a list of strings", function()
+    config.setup({ dashboard = { groups = { { name = "Work", paths = "~/work" } } } })
+    local c = config.get()
+    assert.same(
+      {},
+      c.dashboard.groups,
+      "a single un-listed path string would crash inside dashboard_pages.apply()'s ipairs"
+    )
+  end)
+
+  it("drops a dashboard.groups entry missing a name", function()
+    config.setup({ dashboard = { groups = { { paths = { "~/work" } } } } })
+    local c = config.get()
+    assert.same({}, c.dashboard.groups)
+  end)
+
+  it(
     "deep-copies DEFAULTS on merge (ERR-51): mutating one setup() result never leaks into the next",
     function()
       config.setup({})

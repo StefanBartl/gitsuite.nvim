@@ -1021,7 +1021,14 @@ local function _switch_page(ctx, delta)
 
   _page_switching = true
   notify(("Loading %s ..."):format(page.name or "dashboard"), 3)
-  on_switch_page(page, function(records, errors)
+  -- `on_switch_page` is a caller-supplied callback (features/dashboard/
+  -- init.lua's `scan_page`) that can throw synchronously -- e.g. a
+  -- malformed `dashboard.groups` entry that slipped past config
+  -- validation -- before it ever invokes its own `on_done`. Without the
+  -- pcall, that leaves `_page_switching` stuck `true` forever: every later
+  -- `<C-l>`/`<C-h>`/`R` hits the guard above and refuses to run, for the
+  -- rest of the session.
+  local switch_ok, switch_err = pcall(on_switch_page, page, function(records, errors)
     vim.schedule(function()
       _page_switching = false
       _pending = {}
@@ -1055,6 +1062,10 @@ local function _switch_page(ctx, delta)
       end
     end)
   end)
+  if not switch_ok then
+    _page_switching = false
+    notify(("Failed to load %s: %s"):format(page.name or "dashboard", switch_err), 4)
+  end
 end
 
 ---@private
