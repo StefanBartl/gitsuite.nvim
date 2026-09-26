@@ -28,6 +28,20 @@ local unify_slashes = require("lib.nvim.cross.fs.separators.unify_slashes")
 local config = require("gitsuite.config")
 local is_windows = require("lib.nvim.cross.platform.is_windows")
 
+---@internal
+---Resolves `path` to its absolute, trailing-separator-free form. Strips any
+---trailing separator *before* handing off to `fnamemodify(..., ":p")`: on
+---Windows, a drive-less absolute path (`/tmp/x`) only gets the current
+---drive letter prepended when it has *no* trailing separator -- `/tmp/x/`
+---comes back unresolved, un-anchored to any drive. Stripping first forces
+---both spellings through the same code path, so they resolve to the same
+---string instead of two different ones for the same real path.
+---@param path string
+---@return string
+local function to_absolute(path)
+  return (fnamemodify(expand(path:gsub("[\\/]+$", "")), ":p"):gsub("[\\/]+$", ""))
+end
+
 ---Checks whether a directory is a git repository.
 ---Accepts both a `.git` directory (normal clone) and a `.git` file (worktree/submodule).
 ---@param path string Absolute path to the candidate directory
@@ -50,9 +64,7 @@ function M.resolve_base_dir(override)
 
   if not dir or dir == "" then return nil end
 
-  -- Parenthesised: `gsub` answers with the string *and* the replacement count,
-  -- and this function promises one value.
-  return (fnamemodify(expand(dir), ":p"):gsub("[\\/]+$", ""))
+  return to_absolute(dir)
 end
 
 ---Collects all immediate subdirectories of `base_dir` that are git repositories.
@@ -78,16 +90,21 @@ function M.collect_repos(base_dir)
   return repos
 end
 
----Comparison key for deduplicating paths: `collect_repos` always joins with
----"/", but a configured entry (`dashboard.extra_paths`, a group's paths) may
----be typed with "\" (copy-pasted from Explorer on Windows) -- raw string
----equality on the expanded path misses that they name the same directory.
----Folded to lowercase on Windows too, where the filesystem is
----case-insensitive.
+---Normalizes a path for *comparison*: expanded (`~`, env vars), absolute,
+---no trailing separator, slashes unified, and lowercased on Windows (whose
+---filesystem is itself case-insensitive). This is the one key any two
+---spellings of "the same path" -- `~/repos/x`, `E:\repos\x`,
+---`e:/repos/x/` -- resolve to the same value under, used both for
+---deduplicating a scan's results (below) and, more importantly, for
+---recognizing "is this the path the user already added/removed" in
+---`state/dashboard_pages.lua`: without going through this, a page's
+---raw, as-typed `a`/`x` input never reliably matches a resolved
+---`record.path`, or a differently-spelled `dashboard.extra_paths`/`groups`
+---config entry.
 ---@param path string
 ---@return string
-local function dedup_key(path)
-  local key = unify_slashes(path)
+function M.normalize_path(path)
+  local key = unify_slashes(to_absolute(path))
   if is_windows() then key = key:lower() end
   return key
 end
@@ -100,7 +117,7 @@ end
 ---@param raw string A directory or single-repo path, `~`/env-expandable
 ---@return string[] resolved Absolute paths, empty when `raw` resolves to nothing
 local function resolve_entry(raw)
-  local resolved = fnamemodify(expand(raw), ":p"):gsub("[\\/]+$", "")
+  local resolved = to_absolute(raw)
   if M.is_git_repo(resolved) then return { resolved } end
   return M.collect_repos(resolved)
 end
@@ -118,14 +135,14 @@ function M.resolve_group_repos(entries, existing)
   ---@type table<string, boolean>
   local seen = {}
   for _, p in ipairs(existing or {}) do
-    seen[dedup_key(p)] = true
+    seen[M.normalize_path(p)] = true
   end
 
   ---@type string[]
   local out = {}
   for _, raw in ipairs(entries or {}) do
     for _, resolved in ipairs(resolve_entry(raw)) do
-      local key = dedup_key(resolved)
+      local key = M.normalize_path(resolved)
       if not seen[key] then
         seen[key] = true
         out[#out + 1] = resolved

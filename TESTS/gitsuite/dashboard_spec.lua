@@ -123,6 +123,40 @@ describe("gitsuite.features.dashboard", function()
     end)
   end)
 
+  describe("status.scan: on_complete always fires, even on a validation failure", function()
+    -- Regression: on_complete used to never fire on these paths (a bare
+    -- notify() + return), which broke the multi-page dashboard's own
+    -- fallback ("the default page failed, fall through to a configured
+    -- group page instead") -- that fallback lives in
+    -- gitsuite.features.dashboard.init, but the contract it depends on is
+    -- this module's, so it belongs here.
+    it(
+      "an inaccessible directory still invokes on_complete, with the failure as its one error",
+      function()
+        local result
+        status.scan(vim.fn.tempname() .. "-gitsuite-status-scan-missing", function(records, errors)
+          result = { records = records, errors = errors }
+        end)
+        assert.is_not_nil(result, "on_complete fires synchronously on this validation path")
+        assert.equals(0, #result.records)
+        assert.equals(1, #result.errors)
+      end
+    )
+
+    it("a directory with no repositories still invokes on_complete", function()
+      local empty = vim.fn.tempname() .. "-gitsuite-status-scan-empty"
+      vim.fn.mkdir(empty, "p")
+      local result
+      status.scan(empty, function(records, errors)
+        result = { records = records, errors = errors }
+      end)
+      assert.is_not_nil(result)
+      assert.equals(0, #result.records)
+      assert.equals(1, #result.errors)
+      pcall(vim.fn.delete, empty, "rf")
+    end)
+  end)
+
   describe("actions: adapt lib.nvim.git's async primitives to (repo, on_done)", function()
     local bare, clone
 
@@ -164,5 +198,86 @@ describe("gitsuite.features.dashboard", function()
       end)
       assert.is_true(ok)
     end)
+  end)
+
+  describe("state.dashboard_pages: normalized path matching, no long-lived cache", function()
+    local dashboard_pages
+    local original_stdpath, fake_data_dir
+
+    before_each(function()
+      package.loaded["gitsuite.state.dashboard_pages"] = nil
+      fake_data_dir = vim.fn.tempname() .. "-gitsuite-dashboard-pages-data"
+      original_stdpath = vim.fn.stdpath
+      -- luacheck: ignore 122 -- deliberately shadowing a vim.* API for the
+      -- duration of this describe block, restored in after_each below.
+      vim.fn.stdpath = function(what)
+        if what == "data" then return fake_data_dir end
+        return original_stdpath(what)
+      end
+      dashboard_pages = require("gitsuite.state.dashboard_pages")
+    end)
+
+    after_each(function()
+      vim.fn.stdpath = original_stdpath
+      pcall(vim.fn.delete, fake_data_dir, "rf")
+    end)
+
+    it("remove() matches a raw, unexpanded add() by its resolved form", function()
+      local raw = "~/gitsuite-dashboard-pages-test-dir"
+      dashboard_pages.add("p", raw)
+      local resolved = vim.fn.fnamemodify(vim.fn.expand(raw), ":p"):gsub("[\\/]+$", "")
+
+      local ok = dashboard_pages.remove("p", resolved)
+      assert.is_true(ok)
+      assert.same(
+        {},
+        dashboard_pages.apply("p", {}),
+        "the added entry is gone under either spelling"
+      )
+    end)
+
+    it("remove() hides a statically configured entry spelled with a different separator", function()
+      local static = "/tmp/gitsuite-dashboard-pages-static"
+      local differently_spelled = static:gsub("/", "\\")
+
+      dashboard_pages.remove("p", differently_spelled)
+      assert.same(
+        {},
+        dashboard_pages.apply("p", { static }),
+        "the static entry stays hidden even though it was never spelled exactly like this"
+      )
+    end)
+
+    it(
+      "add() recognizes an already-added path under a different spelling as the same entry",
+      function()
+        dashboard_pages.add("p", "/tmp/gitsuite-dup/")
+        dashboard_pages.add("p", "/tmp/gitsuite-dup") -- no trailing slash this time
+        assert.equals(1, #dashboard_pages.apply("p", {}), "not added twice")
+      end
+    )
+
+    it(
+      "apply() re-reads the file fresh -- an external write between calls is not shadowed by a stale cache",
+      function()
+        dashboard_pages.add("p", "/tmp/from-module")
+
+        -- Simulate a second Neovim instance writing to the same file
+        -- directly, between this instance's add() and apply().
+        local json = require("lib.nvim.fs.json")
+        local path = vim.fs.joinpath(fake_data_dir, "gitsuite", "dashboard_pages.json")
+        local data = json.read(path)
+        table.insert(data.p.added, "/tmp/from-elsewhere")
+        json.write(path, data)
+
+        local result = dashboard_pages.apply("p", {})
+        table.sort(result)
+        assert.same(
+          { "/tmp/from-elsewhere", "/tmp/from-module" },
+          result,
+          "both this instance's own write and the externally-written one are visible"
+        )
+      end
+    )
   end)
 end)

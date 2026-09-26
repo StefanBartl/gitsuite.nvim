@@ -40,6 +40,13 @@ local function is_string_or_empty(v)
   return type(v) == "string"
 end
 
+---@internal
+---@param v any
+---@return boolean
+local function is_table(v)
+  return type(v) == "table"
+end
+
 ---Schema for `setup()`'s top-level and one-level-nested keys (ERR-50/ERR-22):
 ---an unknown key or a value that fails its check is dropped before the merge
 ---so the built-in default underneath actually applies, instead of silently
@@ -75,8 +82,8 @@ local KNOWN = {
   },
   dashboard = {
     base_dir = { ok = is_string_or_empty, expect = "a string" },
-    extra_paths = true,
-    groups = true,
+    extra_paths = { ok = is_table, expect = "a table (list of paths)" },
+    groups = { ok = is_table, expect = "a table (list of { name, paths })" },
   },
   progress_style = { ok = is_string, expect = "a non-empty string" },
 }

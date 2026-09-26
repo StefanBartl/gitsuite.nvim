@@ -41,6 +41,20 @@ describe("gitsuite.config", function()
     assert.equals("Git", c.commands.git)
   end)
 
+  it("drops a non-table dashboard.extra_paths instead of reaching ipairs() and raising", function()
+    config.setup({ dashboard = { extra_paths = "~/repos/foo" } })
+    local c = config.get()
+    assert.same({}, c.dashboard.extra_paths, "the default (empty list) applies, not the string")
+    local issues = config.issues()
+    assert.is_not_nil(table.concat(issues, "\n"):find("dashboard.extra_paths", 1, true))
+  end)
+
+  it("drops a non-table dashboard.groups the same way", function()
+    config.setup({ dashboard = { groups = "not-a-list" } })
+    local c = config.get()
+    assert.same({}, c.dashboard.groups)
+  end)
+
   it(
     "deep-copies DEFAULTS on merge (ERR-51): mutating one setup() result never leaks into the next",
     function()

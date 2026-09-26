@@ -433,26 +433,44 @@ end
 ---configured extra path still produces a dashboard.
 ---If the resolved path is itself a repository, only that one is reported
 ---(extra_paths are still merged in on top of it).
----Validation failures (missing git, inaccessible directory, no repositories) are
----reported via notification and abort early without invoking `on_complete`.
+---Validation failures (missing git, inaccessible directory, no repositories)
+---always invoke `on_complete` (with an empty record list and the failure as
+---its one error), never just a notification and a silent return: a caller
+---juggling more than this one page -- `:Git dashboard`'s own `dashboard.groups`
+---fallback in `features/dashboard/init.lua` is exactly this case -- relies on
+---the callback firing to know the default page came back empty and it
+---should show a configured group page instead, rather than nothing at all.
+---When `on_complete` is not given at all, the notification is still the
+---only signal (unchanged from before), so a caller that never asked for the
+---callback sees no behavior change.
 ---@param path string|nil Optional directory or single-repo override (defaults to `dashboard.base_dir`)
----@param on_complete fun(records: RepoDashboardRecord[], errors: string[]): nil|nil Called once on completion
+---@param on_complete fun(records: RepoDashboardRecord[], errors: string[]): nil|nil Always called exactly once
 ---@return nil
 function M.scan(path, on_complete)
+  ---@param msg string
+  ---@param level integer
+  local function fail(msg, level)
+    if on_complete then
+      on_complete({}, { msg })
+    else
+      notify(msg, level)
+    end
+  end
+
   if vim.fn.executable("git") ~= 1 then
-    notify("Cannot read repository status: 'git' is not available in PATH", 4)
+    fail("Cannot read repository status: 'git' is not available in PATH", 4)
     return
   end
 
   local base_dir = resolve_base_dir(path)
   if not base_dir then
-    notify("No repository directory provided and dashboard.base_dir is not set", 4)
+    fail("No repository directory provided and dashboard.base_dir is not set", 4)
     return
   end
 
   local stat = uv.fs_stat(base_dir)
   if not stat or stat.type ~= "directory" then
-    notify("Repository directory is not accessible: " .. base_dir, 4)
+    fail("Repository directory is not accessible: " .. base_dir, 4)
     return
   end
 
@@ -460,7 +478,7 @@ function M.scan(path, on_complete)
   local repos = is_git_repo(base_dir) and { base_dir } or collect_repos(base_dir)
   vim.list_extend(repos, extra_repo_paths(repos))
   if #repos == 0 then
-    notify("No git repositories found in " .. base_dir, 3)
+    fail("No git repositories found in " .. base_dir, 3)
     return
   end
 
@@ -484,6 +502,7 @@ end
 function M.scan_group(paths, on_complete)
   if vim.fn.executable("git") ~= 1 then
     notify("Cannot read repository status: 'git' is not available in PATH", 4)
+    on_complete({}, {})
     return
   end
 

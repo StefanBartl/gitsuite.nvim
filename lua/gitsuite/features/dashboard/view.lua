@@ -662,7 +662,15 @@ local function _run_row_action(bufnr, records, verb, action_fn)
 
   action_fn(record.path, function(ok, err)
     vim.schedule(function()
-      _pending[idx] = nil
+      -- `_switch_page`/`_rescan_all`/the sort key all refuse to run while
+      -- any `_pending` entry is set (guarding exactly this), but a stale
+      -- completion for a row that *was* mid-flight before one of those
+      -- somehow still ran (or before that guard existed) must not clear a
+      -- different action's busy flag or overwrite a row it was never asked
+      -- to touch -- re-check identity by path, not just index, before
+      -- touching shared state.
+      local still_here = records[idx] and records[idx].path == record.path
+      if still_here then _pending[idx] = nil end
       if ok then
         notify(("%s: %s done"):format(record.name, verb), 3)
         if handle then handle:finish(("%s %s done"):format(verb, record.name)) end
@@ -670,7 +678,7 @@ local function _run_row_action(bufnr, records, verb, action_fn)
         notify(("%s: %s failed - %s"):format(record.name, verb, err or "unknown error"), 4)
         if handle then handle:finish(("%s %s failed"):format(verb, record.name)) end
       end
-      _refresh_row(bufnr, records, idx)
+      if still_here then _refresh_row(bufnr, records, idx) end
     end)
   end)
 end
@@ -957,6 +965,17 @@ end
 
 ---@private
 ---@internal
+---Guards against `_switch_page` firing twice before its own async scan
+---resolves (e.g. a double-tap on the page-next key): `_last_view.opts.
+---page_index` only advances once that scan's callback runs, so two
+---quick presses would otherwise both compute the same target page and
+---dispatch two overlapping, redundant scans of it, whichever resolves last
+---silently winning.
+---@type boolean
+local _page_switching = false
+
+---@private
+---@internal
 ---Re-reads the page currently open (`delta = 0`), or switches to the
 ---next/previous configured page (`delta = ±1`, wrapping) and reads that one
 ---instead. Pages come from `dashboard.groups`: the default (unnamed) page
@@ -982,14 +1001,29 @@ local function _switch_page(ctx, delta)
     notify(("Cannot switch pages while a bulk %s is running"):format(_bulk_running), 3)
     return
   end
+  -- A single-row action's own completion callback also clears its
+  -- `_pending[idx]` entry, keyed by row index -- rebuilding `ctx.records`
+  -- out from under it (a genuinely different page, or even a same-page
+  -- rescan) would let that stale completion clear the wrong row's flag, or
+  -- overwrite a row it was never asked to touch, once it finally settles.
+  if next(_pending) ~= nil then
+    notify("Cannot switch pages while a row action is still running", 3)
+    return
+  end
+  if _page_switching then
+    notify("Already loading a page -- wait for it to finish", 3)
+    return
+  end
 
   local current_index = view_state.opts.page_index or 1
   local new_index = ((current_index - 1 + delta) % #pages) + 1
   local page = pages[new_index]
 
+  _page_switching = true
   notify(("Loading %s ..."):format(page.name or "dashboard"), 3)
   on_switch_page(page, function(records, errors)
     vim.schedule(function()
+      _page_switching = false
       _pending = {}
       _marks = {}
       _sort_index = 1
@@ -1180,9 +1214,16 @@ local ROW_KEYMAPS = {
     desc = "Cycle sort order (discovery / name / state / age)",
     run = function(ctx)
       -- `_pending` is keyed by row index, so reordering mid-batch would leave
-      -- the spinners pointing at repositories that are not the ones running.
+      -- the spinners pointing at repositories that are not the ones running
+      -- -- and a row action's own completion callback would then clear the
+      -- wrong row's flag, or overwrite a row it was never asked to touch,
+      -- once it finally settles against the reordered table.
       if _bulk_running then
         notify(("Cannot re-sort while a bulk %s is running"):format(_bulk_running), 3)
+        return
+      end
+      if next(_pending) ~= nil then
+        notify("Cannot re-sort while a row action is still running", 3)
         return
       end
 
@@ -1529,6 +1570,12 @@ function M.show(records, opts)
   end
   _last_view = { records = records, opts = opts, line = (_last_view or {}).line or 2 }
 
+  -- Only the interactive backends open/focus a dashboard window at all --
+  -- "clipboard"/"path" (and an unrecognized mode) never do, so restoring a
+  -- cursor position afterwards would move it in whatever window/buffer the
+  -- user already had focused (their own file), not the dashboard.
+  local interactive = mode == "popup" or mode == "buffer" or mode == "split" or mode == "vsplit"
+
   if mode == "popup" then
     show_popup(lines, hls, records)
   elseif mode == "buffer" then
@@ -1545,10 +1592,12 @@ function M.show(records, opts)
     notify("Unknown dashboard output mode: " .. tostring(mode), 4)
   end
 
-  -- Restore the row the user was on before the dashboard was last torn down.
-  local win = vim.api.nvim_get_current_win()
-  local count = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(win))
-  pcall(vim.api.nvim_win_set_cursor, win, { math.min(_last_view.line, count), 0 })
+  if interactive then
+    -- Restore the row the user was on before the dashboard was last torn down.
+    local win = vim.api.nvim_get_current_win()
+    local count = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(win))
+    pcall(vim.api.nvim_win_set_cursor, win, { math.min(_last_view.line, count), 0 })
+  end
 end
 
 ---Re-displays the most recent dashboard, using the cached records rather than

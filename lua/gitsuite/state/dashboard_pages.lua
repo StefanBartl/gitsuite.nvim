@@ -15,8 +15,24 @@
 --- Keyed by page name (`""` for the default, unnamed `base_dir` page); each
 --- entry holds `added` (paths the user typed in) and `removed` (static
 --- paths hidden from this page without touching config).
+---
+--- Every path is compared via `repos.normalize_path`, never raw string
+--- equality: `a` persists whatever the user typed (unexpanded, whichever
+--- separator), while `x` passes the fully resolved `record.path` -- without
+--- normalizing both sides first, the two would almost never match the same
+--- entry.
+---
+--- No process-lifetime cache: every call re-reads the file fresh and, for a
+--- mutation, writes it straight back. Two Neovim instances with the
+--- dashboard open at once (a common workflow -- one per project/terminal
+--- tab) each editing a *different* page would otherwise silently clobber
+--- each other's change with a stale in-memory snapshot on whichever saved
+--- last. The extra I/O is the trade worth making here -- these are
+--- interactive, human-paced writes (one `a`/`x` keypress at a time), never
+--- a hot path.
 
 local json = require("lib.nvim.fs.json")
+local normalize_path = require("gitsuite.features.dashboard.repos").normalize_path
 
 ---@class GitSuiteDashboardPagesState
 local M = {}
@@ -26,29 +42,24 @@ local function state_path()
   return vim.fs.joinpath(vim.fn.stdpath("data"), "gitsuite", "dashboard_pages.json")
 end
 
----@type table<string, { added: string[], removed: string[] }>|nil
-local _cache
-
 ---@return table<string, { added: string[], removed: string[] }>
 local function load()
-  if _cache then return _cache end
   local data = json.read(state_path())
-  _cache = (type(data) == "table") and data or {}
-  return _cache
+  return (type(data) == "table") and data or {}
 end
 
+---@param data table<string, { added: string[], removed: string[] }>
 ---@return boolean ok
-local function save()
+local function save(data)
   local dir = vim.fs.dirname(state_path())
   vim.fn.mkdir(dir, "p")
-  local ok = json.write(state_path(), _cache or {})
-  return ok
+  return json.write(state_path(), data)
 end
 
+---@param data table<string, { added: string[], removed: string[] }>
 ---@param key string
 ---@return { added: string[], removed: string[] }
-local function entry(key)
-  local data = load()
+local function entry(data, key)
   data[key] = data[key] or { added = {}, removed = {} }
   data[key].added = data[key].added or {}
   data[key].removed = data[key].removed or {}
@@ -62,54 +73,75 @@ end
 ---@param static_paths string[] The page's `setup()`-declared paths
 ---@return string[] resolved
 function M.apply(key, static_paths)
-  local e = entry(key)
+  local e = entry(load(), key)
   ---@type table<string, boolean>
   local removed = {}
   for _, p in ipairs(e.removed) do
-    removed[p] = true
+    removed[normalize_path(p)] = true
   end
 
   local out = {}
   for _, p in ipairs(static_paths or {}) do
-    if not removed[p] then out[#out + 1] = p end
+    if not removed[normalize_path(p)] then out[#out + 1] = p end
   end
-  vim.list_extend(out, e.added)
+
+  -- An added entry that (under some other spelling) is already in `out` is
+  -- not appended a second time.
+  local present = {}
+  for _, p in ipairs(out) do
+    present[normalize_path(p)] = true
+  end
+  for _, p in ipairs(e.added) do
+    local key_ = normalize_path(p)
+    if not present[key_] then
+      present[key_] = true
+      out[#out + 1] = p
+    end
+  end
   return out
 end
 
 ---Adds `add_path` to page `key`, persisted immediately. A no-op if it is
----already there.
+---already there (compared via `normalize_path`, not raw string equality).
 ---@param key string
 ---@param add_path string
 ---@return boolean ok
 function M.add(key, add_path)
-  local e = entry(key)
+  local data = load()
+  local e = entry(data, key)
+  local norm = normalize_path(add_path)
   for _, p in ipairs(e.added) do
-    if p == add_path then return true end
+    if normalize_path(p) == norm then return true end
   end
   e.added[#e.added + 1] = add_path
-  return save()
+  return save(data)
 end
 
 ---Hides `remove_path` from page `key`: drops it from `added` if it was
 ---added at runtime, otherwise records it in `removed` so a statically
----configured entry stays hidden without editing `setup()`.
+---configured entry stays hidden without editing `setup()`. Matched via
+---`normalize_path` in both directions, since `remove_path` (the resolved
+---`record.path` a dashboard row carries) rarely shares the exact spelling
+---of whatever `add`/config used.
 ---@param key string
 ---@param remove_path string
 ---@return boolean ok
 function M.remove(key, remove_path)
-  local e = entry(key)
+  local data = load()
+  local e = entry(data, key)
+  local norm = normalize_path(remove_path)
+
   for i, p in ipairs(e.added) do
-    if p == remove_path then
+    if normalize_path(p) == norm then
       table.remove(e.added, i)
-      return save()
+      return save(data)
     end
   end
   for _, p in ipairs(e.removed) do
-    if p == remove_path then return true end
+    if normalize_path(p) == norm then return true end
   end
   e.removed[#e.removed + 1] = remove_path
-  return save()
+  return save(data)
 end
 
 return M
