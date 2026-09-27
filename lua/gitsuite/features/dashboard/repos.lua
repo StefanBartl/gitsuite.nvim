@@ -36,18 +36,21 @@ local is_windows = require("lib.nvim.cross.platform.is_windows")
 ---comes back unresolved, un-anchored to any drive. Stripping first forces
 ---both spellings through the same code path, so they resolve to the same
 ---string instead of two different ones for the same real path.
----A path made up of nothing but separators (`/`, `\`) strips down to an
----empty string, which `fnamemodify`/`expand` resolve to the current working
----directory rather than the filesystem root -- so that one case falls back
----to the original, unstripped path instead (verified: `fnamemodify` already
----resolves a bare `/`/`\`/drive letter to that drive's root correctly on its
----own, trailing separator or not; the drive-omission quirk above only
----affects a *multi-segment* path).
+---A path made up of nothing but separators (`/`, `\`, or a run of either,
+---any length -- "/", "\\", "///", ...) strips down to an empty string,
+---which `fnamemodify`/`expand` resolve to the current working directory
+---rather than the filesystem root -- so that one case falls back to a
+---single representative separator character instead (verified:
+---`fnamemodify` already resolves exactly one bare `/`/`\`/drive letter to
+---that drive's root correctly on its own, trailing separator or not, but
+---does NOT extend that special-case to a *multi-character* separator-only
+---string -- the drive-omission quirk above only affects a *multi-segment*
+---path, not a bare run of separators).
 ---@param path string
 ---@return string
 local function to_absolute(path)
   local trimmed = path:gsub("[\\/]+$", "")
-  if trimmed == "" then trimmed = path end
+  if trimmed == "" then trimmed = path:sub(1, 1) end
   return (fnamemodify(expand(trimmed), ":p"):gsub("[\\/]+$", ""))
 end
 

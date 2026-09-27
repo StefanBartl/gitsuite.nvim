@@ -86,6 +86,25 @@ describe("gitsuite.config", function()
     assert.same({}, c.dashboard.groups)
   end)
 
+  it("drops a hash-keyed table masquerading as an empty extra_paths list", function()
+    -- Regression: is_list_of_strings()/is_valid_groups() only looped with
+    -- ipairs(), which silently skips a non-sequential-integer key -- a
+    -- table like { foo = "bar" } iterates zero times, so it looked
+    -- identical to a genuinely empty (valid) list and passed straight
+    -- through with no warning at all.
+    config.setup({ dashboard = { extra_paths = { foo = "bar" } } })
+    local c = config.get()
+    assert.same({}, c.dashboard.extra_paths, "a hash-keyed table is not a list, empty or not")
+    local issues = config.issues()
+    assert.is_not_nil(table.concat(issues, "\n"):find("dashboard.extra_paths", 1, true))
+  end)
+
+  it("drops a hash-keyed table masquerading as an empty dashboard.groups list", function()
+    config.setup({ dashboard = { groups = { foo = "bar" } } })
+    local c = config.get()
+    assert.same({}, c.dashboard.groups)
+  end)
+
   it(
     "deep-copies DEFAULTS on merge (ERR-51): mutating one setup() result never leaks into the next",
     function()

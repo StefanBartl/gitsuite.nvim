@@ -41,6 +41,23 @@ local function is_string_or_empty(v)
 end
 
 ---@internal
+---True only for a genuine list -- every key a sequential integer `1..#v`,
+---nothing else. `ipairs()` alone silently skips a hash-keyed table (e.g.
+---`{ foo = "bar" }`) as though it were an empty, valid list, so a checker
+---that only loops with `ipairs()` would accept a malformed config value
+---with zero warning instead of rejecting it the way a non-list value
+---already is.
+---@param v table
+---@return boolean
+local function is_proper_list(v)
+  local count = 0
+  for _ in pairs(v) do
+    count = count + 1
+  end
+  return count == #v
+end
+
+---@internal
 ---A table whose every entry is a non-empty string -- e.g.
 ---`dashboard.extra_paths`. Rejecting a wrongly-shaped *entry* here, not just
 ---a wrongly-typed outer value, matters because `repos.to_absolute()` (a
@@ -49,7 +66,7 @@ end
 ---@param v any
 ---@return boolean
 local function is_list_of_strings(v)
-  if type(v) ~= "table" then return false end
+  if type(v) ~= "table" or not is_proper_list(v) then return false end
   for _, item in ipairs(v) do
     if type(item) ~= "string" or item == "" then return false end
   end
@@ -67,7 +84,7 @@ end
 ---@param v any
 ---@return boolean
 local function is_valid_groups(v)
-  if type(v) ~= "table" then return false end
+  if type(v) ~= "table" or not is_proper_list(v) then return false end
   for _, group in ipairs(v) do
     if type(group) ~= "table" then return false end
     if type(group.name) ~= "string" or group.name == "" then return false end

@@ -97,6 +97,29 @@ describe("gitsuite.features.dashboard", function()
         )
       end
     )
+
+    it("normalize_path: a run of separator characters resolves the same as a single one", function()
+      -- Regression: the bare-separator fallback above only re-derived a
+      -- SINGLE representative separator when the trailing-strip collapsed
+      -- to "" -- a run of two-or-more ("///", "\\\\") also collapses to
+      -- "" but was passed through unstripped, and fnamemodify does not
+      -- special-case a multi-character separator-only string the way it
+      -- does a single one, so it silently fell back to the cwd again.
+      local single = repos.normalize_path("/")
+      local cwd_key = repos.normalize_path(vim.fn.getcwd())
+      for _, variant in ipairs({ "//", "///", "\\\\", "\\/\\" }) do
+        assert.equals(
+          single,
+          repos.normalize_path(variant),
+          ("%q must resolve exactly like a single separator"):format(variant)
+        )
+        assert.is_not.equal(
+          cwd_key,
+          repos.normalize_path(variant),
+          ("%q must not silently resolve to the cwd"):format(variant)
+        )
+      end
+    end)
   end)
 
   describe("status.scan_group", function()

@@ -64,6 +64,7 @@ function M.check()
     end
   end
 
+  vim.health.start("gitsuite: plugin state")
   if vim.g.loaded_gitsuite then
     vim.health.ok(
       "plugin loaded (vim.g.loaded_gitsuite = " .. tostring(vim.g.loaded_gitsuite) .. ")"
