@@ -483,20 +483,30 @@ end
 
 ---@private
 ---@internal
----Lists `repo_path`'s root entries (files and directories, `.git` excluded),
----sorted case-insensitively.
----@param repo_path string
+---Lists `dir`'s entries (files and directories, `.git` excluded), sorted
+---case-insensitively. A symlink is resolved via `fs_stat` to tell whether it
+---points at a directory -- `fs_scandir_next` alone reports it as `"link"`,
+---which would otherwise be treated as a file and offered for `:edit` instead
+---of being browsable.
+---@param dir string
 ---@return { name: string, is_dir: boolean }[]
-local function _list_repo_entries(repo_path)
+local function _list_repo_entries(dir)
   local uv = vim.uv or vim.loop
   local entries = {}
-  local handle = uv.fs_scandir(repo_path)
+  local handle = uv.fs_scandir(dir)
   if not handle then return entries end
 
   while true do
     local name, typ = uv.fs_scandir_next(handle)
     if not name then break end
-    if name ~= ".git" then entries[#entries + 1] = { name = name, is_dir = typ == "directory" } end
+    if name ~= ".git" then
+      local is_dir = typ == "directory"
+      if typ == "link" then
+        local stat = uv.fs_stat(dir .. "/" .. name)
+        is_dir = stat ~= nil and stat.type == "directory"
+      end
+      entries[#entries + 1] = { name = name, is_dir = is_dir }
+    end
   end
 
   table.sort(entries, function(a, b)
@@ -531,24 +541,42 @@ end
 
 ---@private
 ---@internal
----Lets the user pick a file or directory from `record`'s root to jump into --
+---Lets the user pick a file or directory from `record`'s root -- or, on a
+---recursive call, from one of its subdirectories -- to jump into. This is
 ---the fallback when there is no README.md, and also reachable as a third
----option when there is one. README.md, when present, is preselected.
+---option when there is one. README.md, when present, is preselected (root
+---level only).
+---
+---Selecting a directory re-opens this same picker one level deeper instead
+---of `:edit`ing it: `:edit <dir>` only does anything useful when a file
+---explorer plugin (netrw, or a replacement) has claimed directory buffers,
+---which this codebase cannot assume -- e.g. this user's own config disables
+---netrw outright in favor of a separate filetree plugin that never sees a
+---`:edit`-opened directory buffer. A `..` entry is added below the repo root
+---so a wrong turn isn't a dead end (root itself has none, so browsing can't
+---walk above the repository).
 ---@param record RepoDashboardRecord
 ---@param before_open? fun(): nil
+---@param dir? string Absolute path to browse; defaults to `record.path`
+---@param label? string Short display name for `dir`; defaults to `record.name`
 ---@return nil
-local function _browse_repo(record, before_open)
-  local entries = _list_repo_entries(record.path)
+local function _browse_repo(record, before_open, dir, label)
+  local base_dir = dir or record.path
+  local entries = _list_repo_entries(base_dir)
+  local at_root = base_dir == record.path
+  if not at_root then table.insert(entries, 1, { name = "..", is_dir = true, up = true }) end
   if #entries == 0 then
-    notify("No files found in " .. record.name, 3)
+    notify("No files found in " .. (label or record.name), 3)
     return
   end
 
   local initial_index = 1
-  for i, e in ipairs(entries) do
-    if not e.is_dir and e.name:lower() == "readme.md" then
-      initial_index = i
-      break
+  if at_root then
+    for i, e in ipairs(entries) do
+      if not e.is_dir and e.name:lower() == "readme.md" then
+        initial_index = i
+        break
+      end
     end
   end
 
@@ -558,13 +586,26 @@ local function _browse_repo(record, before_open)
 
   kit.select({
     items = entries,
-    title = ('Jump into "%s"'):format(record.name),
+    title = ('Jump into "%s"'):format(label or record.name),
     format_item = function(e)
+      if e.up then return ".." end
       return e.is_dir and (e.name .. "/") or e.name
     end,
     initial_index = initial_index,
     on_select = function(entry)
-      _open_repo_path(record.path .. "/" .. entry.name, before_open)
+      if entry.up then
+        local parent = vim.fn.fnamemodify(base_dir, ":h")
+        local parent_label = parent == record.path and record.name
+          or vim.fn.fnamemodify(parent, ":t")
+        _browse_repo(record, before_open, parent, parent_label)
+        return
+      end
+      local path = base_dir .. "/" .. entry.name
+      if entry.is_dir then
+        _browse_repo(record, before_open, path, entry.name)
+      else
+        _open_repo_path(path, before_open)
+      end
     end,
   })
 end
