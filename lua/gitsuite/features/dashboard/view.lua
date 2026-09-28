@@ -71,6 +71,7 @@ local repos = require("gitsuite.features.dashboard.repos")
 local dashboard_one = require("gitsuite.features.dashboard.status").dashboard_one
 local progress = require("gitsuite.util.progress")
 local notify = require("gitsuite.util.notify").notify
+local notify_success = require("gitsuite.util.notify").success
 
 ---In-flight row actions, keyed by record index -> verb ("push", "pull", ...).
 ---Rendered in place of the row's state so a slow push isn't several seconds of
@@ -840,9 +841,12 @@ local function _run_row_action(bufnr, records, verb, action_fn)
     return
   end
 
-  -- Level 3: `utils.debug.notify` drops anything below WARN unless dev mode is
-  -- on, so an INFO-level "push ..." would be invisible in normal use -- which
-  -- is exactly the silence this feedback is meant to fill.
+  -- WARN (not INFO): a deliberate "in progress" color, distinct from the
+  -- green notify_success() the completion below uses on success and the red
+  -- ERROR on failure. (An earlier version of this comment claimed INFO-level
+  -- messages are invisible by default -- that isn't true of this codebase's
+  -- actual notify config, toast_min_level is INFO; don't revive that as a
+  -- reason to keep this WARN if it's ever revisited.)
   notify(("%s %s ..."):format(verb, record.name), 3)
   local handle = progress.create(("%s %s"):format(verb, record.name))
 
@@ -861,7 +865,7 @@ local function _run_row_action(bufnr, records, verb, action_fn)
       local still_here = records[idx] and records[idx].path == record.path
       if still_here then _pending[idx] = nil end
       if ok then
-        notify(("%s: %s done"):format(record.name, verb), 3)
+        notify_success(("%s: %s done"):format(record.name, verb))
         if handle then handle:finish(("%s %s done"):format(verb, record.name)) end
       else
         notify(("%s: %s failed - %s"):format(record.name, verb, err or "unknown error"), 4)
@@ -938,9 +942,8 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
         vim.log.levels.WARN
       )
     else
-      notify(
-        ("%s: %d repositor%s done"):format(verb, succeeded, succeeded == 1 and "y" or "ies"),
-        3
+      notify_success(
+        ("%s: %d repositor%s done"):format(verb, succeeded, succeeded == 1 and "y" or "ies")
       )
     end
   end
