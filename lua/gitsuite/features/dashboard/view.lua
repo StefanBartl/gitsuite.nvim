@@ -14,10 +14,11 @@
 ---
 --- On every interactive backend (popup/buffer/split/vsplit), the repository row
 --- under the cursor can be opened: `<CR>` or a double-click (`<2-LeftMouse>`)
---- asks for confirmation via `ui.kit`'s button-confirm dialog, then
---- opens that repository's `README.md` (`:edit`). Rows with no readable
---- `README.md` are a silent no-op past a notification — there is nothing to
---- confirm opening.
+--- asks, via `ui.kit`'s button-confirm dialog, whether to open that
+--- repository's `README.md` (`:edit`, preselected) or browse its root
+--- entries instead. Rows with no readable `README.md` skip straight to that
+--- file/directory browser (a themed `ui.kit.select` list) rather than a dead-
+--- end notification.
 ---
 --- The same row also drives git itself: `p`/`P`/`f` push, pull (`--ff-only`)
 --- or fetch the repository under the cursor via `utils.repo_actions`. Each
@@ -482,16 +483,105 @@ end
 
 ---@private
 ---@internal
----Confirms with the user, then opens `record`'s README.md (`:edit`). A
----missing README.md is reported and treated as a no-op — there is nothing
----to confirm opening.
+---Lists `repo_path`'s root entries (files and directories, `.git` excluded),
+---sorted case-insensitively.
+---@param repo_path string
+---@return { name: string, is_dir: boolean }[]
+local function _list_repo_entries(repo_path)
+  local uv = vim.uv or vim.loop
+  local entries = {}
+  local handle = uv.fs_scandir(repo_path)
+  if not handle then return entries end
+
+  while true do
+    local name, typ = uv.fs_scandir_next(handle)
+    if not name then break end
+    if name ~= ".git" then entries[#entries + 1] = { name = name, is_dir = typ == "directory" } end
+  end
+
+  table.sort(entries, function(a, b)
+    return a.name:lower() < b.name:lower()
+  end)
+  return entries
+end
+
+---@private
+---@internal
+---Opens `path` (`:edit`) and, on an interactive dashboard, binds `q` to wipe
+---it and return to the dashboard. Shared by the README shortcut and the
+---file browser below.
+---@param path string
+---@param before_open? fun(): nil Called right before the file is opened (e.g. to close a popup)
+---@return nil
+local function _open_repo_path(path, before_open)
+  if before_open then before_open() end
+  vim.cmd.edit(vim.fn.fnameescape(path))
+
+  -- Bound explicitly rather than via a BufWinLeave autocmd: navigating away
+  -- with `:edit other` would also fire that, and silently resurrecting the
+  -- dashboard on an unrelated buffer switch is worse than not restoring it.
+  if not _last_view then return end
+  local buf = vim.api.nvim_get_current_buf()
+  map("n", "q", function()
+    vim.cmd("bwipeout")
+    M.reopen()
+  end, { buffer = buf, nowait = true }, "Close and return to the gitsuite dashboard")
+  notify("q returns to the dashboard", 3)
+end
+
+---@private
+---@internal
+---Lets the user pick a file or directory from `record`'s root to jump into --
+---the fallback when there is no README.md, and also reachable as a third
+---option when there is one. README.md, when present, is preselected.
+---@param record RepoDashboardRecord
+---@param before_open? fun(): nil
+---@return nil
+local function _browse_repo(record, before_open)
+  local entries = _list_repo_entries(record.path)
+  if #entries == 0 then
+    notify("No files found in " .. record.name, 3)
+    return
+  end
+
+  local initial_index = 1
+  for i, e in ipairs(entries) do
+    if not e.is_dir and e.name:lower() == "readme.md" then
+      initial_index = i
+      break
+    end
+  end
+
+  -- Remember where we were before the popup is torn down, so `q` can put the
+  -- dashboard back on the same row.
+  if _last_view then _last_view.line = vim.api.nvim_win_get_cursor(0)[1] end
+
+  kit.select({
+    items = entries,
+    title = ('Jump into "%s"'):format(record.name),
+    format_item = function(e)
+      return e.is_dir and (e.name .. "/") or e.name
+    end,
+    initial_index = initial_index,
+    on_select = function(entry)
+      _open_repo_path(record.path .. "/" .. entry.name, before_open)
+    end,
+  })
+end
+
+---@private
+---@internal
+---Confirms with the user, then opens `record`'s README.md (`:edit`, the
+---preselected default) -- or, when there is no README.md, or the user picks
+---"Browse files…", lets them jump to any file/directory in the repo root
+---instead (see `_browse_repo`).
 ---@param record RepoDashboardRecord
 ---@param before_open? fun(): nil Called right before the file is opened (e.g. to close a popup)
 ---@return nil
 local function _open_readme(record, before_open)
   local readme_path = record.path .. "/README.md"
   if not require("lib.nvim.fs.is_readable_file")(readme_path) then
-    notify("No README.md found for " .. record.name, 3)
+    _browse_repo(record, before_open)
     return
   end
 
@@ -501,21 +591,13 @@ local function _open_readme(record, before_open)
 
   kit.confirm({
     question = ('Open README.md of "%s"?'):format(record.name),
-    on_answer = function(yes)
-      if not yes then return end
-      if before_open then before_open() end
-      vim.cmd.edit(vim.fn.fnameescape(readme_path))
-
-      -- Bound explicitly rather than via a BufWinLeave autocmd: navigating away
-      -- with `:edit other` would also fire that, and silently resurrecting the
-      -- dashboard on an unrelated buffer switch is worse than not restoring it.
-      if not _last_view then return end
-      local buf = vim.api.nvim_get_current_buf()
-      map("n", "q", function()
-        vim.cmd("bwipeout")
-        M.reopen()
-      end, { buffer = buf, nowait = true }, "Close README and return to the gitsuite dashboard")
-      notify("q returns to the dashboard", 3)
+    choices = { "Open README.md", "Browse files…" },
+    on_answer = function(choice)
+      if choice == "Open README.md" then
+        _open_repo_path(readme_path, before_open)
+      elseif choice == "Browse files…" then
+        _browse_repo(record, before_open)
+      end
     end,
   })
 end
@@ -1091,8 +1173,8 @@ local _show_keymap_help
 local ROW_KEYMAPS = {
   {
     keys = { "<CR>", "<2-LeftMouse>" },
-    label = "<CR> README",
-    desc = "Open README.md of repository under cursor",
+    label = "<CR> Open",
+    desc = "Open README.md (or browse files) of repository under cursor",
     run = function(ctx)
       local record = _record_at_cursor(ctx.records)
       if record then _open_readme(record, ctx.before_open) end

@@ -178,13 +178,20 @@ local function last_commit_ts(repo, on_done)
   vim.system(
     { "git", "log", "-1", "--format=%ct" },
     { cwd = repo, text = true, timeout = GIT_TIMEOUT_MS },
-    function(res)
+    -- `vim.system`'s completion callback runs in a fast-event context, not
+    -- on the main loop -- `on_done` eventually reaches a progress handle's
+    -- `:update()` (see `read_statuses`/`finish` below), which touches
+    -- `nvim_win_*` and raises E5560 unscheduled. `vim.schedule_wrap` matches
+    -- `lib.nvim.cross.run_argv.run_async_captured`'s own contract ("on_done
+    -- is always invoked on the main loop"), which this hand-rolled
+    -- `vim.system` call bypasses.
+    vim.schedule_wrap(function(res)
       if res.code ~= 0 then
         on_done(nil)
         return
       end
       on_done(tonumber(vim.trim(res.stdout or "")))
-    end
+    end)
   )
 end
 
@@ -213,7 +220,10 @@ local function status_repo(repo, on_done)
   vim.system(
     status_argv("--porcelain=v2", "--branch"),
     { cwd = repo, text = true, timeout = GIT_TIMEOUT_MS },
-    function(res)
+    -- Same fast-event-context issue as `last_commit_ts` above: `settle()`
+    -- ultimately drives a progress handle's `:update()`, which needs the
+    -- main loop.
+    vim.schedule_wrap(function(res)
       if res.code ~= 0 then
         err = failure_text(res, "git status")
       else
@@ -221,7 +231,7 @@ local function status_repo(repo, on_done)
       end
       got_status = true
       settle()
-    end
+    end)
   )
 
   last_commit_ts(repo, function(value)
@@ -278,23 +288,26 @@ function M.dashboard_detail(repo, on_done)
     on_done(lines)
   end
 
+  -- Both callbacks below are `vim.schedule_wrap`ped for the same reason as
+  -- `status_repo`/`last_commit_ts`: `on_done` (via `settle()`) is meant to
+  -- open a UI popup with the result, which needs the main loop.
   vim.system(
     status_argv("--short", "--branch"),
     { cwd = repo, text = true, timeout = GIT_TIMEOUT_MS },
-    function(res)
+    vim.schedule_wrap(function(res)
       short = (res.code == 0) and vim.trim(res.stdout or "")
         or ("error: " .. vim.trim(failure_text(res, "git status")))
       settle()
-    end
+    end)
   )
 
   vim.system(
     { "git", "log", "-5", "--format=%h  %<(18,trunc)%an  %s" },
     { cwd = repo, text = true, timeout = GIT_TIMEOUT_MS },
-    function(res)
+    vim.schedule_wrap(function(res)
       log = (res.code == 0) and vim.trim(res.stdout or "") or ""
       settle()
-    end
+    end)
   )
 end
 
