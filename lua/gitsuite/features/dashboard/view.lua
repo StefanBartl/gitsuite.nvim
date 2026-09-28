@@ -67,6 +67,7 @@ local copy_to_clipboard = require("lib.nvim.cross.copy_to_clipboard")
 local write_to_file = require("lib.nvim.fs.write.to_file")
 local expand_path = require("lib.nvim.cross.fs.expand_path")
 local repo_actions = require("gitsuite.features.dashboard.actions")
+local repos = require("gitsuite.features.dashboard.repos")
 local dashboard_one = require("gitsuite.features.dashboard.status").dashboard_one
 local progress = require("gitsuite.util.progress")
 local notify = require("gitsuite.util.notify").notify
@@ -483,36 +484,70 @@ end
 
 ---@private
 ---@internal
+---Hard cap on entries listed per directory level. `_list_repo_entries` scans
+---synchronously (`fs_scandir`/`fs_scandir_next`/`fs_stat`, no async variant
+---threaded through the picker), so an unbounded scan of a huge or
+---symlink-heavy directory -- a checked-in `node_modules`/`vendor` tree, say
+----- would block Neovim's UI for however long that scan takes. Stopping
+---after this many entries keeps the worst case bounded without having to
+---rearchitect the picker as async; ordinary repo roots never come close.
+local MAX_ENTRIES = 1000
+
+---@private
+---@internal
 ---Lists `dir`'s entries (files and directories, `.git` excluded), sorted
----case-insensitively. A symlink is resolved via `fs_stat` to tell whether it
----points at a directory -- `fs_scandir_next` alone reports it as `"link"`,
----which would otherwise be treated as a file and offered for `:edit` instead
----of being browsable.
+---case-insensitively and capped at `MAX_ENTRIES` (see above; the second
+---return value reports whether the cap was hit). A symlink is resolved via
+---`fs_realpath` and excluded unless its real target stays inside
+---`repo_root` -- without this, a single symlink pointing outside the
+---repository (accidental or crafted) would let the browser recurse into and
+---`:edit` arbitrary files elsewhere on disk, with the picker showing only
+---the bare entry name and no indication anything left the repo. A symlink
+---that resolves inside the repo is otherwise classified normally via
+---`fs_stat` (`fs_scandir_next` alone reports it as `"link"`, not
+---`"directory"`).
 ---@param dir string
----@return { name: string, is_dir: boolean }[]
-local function _list_repo_entries(dir)
+---@param repo_root string Absolute repo root; bounds symlink containment
+---@return { name: string, is_dir: boolean }[] entries
+---@return boolean truncated
+local function _list_repo_entries(dir, repo_root)
   local uv = vim.uv or vim.loop
   local entries = {}
   local handle = uv.fs_scandir(dir)
-  if not handle then return entries end
+  if not handle then return entries, false end
+
+  local root_key = repos.normalize_path(uv.fs_realpath(repo_root) or repo_root)
+  local truncated = false
 
   while true do
+    if #entries >= MAX_ENTRIES then
+      truncated = true
+      break
+    end
     local name, typ = uv.fs_scandir_next(handle)
     if not name then break end
     if name ~= ".git" then
+      local path = dir .. "/" .. name
       local is_dir = typ == "directory"
+      local include = true
       if typ == "link" then
-        local stat = uv.fs_stat(dir .. "/" .. name)
-        is_dir = stat ~= nil and stat.type == "directory"
+        local target_real = uv.fs_realpath(path)
+        local target_key = target_real and repos.normalize_path(target_real)
+        include = target_key ~= nil
+          and (target_key == root_key or target_key:sub(1, #root_key + 1) == root_key .. "/")
+        if include then
+          local stat = uv.fs_stat(path)
+          is_dir = stat ~= nil and stat.type == "directory"
+        end
       end
-      entries[#entries + 1] = { name = name, is_dir = is_dir }
+      if include then entries[#entries + 1] = { name = name, is_dir = is_dir } end
     end
   end
 
   table.sort(entries, function(a, b)
     return a.name:lower() < b.name:lower()
   end)
-  return entries
+  return entries, truncated
 end
 
 ---@private
@@ -562,12 +597,21 @@ end
 ---@return nil
 local function _browse_repo(record, before_open, dir, label)
   local base_dir = dir or record.path
-  local entries = _list_repo_entries(base_dir)
+  local entries, truncated = _list_repo_entries(base_dir, record.path)
   local at_root = base_dir == record.path
   if not at_root then table.insert(entries, 1, { name = "..", is_dir = true, up = true }) end
   if #entries == 0 then
     notify("No files found in " .. (label or record.name), 3)
     return
+  end
+  if truncated then
+    notify(
+      ("Showing first %d entries of %s (more were truncated)"):format(
+        MAX_ENTRIES,
+        label or record.name
+      ),
+      3
+    )
   end
 
   local initial_index = 1
