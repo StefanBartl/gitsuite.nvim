@@ -516,22 +516,44 @@ local function _list_repo_entries(dir, repo_root)
   local handle = uv.fs_scandir(dir)
   if not handle then return entries, false end
 
-  local root_key = repos.normalize_path(uv.fs_realpath(repo_root) or repo_root)
+  -- `root_real` is nil when `repo_root` itself can't be resolved (a
+  -- transient sharing violation, a network share, ...). Falling back to the
+  -- raw, non-canonicalized `repo_root` here while every symlink TARGET below
+  -- is always compared via its fully resolved real path would be an
+  -- asymmetric comparison: if `repo_root`'s literal spelling ever differs
+  -- from its canonical form (a `subst` drive, a junction in its ancestry, an
+  -- 8.3 short name), a genuinely in-repo symlink could silently fail the
+  -- prefix check and vanish from the listing with no error shown. Instead,
+  -- when the root itself can't be resolved, containment can't be verified
+  -- for ANY symlink this call encounters, so every symlink is excluded
+  -- (fail closed) rather than compared against an unreliable raw string.
+  local root_real = uv.fs_realpath(repo_root)
+  local root_key = root_real and repos.normalize_path(root_real)
   local truncated = false
 
+  -- Counts every entry the scan LOOKS AT, not just the ones that end up
+  -- included: a directory dominated by excluded symlinks (e.g. a pnpm
+  -- node_modules, whose symlinks by design resolve outside the repo) would
+  -- otherwise never trip this cap -- #entries would stay near zero while the
+  -- loop kept paying a blocking fs_realpath per excluded symlink over the
+  -- whole directory, reproducing the unbounded-scan problem this cap exists
+  -- to prevent.
+  local scanned = 0
+
   while true do
-    if #entries >= MAX_ENTRIES then
+    if scanned >= MAX_ENTRIES then
       truncated = true
       break
     end
     local name, typ = uv.fs_scandir_next(handle)
     if not name then break end
     if name ~= ".git" then
+      scanned = scanned + 1
       local path = dir .. "/" .. name
       local is_dir = typ == "directory"
       local include = true
       if typ == "link" then
-        local target_real = uv.fs_realpath(path)
+        local target_real = root_key and uv.fs_realpath(path)
         local target_key = target_real and repos.normalize_path(target_real)
         include = target_key ~= nil
           and (target_key == root_key or target_key:sub(1, #root_key + 1) == root_key .. "/")
