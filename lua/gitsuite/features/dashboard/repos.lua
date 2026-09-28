@@ -21,38 +21,18 @@ local M = {}
 
 -- Vim Utilities
 local uv = vim.uv or vim.loop
-local fnamemodify = vim.fn.fnamemodify
-local expand = require("lib.nvim.cross.fs.expand_path")
+-- Resolves any path spec to its absolute, trailing-separator-free,
+-- comparison-ready form -- including the separator-only edge case ("/",
+-- "//", "\\\\", "\\/\\", ...), which used to be hand-rolled here and get
+-- the POSIX side wrong (a bare "\" fallback is meaningless where backslash
+-- is just an ordinary filename character). Centralized in lib.nvim so
+-- every consumer shares one tested implementation instead of re-deriving
+-- it -- see lib.nvim.cross.fs.to_absolute's own doc comment for why.
+local to_absolute = require("lib.nvim.cross.fs.to_absolute")
 local unify_slashes = require("lib.nvim.cross.fs.separators.unify_slashes")
 -- Configuration
 local config = require("gitsuite.config")
 local is_windows = require("lib.nvim.cross.platform.is_windows")
-
----@internal
----Resolves `path` to its absolute, trailing-separator-free form. Strips any
----trailing separator *before* handing off to `fnamemodify(..., ":p")`: on
----Windows, a drive-less absolute path (`/tmp/x`) only gets the current
----drive letter prepended when it has *no* trailing separator -- `/tmp/x/`
----comes back unresolved, un-anchored to any drive. Stripping first forces
----both spellings through the same code path, so they resolve to the same
----string instead of two different ones for the same real path.
----A path made up of nothing but separators (`/`, `\`, or a run of either,
----any length -- "/", "\\", "///", ...) strips down to an empty string,
----which `fnamemodify`/`expand` resolve to the current working directory
----rather than the filesystem root -- so that one case falls back to a
----single representative separator character instead (verified:
----`fnamemodify` already resolves exactly one bare `/`/`\`/drive letter to
----that drive's root correctly on its own, trailing separator or not, but
----does NOT extend that special-case to a *multi-character* separator-only
----string -- the drive-omission quirk above only affects a *multi-segment*
----path, not a bare run of separators).
----@param path string
----@return string
-local function to_absolute(path)
-  local trimmed = path:gsub("[\\/]+$", "")
-  if trimmed == "" then trimmed = path:sub(1, 1) end
-  return (fnamemodify(expand(trimmed), ":p"):gsub("[\\/]+$", ""))
-end
 
 ---Checks whether a directory is a git repository.
 ---Accepts both a `.git` directory (normal clone) and a `.git` file (worktree/submodule).
