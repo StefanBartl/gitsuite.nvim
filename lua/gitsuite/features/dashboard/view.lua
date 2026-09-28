@@ -542,13 +542,20 @@ local function _list_repo_entries(dir, repo_root)
   local scanned = 0
 
   while true do
-    if scanned >= MAX_ENTRIES then
-      truncated = true
-      break
-    end
     local name, typ = uv.fs_scandir_next(handle)
     if not name then break end
     if name ~= ".git" then
+      -- Checked only once a *real* next entry is confirmed to exist (i.e.
+      -- after this fs_scandir_next call already returned one): checking
+      -- `scanned >= MAX_ENTRIES` before fetching the next entry would report
+      -- `truncated = true` for a directory with EXACTLY MAX_ENTRIES entries
+      -- too, even though nothing was actually cut -- a false-positive "more
+      -- were truncated" notification for the common case of a directory
+      -- that just happens to land on the cap.
+      if scanned >= MAX_ENTRIES then
+        truncated = true
+        break
+      end
       scanned = scanned + 1
       local path = dir .. "/" .. name
       local is_dir = typ == "directory"
