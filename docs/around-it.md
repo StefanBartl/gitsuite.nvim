@@ -5,10 +5,13 @@ replaces.
 
 **gitsigns.nvim** — not replaced, adapted. gitsigns owns the hunk engine
 (stage/reset/preview, the sign column) and gitsuite.nvim never rebuilds
-it: `:Git hunk *` delegates to gitsigns when it's loaded, and to a native
-`git`-only implementation otherwise. Blame and diff are gitsuite's own
-either way — gitsigns' current-line blame text is not what `:Git blame *`
-uses.
+it: `:Git hunk *` delegates to gitsigns, and stage/reset/stage-buffer/
+reset-buffer/toggle-deleted/inline have no native fallback at all —
+reimplementing gitsigns' git-index writes and deleted-line tracking was
+rejected, so those report "not installed" without it. Only `preview`
+degrades gracefully, to `:Git diff head` (diff.nvim). Blame and diff are
+gitsuite's own either way — gitsigns' current-line blame text is not what
+`:Git blame *` uses.
 
 **diffview.nvim** — not replaced, adapted, and a genuinely one-way
 relationship: gitsuite.nvim depends on `diff.nvim` (its own sibling) as a

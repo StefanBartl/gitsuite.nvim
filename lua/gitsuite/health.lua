@@ -50,11 +50,13 @@ function M.check()
   end
 
   vim.health.start("gitsuite: adapters")
-  -- UI-59: several adapters exist per family (gitsigns vs. native for hunks,
-  -- lazygit/neogit/diffview for the ui launcher); a single one being absent
-  -- is `info`, never `warn`/`error` -- there is always a working alternative
-  -- (native.lua) or the family is simply not usable until you pick one, which
-  -- `:Git ui *` says for itself when invoked.
+  -- UI-59: several adapters exist, one per foreign plugin/binary this gitsuite.nvim
+  -- can lean on (gitsigns, diffview, neogit, lazygit) plus `native`, which backs the
+  -- OWN-implementation families (blame/diff/browse/status/conflict/branch/dashboard --
+  -- see architecture.md). A single one being absent is `info`, never `warn`/`error`:
+  -- `native`'s families stay usable regardless, and for the rest (`ui *`, and `hunk`'s
+  -- stage/reset/toggle-deleted/inline, which has no native fallback at all) the family
+  -- simply reports "not installed" when actually invoked, not here.
   local adapter = require("gitsuite.adapter")
   for _, name in ipairs({ "gitsigns", "diffview", "neogit", "lazygit", "native" }) do
     if adapter.resolve(name) then

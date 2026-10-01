@@ -23,11 +23,14 @@ two shapes on its own merits, not by a blanket rule:
 
 `lua/gitsuite/adapter/` is a small registry (`register`/`resolve`/
 `resolve_first`), not a single global "which UI backend is active" switch
-— because there isn't one answer. `hunk` wants `{"gitsigns", "native"}`
-in that priority order; `ui` wants a specific named adapter per action
-(`lazygit`, `neogit`, `diffview`) with no fallback beyond "not installed".
-Each feature module supplies its own candidate list to `resolve_first`
-instead of the registry guessing.
+— because there isn't one answer. `ui` wants a specific named adapter per
+action (`lazygit`, `neogit`, `diffview`) with no fallback beyond "not
+installed"; `hunk` wants `gitsigns` outright, with no priority list at all
+(`stage`/`reset`/`stage-buffer`/`reset-buffer`/`toggle-deleted`/`inline`
+report "not installed" without it — only `preview` falls back on its own,
+to `:Git diff head`, not through the adapter registry). `resolve_first`
+exists for a feature that genuinely has an ordered list of interchangeable
+backends; no feature currently needs one, so nothing calls it yet.
 
 **Availability is checked via `package.loaded`, never by `require`ing the
 foreign plugin.** `adapter.gitsigns.is_available()` reads

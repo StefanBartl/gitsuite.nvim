@@ -2,15 +2,18 @@
 
 ## Does
 
-Eight `:Git <scope> <action>` families, each a real implementation unless
+Nine `:Git <scope> <action>` families, each a real implementation unless
 noted:
 
 - **`conflict`** — merge-conflict detection, highlighting and resolution
   in the current buffer. Own parser (diff3/zdiff3-aware, marker-length
   aware for nesting, `.gitattributes`' `conflict-marker-size` respected).
 - **`hunk`** — stage/reset/preview a hunk or the whole buffer, toggle
-  inline diff. gitsigns' engine when available, a native `git`-only
-  implementation otherwise.
+  inline diff. Delegates to gitsigns' engine; no native fallback for
+  stage/reset/stage-buffer/reset-buffer/toggle-deleted/inline (that would
+  mean reimplementing gitsigns' git-index writes and deleted-line
+  tracking, never done here) — only `preview` degrades gracefully, to
+  `:Git diff head` (diff.nvim), when gitsigns is not installed.
 - **`blame`** — full-file and current-line blame. Own implementation
   (`git blame --porcelain`), not delegated to gitsigns or fugitive.
 - **`diff`** — diffing against HEAD, the previous commit, or an arbitrary

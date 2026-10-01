@@ -56,8 +56,11 @@ function M.resolve(name)
 end
 
 ---Resolve the first available adapter from an ordered priority list.
----Each feature module supplies its own list (e.g. `{"gitsigns", "native"}`
----for hunks) instead of relying on one hardcoded global order.
+---Each feature module would supply its own list instead of relying on one
+---hardcoded global order -- no feature currently has an ordered fallback
+---list of its own (`hunk` resolves `gitsigns` directly, with no priority
+---list and no "native" entry: see `gitsuite.features.hunk`), so nothing
+---calls this yet. Kept for a feature that genuinely needs it.
 ---@param candidates string[]
 ---@return GitSuite.Adapter|nil, string|nil name
 function M.resolve_first(candidates)
