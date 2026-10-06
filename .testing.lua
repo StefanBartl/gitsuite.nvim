@@ -17,4 +17,25 @@ return {
   host = "c",
   -- Limits per case in milliseconds (the slowest spec file takes about 21 s).
   timeouts = { case_ms = 30000 },
+  -- Safety nets (docs/GUARDS.md). "error" = the suite passes them cleanly, so a regression fails the run.
+  guards = {
+    -- Real finding, kept at "warn": browse_spec, lazygit_bridge_spec and status_spec write scratch files
+    -- (`__gitsuite_*_scratch.md`) into the live repo root instead of a tempname() directory; running files
+    -- in parallel can even see each other's file.
+    fs = "warn",
+    -- "warn": diff_spec and hunk_spec leave kit floating windows and their autocmd groups/timers open (real);
+    -- the css* highlight groups and the 'syntax' option are runtime noise of loading a filetype (not a leak).
+    -- The plugin's own setup() state (commands, keymaps, autocmds) is harmless under isolated = "file".
+    state = "warn",
+    scheduled_error = "error",
+    prompt = "error",
+    deprecation = "error",
+    -- Every spawn of the suite is `git`, allowed below; anything else is a new, unexpected process.
+    process_net = "error",
+  },
+  guard_allow = {
+    -- The specs build temporary repositories and test the plugin's git wrappers (`git init`, `commit`,
+    -- `rev-parse`, `blame`, `diff`): about 500 spawns in 53 files.
+    spawn = { "git" },
+  },
 }
