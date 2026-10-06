@@ -83,12 +83,17 @@ on first `resolve()`/`resolve_first()` call) and add it to
 
 ## Tests
 
-`TESTS/` is a [plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
-busted-style suite, run with:
+`TESTS/` is a busted-style suite (`describe` / `it`, luassert) run by
+[testing.nvim](https://github.com/StefanBartl/testing.nvim), configured in
+[`.testing.lua`](../.testing.lua). testing.nvim, lib.nvim, diff.nvim and ui.nvim are
+looked up in `$<NAME>_DIR`, `.deps/<name>`, `../<name>` and
+`stdpath("data")/lazy/<name>`, in this order; a missing one stops the run with
+exit code 1.
 
 ```bash
-LIB_NVIM_DIR=/path/to/lib.nvim DIFF_NVIM_DIR=/path/to/diff.nvim \
-PLENARY_DIR=/path/to/plenary.nvim bash scripts/test.sh [TESTS/gitsuite/x_spec.lua]
+bash scripts/test.sh                       # every spec under TESTS/
+bash scripts/test.sh --file config         # spec files whose name contains "config"
+bash scripts/test.sh --json ir.json        # also write the machine-readable result
 ```
 
 Most specs run against this repository's own real git state (its actual

@@ -57,20 +57,24 @@ jobs:
           path: diff.nvim
           ref: ci-verified
 
-      - name: Checkout plenary.nvim
-        uses: actions/checkout@v5
-        with:
-          repository: nvim-lua/plenary.nvim
-          path: plenary.nvim
-          # Pinned to the 2026-09-20 HEAD; bump deliberately, not by drifting.
-          ref: 74b06c6c75e4eeb3108ec01852001636d85a932b
-
       - name: Install Neovim (stable)
         uses: rhysd/action-setup-vim@v1
         with:
           neovim: true
           version: stable
 
+      # Checked out from the branch that only moves once the dependency's own CI is green.
+      - uses: actions/checkout@v5
+        with:
+          repository: "StefanBartl/testing.nvim"
+          path: testing.nvim
+          ref: ci-verified
+      # Checked out from the branch that only moves once the dependency's own CI is green.
+      - uses: actions/checkout@v5
+        with:
+          repository: "StefanBartl/ui.nvim"
+          path: ui.nvim
+          ref: ci-verified
       - name: Run test suite
         working-directory: gitsuite.nvim
         # bash scripts/test.sh, not ./scripts/test.sh: the exec bit is not
@@ -78,7 +82,15 @@ jobs:
         # git checkout) -- invoking the interpreter directly sidesteps it.
         run: |
           exec > >(tee -a "$RUNNER_TEMP/test-output.log") 2>&1
-          bash scripts/test.sh
+          bash scripts/test.sh --json "$RUNNER_TEMP/testing-ir.json"
+      # The IR is what a reporter or a person reads to find out WHICH case failed on WHICH platform.
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: testing-ir-${{ matrix.os }}
+          path: ${{ runner.temp }}/testing-ir.json
+          if-no-files-found: ignore
+          retention-days: 14
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
