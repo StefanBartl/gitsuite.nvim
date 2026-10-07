@@ -350,8 +350,21 @@ local function build_routes()
           name = "out",
           type = "STRING",
           enum = { "popup", "buffer", "split", "vsplit", "clipboard", "path" },
+          desc = "Where the dashboard is shown or written",
+          enum_desc = {
+            popup = "Scrollable floating window (default)",
+            buffer = "In the current window, replacing its buffer",
+            split = "In a horizontal split below",
+            vsplit = "In a vertical split on the right",
+            clipboard = "Copy the table to the clipboard",
+            path = "Write the table to a file (see --to)",
+          },
         },
-        { name = "to", type = "PATH" },
+        {
+          name = "to",
+          type = "PATH",
+          desc = "File that --out=path writes; default: a file in the cache dir",
+        },
       },
       desc = "Show the git dashboard of every repository in dir/$REPOS_DIR (or one repository); <C-l>/<C-h> flip through dashboard.groups",
       run = function(ctx)
