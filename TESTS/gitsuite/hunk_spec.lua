@@ -10,17 +10,60 @@
 describe("gitsuite.features.hunk", function()
   local hunk
   local bufnr
+  local origin_win
+  local known_bufs
+  local initial_buf
 
   before_each(function()
     package.loaded["gitsuite.features.hunk"] = nil
     package.loaded["gitsuite.adapter"] = nil
     hunk = require("gitsuite.features.hunk")
-    vim.cmd("edit " .. vim.fn.fnameescape(vim.fn.getcwd() .. "/README.md"))
-    bufnr = vim.api.nvim_get_current_buf()
+    -- Show README.md from a hidden buffer instead of `:edit`: the buffer that
+    -- was current stays put (an `:edit` over an empty buffer wipes it, and
+    -- deleting the then-current buffer later makes nvim create a new one).
+    origin_win = vim.api.nvim_get_current_win()
+    initial_buf = vim.api.nvim_get_current_buf()
+    known_bufs = {}
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+      known_bufs[b] = true
+    end
+    bufnr = vim.fn.bufadd(vim.fn.getcwd() .. "/README.md")
+    vim.fn.bufload(bufnr)
+    vim.api.nvim_win_set_buf(origin_win, bufnr)
   end)
+
+  -- Closes every window but the one the case started in, the kit floats
+  -- included (closing a float fires WinClosed, which drops its
+  -- lib_ui_kit_surface_<winid> autocmd group). Returns how many it closed.
+  local function close_extra_windows()
+    local closed = 0
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      if win ~= origin_win and pcall(vim.api.nvim_win_close, win, true) then closed = closed + 1 end
+    end
+    return closed
+  end
 
   after_each(function()
     require("diff").clear()
+    pcall(vim.api.nvim_del_user_command, "Git") -- registered by the `:Git hunk` cases
+    -- diff.nvim opens its splits and ui.kit floats (notifications, pickers)
+    -- from scheduled and async callbacks that land after the case body. Keep
+    -- cleaning until a quiet period shows nothing more arrives (bounded).
+    local quiet = 0
+    local deadline = vim.uv.now() + 3000
+    while quiet < 2 and vim.uv.now() < deadline do
+      vim.wait(50)
+      pcall(function()
+        require("ui.kit.toast").clear()
+      end)
+      quiet = close_extra_windows() == 0 and quiet + 1 or 0
+    end
+    if vim.api.nvim_buf_is_valid(initial_buf) then
+      pcall(vim.api.nvim_win_set_buf, origin_win, initial_buf)
+    end
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+      if not known_bufs[b] then pcall(vim.api.nvim_buf_delete, b, { force = true }) end
+    end
     pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
   end)
 

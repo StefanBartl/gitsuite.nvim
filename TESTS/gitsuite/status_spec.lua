@@ -20,22 +20,32 @@ describe("gitsuite.features.status", function()
   end)
 
   it("quickfix() populates the quickfix list when there is an untracked file", function()
-    local scratch = vim.fn.getcwd() .. "/__gitsuite_status_spec_scratch.md"
-    vim.fn.writefile({ "scratch" }, scratch)
+    -- A throwaway repo: the live checkout must never receive scratch files,
+    -- and its own untracked files must not influence the assertion.
+    local original_cwd = vim.fn.getcwd()
+    local dir = vim.fn.tempname() .. "-gitsuite-status-untracked"
+    vim.fn.mkdir(dir, "p")
+    local init = vim.system({ "git", "-C", dir, "init", "-q" }):wait()
+    assert.equals(0, init.code, "fixture: git init failed: " .. tostring(init.stderr))
+    vim.fn.writefile({ "scratch" }, dir .. "/scratch.md")
+    vim.api.nvim_set_current_dir(dir)
 
-    status.quickfix()
-    local qf = vim.fn.getqflist({ title = 0, items = 0 })
-    assert.equals("gitsuite: status", qf.title)
+    local ok, err = pcall(function()
+      status.quickfix()
+      local qf = vim.fn.getqflist({ title = 0, items = 0 })
+      assert.equals("gitsuite: status", qf.title)
 
-    local found = false
-    for _, item in ipairs(qf.items) do
-      local name = vim.fn.bufname(item.bufnr)
-      if name:match("__gitsuite_status_spec_scratch%.md$") then found = true end
-    end
-    assert.is_true(found, "the untracked scratch file shows up in the quickfix export")
+      local found = false
+      for _, item in ipairs(qf.items) do
+        if vim.fn.bufname(item.bufnr):match("scratch%.md$") then found = true end
+      end
+      assert.is_true(found, "the untracked scratch file shows up in the quickfix export")
+    end)
 
-    vim.fn.delete(scratch)
+    vim.api.nvim_set_current_dir(original_cwd)
     vim.cmd("cclose")
+    pcall(vim.fn.delete, dir, "rf")
+    assert.is_true(ok, tostring(err))
   end)
 
   -- Without `-z`, git C-quotes a path containing a space or a non-ASCII byte

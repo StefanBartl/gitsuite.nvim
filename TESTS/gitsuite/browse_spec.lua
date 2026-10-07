@@ -45,12 +45,25 @@ describe("gitsuite.features.browse", function()
   end)
 
   it("file() reports an error, not a crash, on an untracked file", function()
-    local scratch = vim.fn.getcwd() .. "/__gitsuite_browse_spec_scratch.md"
+    -- A throwaway repo: the live checkout must never receive scratch files
+    -- (and parallel runs must not see each other's).
+    local original_cwd = vim.fn.getcwd()
+    local dir = vim.fn.tempname() .. "-gitsuite-browse-untracked"
+    vim.fn.mkdir(dir, "p")
+    local init = vim.system({ "git", "-C", dir, "init", "-q" }):wait()
+    assert.equals(0, init.code, "fixture: git init failed: " .. tostring(init.stderr))
+    local scratch = dir .. "/scratch.md"
     vim.fn.writefile({ "scratch" }, scratch)
-    vim.cmd("edit " .. vim.fn.fnameescape(scratch))
-    local ok = pcall(browse.file)
-    assert.is_true(ok)
-    vim.cmd("bdelete!")
-    vim.fn.delete(scratch)
+    vim.api.nvim_set_current_dir(dir)
+
+    local ok, err = pcall(function()
+      vim.cmd("edit " .. vim.fn.fnameescape(scratch))
+      assert.is_true(pcall(browse.file))
+    end)
+
+    vim.api.nvim_set_current_dir(original_cwd)
+    pcall(vim.cmd, "bdelete!")
+    pcall(vim.fn.delete, dir, "rf")
+    assert.is_true(ok, tostring(err))
   end)
 end)

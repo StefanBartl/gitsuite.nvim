@@ -55,7 +55,9 @@ describe("gitsuite.features.ui.lazygit bridge", function()
 
     it("replaces the visible file in a real editor window", function()
       vim.cmd("only")
-      local scratch = vim.fn.getcwd() .. "/__gitsuite_lazygit_bridge_scratch.md"
+      local dir = vim.fn.tempname() .. "-gitsuite-lazygit-bridge"
+      vim.fn.mkdir(dir, "p")
+      local scratch = dir .. "/scratch.md"
       vim.fn.writefile({ "scratch" }, scratch)
       vim.cmd("edit " .. vim.fn.fnameescape(scratch))
       local win = vim.api.nvim_get_current_win()
@@ -70,7 +72,7 @@ describe("gitsuite.features.ui.lazygit bridge", function()
         vim.fs.normalize(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)))
       )
 
-      vim.fn.delete(scratch)
+      vim.fn.delete(dir, "rf")
     end)
 
     it("never clobbers an unsaved buffer -- falls back to badd instead", function()
