@@ -54,6 +54,30 @@ describe("gitsuite :Git plugins log", function()
     F.cleanup()
   end)
 
+  describe("text.lines", function()
+    it("returns every line, with the count", function()
+      local lines, total, exact = text.lines("a\nb\nc")
+      assert.same({ "a", "b", "c" }, lines)
+      assert.equals(3, total)
+      assert.is_true(exact)
+    end)
+
+    it("cleans and returns only the first `max` lines but still counts the rest", function()
+      local lines, total, exact = text.lines(("line\27\n"):rep(50), 5)
+      assert.equals(5, #lines)
+      assert.equals("line?", lines[1])
+      assert.equals(51, total) -- the text ends with a newline: a last, empty line
+      assert.is_true(exact)
+    end)
+
+    it("does not copy more of a huge line than it shows", function()
+      local lines = text.lines(("x"):rep(3000000) .. "\nnext", 10)
+      assert.equals(2, #lines)
+      assert.is_true(vim.fn.strchars(lines[1]) <= text.MAX_LINE + 1)
+      assert.equals("next", lines[2])
+    end)
+  end)
+
   describe("text.clean", function()
     it("turns terminal escapes, CR and NUL into ?", function()
       assert.equals("?[31mred?[0m", text.clean("\27[31mred\27[0m"))
@@ -78,6 +102,10 @@ describe("gitsuite :Git plugins log", function()
         "\226\128\139", -- U+200B zero-width space
         "\226\128\168", -- U+2028 line separator
         "\239\187\191", -- U+FEFF byte-order mark
+        "\226\129\160", -- U+2060 word joiner
+        "\216\156", -- U+061C Arabic letter mark
+        "\239\191\185", -- U+FFF9 interlinear annotation anchor
+        "\243\160\128\129", -- U+E0001 language tag
       }) do
         assert.equals("a?b", text.clean("a" .. bad .. "b"))
       end
@@ -90,6 +118,14 @@ describe("gitsuite :Git plugins log", function()
       assert.equals("first", text.one_line("first\nsecond"))
       assert.equals("a?b", text.one_line("a\27b\r\nrest"))
       assert.equals("", text.one_line(nil))
+    end)
+
+    it("replaces bytes that are not UTF-8 and bounds its work by the text it keeps", function()
+      assert.equals("a?b", text.clean("a\255b"))
+      local started = vim.uv.hrtime()
+      local cut = text.clean(("\226\128\174x"):rep(2000000)) -- 8 MB of hostile characters
+      assert.is_true(vim.fn.strchars(cut) <= text.MAX_LINE + 1)
+      assert.is_true((vim.uv.hrtime() - started) / 1e9 < 2, "clean() did not stay bounded")
     end)
 
     it("cuts an endless line", function()

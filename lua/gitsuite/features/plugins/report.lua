@@ -429,8 +429,13 @@ function M.build(opts, on_done)
           apply_log(entry, entries, max)
           return done(entry)
         end
-        gitlog.has_commit(entry.dir, j.from, function(has)
-          if has then
+        gitlog.has_commit(entry.dir, j.from, function(has, has_err)
+          if has == nil then
+            -- git itself could not answer (missing binary, timeout, broken config):
+            -- that says nothing about the history, so do not blame a force-push.
+            entry.status = "error"
+            entry.reason = "git could not be run: " .. text.one_line(has_err or err)
+          elseif has then
             entry.status = "error"
             entry.reason = "git could not list the commits: " .. text.one_line(err)
           else

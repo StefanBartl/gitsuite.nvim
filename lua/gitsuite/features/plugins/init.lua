@@ -52,6 +52,9 @@ local function read(target, opts)
     notify.warn(("plugins log: showing %d commits, not %d"):format(M.MAX_COMMITS, n))
     n = M.MAX_COMMITS
   end
+  -- Changed-file lists are only shown in the picker's preview; the buffer and
+  -- clipboard listings never print them, so do not ask git for them there.
+  local with_files = (opts.out or "picker") == "picker"
   return gitlog.log(target.dir, n, function(entries, err)
     if not entries then
       fail(opts, ("%s: %s"):format(target.name, err or "git failed"))
@@ -63,7 +66,7 @@ local function read(target, opts)
       return
     end
     view.show(target, entries, opts.out)
-  end)
+  end, with_files)
 end
 
 ---Show the newest commits of one plugin or clone.

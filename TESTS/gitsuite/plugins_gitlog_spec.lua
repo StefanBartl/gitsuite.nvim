@@ -33,8 +33,12 @@ describe("gitsuite.features.plugins.gitlog", function()
 
   describe("check (the verb allowlist)", function()
     it("lets the read-only verbs through", function()
-      for _, verb in ipairs({ "log", "rev-parse", "for-each-ref", "merge-base", "diff-tree" }) do
+      for _, verb in ipairs({ "log", "rev-parse", "cat-file" }) do
         assert.is_true((gitlog.check({ verb })), verb)
+      end
+      -- verbs the feature has no use for are not on the list either
+      for _, verb in ipairs({ "for-each-ref", "merge-base", "diff-tree", "diff", "show" }) do
+        assert.is_false((gitlog.check({ verb })), verb)
       end
     end)
 
@@ -102,11 +106,27 @@ describe("gitsuite.features.plugins.gitlog", function()
         "--pickaxe-all",
       }) do
         assert.is_false((gitlog.check({ "log", arg })), arg)
-        assert.is_false((gitlog.check({ "diff-tree", arg })), arg)
+      end
+      -- attached values and abbreviations of the same options (git accepts both)
+      for _, arg in ipairs({
+        "-Sfoo",
+        "-Gfoo",
+        "-Oorder",
+        "-pu",
+        "-U1",
+        "--unified=3",
+        "--stat-width=9",
+        "--pat",
+        "--out=x",
+        "--format=%H%G?",
+        "--format=%(signature)",
+        "--pretty=format:%GG",
+      }) do
+        assert.is_false((gitlog.check({ "log", arg })), arg)
       end
       -- names and messages stay possible
       assert.is_true((gitlog.check({ "log", "--name-status", "--no-renames", "--format=%H" })))
-      assert.is_true((gitlog.check({ "diff-tree", "--name-status", "--no-renames", "-r", "HEAD" })))
+      assert.is_true((gitlog.check({ "log", "-n5", "--left-right", "-z", "--no-merges" })))
     end)
 
     it("refuses an option smuggled in as the verb, and malformed arguments", function()
@@ -127,8 +147,8 @@ describe("gitsuite.features.plugins.gitlog", function()
     it("adds --no-textconv --no-ext-diff to the verbs that make a diff", function()
       assert.same({ "log", "-n1", "--no-textconv", "--no-ext-diff" }, gitlog.argv({ "log", "-n1" }))
       assert.same(
-        { "diff-tree", "-r", "--no-textconv", "--no-ext-diff", "--", "p" },
-        gitlog.argv({ "diff-tree", "-r", "--", "p" })
+        { "log", "-n1", "--no-textconv", "--no-ext-diff", "--", "p" },
+        gitlog.argv({ "log", "-n1", "--", "p" })
       )
     end)
 
@@ -214,6 +234,80 @@ describe("gitsuite.features.plugins.gitlog", function()
       local res = run({ "rev-parse", "HEAD" }, wanted)
       vim.env.GIT_DIR = previous
       assert.equals(want_sha, vim.trim(assert(res).stdout))
+    end)
+  end)
+
+  describe("has_commit", function()
+    local function has(dir, rev)
+      local box
+      gitlog.has_commit(dir, rev, function(value, err)
+        box = { value = value, err = err }
+      end)
+      vim.wait(20000, function()
+        return box ~= nil
+      end, 10)
+      assert.is_not_nil(box, "gitlog.has_commit called back")
+      return box.value, box.err
+    end
+
+    it("tells a present commit, an absent commit and a git that cannot answer apart", function()
+      local repo = F.init("-has")
+      local sha = F.commit(repo, "one")
+      assert.is_true((has(repo, sha)))
+      assert.is_false((has(repo, ("1"):rep(40))))
+      local value, err = has(F.tmpdir("-has-not-a-repo"), sha)
+      assert.is_nil(value)
+      assert.is_truthy(err and err ~= "")
+    end)
+
+    it("says false, without a process, for something that is not a revision", function()
+      assert.is_false((has("/nowhere", "--output=x")))
+      assert.is_false((has("/nowhere", "HEAD")))
+    end)
+  end)
+
+  describe("hostile configuration", function()
+    ---Make `git log` start `touch <marker>` through `config_key`, then read the
+    ---clone through gitlog and report whether the program ran.
+    local function ran_through(config_key, value)
+      local repo = F.init("-hostile-" .. config_key:gsub("%W", ""))
+      local marker = (F.tmpdir("-hostile-marker") .. "/started"):gsub("\\", "/")
+      F.commit(repo, "one")
+      F.git(repo, { "config", config_key, (value:gsub("MARKER", marker)) })
+      local res = run({ "log", "-n1", "--format=%H" }, repo)
+      local ran = vim.uv.fs_stat(marker) ~= nil
+      return ran, res
+    end
+
+    it("does not start the file-system monitor named in the clone's config", function()
+      -- Control: the same config does start it for a plain git invocation.
+      local repo = F.init("-fsmonitor-control")
+      local marker = (F.tmpdir("-fsmonitor-marker") .. "/started"):gsub("\\", "/")
+      F.commit(repo, "one")
+      F.git(repo, { "config", "core.fsmonitor", "touch " .. marker })
+      F.git(repo, { "status", "--porcelain" }, { allow_fail = true })
+      local armed = vim.uv.fs_stat(marker) ~= nil
+      vim.fn.delete(marker)
+      if not armed then return end -- this git/platform does not run it: nothing to prove
+
+      local ran = ran_through("core.fsmonitor", "touch MARKER")
+      assert.is_false(ran, "core.fsmonitor ran")
+    end)
+
+    it("pins the gpg programs and signature display off", function()
+      local env = gitlog.opts("/some/clone").env
+      local pairs_ = {}
+      for i = 0, tonumber(env.GIT_CONFIG_COUNT) - 1 do
+        pairs_[env["GIT_CONFIG_KEY_" .. i]] = env["GIT_CONFIG_VALUE_" .. i]
+      end
+      assert.equals("false", pairs_["core.fsmonitor"])
+      assert.equals("false", pairs_["log.showSignature"])
+      assert.equals("false", pairs_["gpg.program"])
+      assert.equals("false", pairs_["gpg.ssh.program"])
+    end)
+
+    it("limits what one git process may print", function()
+      assert.is_true(gitlog.opts("/some/clone").max_output_bytes >= 1024 * 1024)
     end)
   end)
 

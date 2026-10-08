@@ -42,6 +42,10 @@ end
 M.MAX_BODY_LINES = 200
 M.MAX_FILES = 500
 
+---Most rows the picker gets: a fuzzy filter over 5000 rows on every keystroke
+---is slow, and nobody scrolls that far.
+M.MAX_PICKER_ROWS = 1000
+
 ---The marker for the commit HEAD points at: "installed" only means something
 ---for a plugin; for an arbitrary clone it is just where HEAD is.
 ---@param kind? "plugin"|"path"
@@ -105,11 +109,14 @@ function M.preview_lines(entry)
   lines[#lines + 1] = text.clean(entry.subject)
   if entry.body ~= "" then
     lines[#lines + 1] = ""
-    local body = text.lines(entry.body)
-    if #body > M.MAX_BODY_LINES then
-      local more = #body - M.MAX_BODY_LINES
-      body = vim.list_slice(body, 1, M.MAX_BODY_LINES)
-      body[#body + 1] = ("... %d more line%s"):format(more, more == 1 and "" or "s")
+    local body, total, exact = text.lines(entry.body, M.MAX_BODY_LINES)
+    if total > #body then
+      local more = total - #body
+      body[#body + 1] = ("... %d%s more line%s"):format(
+        more,
+        exact and "" or "+",
+        more == 1 and "" or "s"
+      )
     end
     vim.list_extend(lines, body)
   end
@@ -133,14 +140,27 @@ function M.preview_lines(entry)
   return lines
 end
 
+---Put `value` on the clipboard and the unnamed register. `+` silently does
+---nothing without a clipboard provider (ssh, a bare container), so say so.
+---@param value string
+---@return boolean
+local function copy(value)
+  vim.fn.setreg('"', value)
+  local ok = pcall(vim.fn.setreg, "+", value)
+  if not ok or vim.fn.getreg("+") ~= value then
+    notify.warn("no clipboard available -- the text is in the unnamed register (p)")
+    return false
+  end
+  return true
+end
+
 ---Open a commit's page in the browser; without a usable forge, copy the hash.
 ---@param target GitSuite.Plugins.Target
 ---@param entry Lib.Git.LogEntry
 function M.open_commit(target, entry)
   local url, err = links.commit_url(target.dir, entry.sha)
   if not url then
-    vim.fn.setreg("+", entry.sha)
-    vim.fn.setreg('"', entry.sha)
+    copy(entry.sha)
     notify.warn(
       ("plugins log: %s -- copied %s instead"):format(text.one_line(err), entry.sha:sub(1, 8))
     )
@@ -190,9 +210,7 @@ function M.show_markdown(lines, name, out, to)
     open_buffer(lines, name, "markdown", "plugins-report")
     return nil, nil
   elseif out == "clipboard" then
-    vim.fn.setreg("+", body)
-    vim.fn.setreg('"', body)
-    notify.info(("copied the report (%d lines)"):format(#lines))
+    if copy(body) then notify.info(("copied the report (%d lines)"):format(#lines)) end
     return nil, nil
   elseif out == "path" then
     -- (`vim.fs.normalize` expands `~` and `$VAR`; `expand()` would also read `*`,
@@ -216,6 +234,15 @@ end
 ---@param entries Lib.Git.LogEntry[]
 ---@return table|nil handle The `ui.kit` picker handle.
 local function open_picker(target, entries)
+  if #entries > M.MAX_PICKER_ROWS then
+    notify.warn(
+      ("plugins log: the picker shows the newest %d of %d commits -- use --out=buffer for all"):format(
+        M.MAX_PICKER_ROWS,
+        #entries
+      )
+    )
+    entries = vim.list_slice(entries, 1, M.MAX_PICKER_ROWS)
+  end
   local ok, kit = pcall(require, "ui.kit")
   if not ok then
     notify.error('plugins log: ui.nvim is not installed -- try "--out=buffer"')
@@ -234,10 +261,12 @@ local function open_picker(target, entries)
       return entry.sha
     end,
     text = function(entry)
-      return table.concat(
-        { entry.sha, entry.author, entry.subject, table.concat(entry.refs, " ") },
-        " "
-      )
+      return table.concat({
+        entry.sha,
+        text.clean(entry.author),
+        text.clean(entry.subject),
+        text.clean(table.concat(entry.refs, " ")),
+      }, " ")
     end,
     format = function(entry)
       local chunks = {
@@ -269,11 +298,7 @@ local function open_picker(target, entries)
       end,
       ["<M-y>"] = function(handle)
         local entry = current(handle)
-        if entry then
-          vim.fn.setreg("+", entry.sha)
-          vim.fn.setreg('"', entry.sha)
-          notify.info("copied " .. entry.sha:sub(1, 8))
-        end
+        if entry and copy(entry.sha) then notify.info("copied " .. entry.sha:sub(1, 8)) end
       end,
     },
     on_submit = function(_, _, entry)

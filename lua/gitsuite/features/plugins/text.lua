@@ -2,37 +2,20 @@
 --- Making text that came out of somebody else's repository safe to put on
 --- screen. A commit message is chosen by whoever wrote the commit: it can
 --- carry terminal escape sequences, a carriage return that overwrites the
---- line it sits on, or a megabyte of text. Everything the plugin features show
---- goes through here first.
+--- line it sits on, invisible characters that make it read differently from what
+--- it is, bytes that are not UTF-8, or a hundred megabytes of text. Everything
+--- the plugin features show goes through here first -- and the work is bounded
+--- by what is shown, not by what was sent.
 
 local M = {}
 
 ---Longest line shown, in characters. Longer text is cut and marked with "…".
 M.MAX_LINE = 400
 
----Replace control characters and cap the length. A tab becomes a space; any
----other control byte (ESC, CR, NUL, DEL, ...) becomes `?` so nothing in the
----text can move the cursor, recolour the terminal or hide a character. The C1
----controls (U+0080..U+009F, two bytes in UTF-8) go too: a terminal in UTF-8
----mode reads U+009B as a CSI.
----@param s string
----@return string
-function M.clean(s)
-  -- An explicit byte class, not `%c`: `iscntrl` follows the C locale, and in some
-  -- locales (macOS UTF-8, Latin-1) it also covers 0x80..0x9F, which would break
-  -- the continuation bytes of "…", "€" or any CJK character.
-  s = s:gsub("\t", " "):gsub("[%z\1-\31\127]", "?"):gsub("\194[\128-\159]", "?")
-  -- Characters that change how text is ORDERED or hide it (UTF-8 byte forms):
-  -- zero-width and bidi marks U+200B-200F, U+202A-202E, U+2066-2069, the line and
-  -- paragraph separators U+2028/2029 and the byte-order mark U+FEFF. A subject
-  -- could otherwise read differently from what it is.
-  s = s:gsub("\226\128[\139-\143]", "?")
-    :gsub("\226\128[\168-\174]", "?")
-    :gsub("\226\129[\166-\169]", "?")
-    :gsub("\239\187\191", "?")
-  if vim.fn.strchars(s) > M.MAX_LINE then s = vim.fn.strcharpart(s, 0, M.MAX_LINE) .. "…" end
-  return s
-end
+---Bytes `clean` looks at: four per character is the most UTF-8 spends, so this is
+---always more than `MAX_LINE` characters -- and a multi-megabyte line costs the
+---same as a short one.
+local CLEAN_CAP = 4 * M.MAX_LINE + 16
 
 ---`s` with every byte that is not part of valid UTF-8 replaced by `?`. A commit
 ---message is raw bytes in whatever encoding its author used; JSON, buffers and
@@ -87,6 +70,41 @@ function M.utf8(s)
   return table.concat(out)
 end
 
+---Make one line of foreign text printable: cut to what is shown, valid UTF-8,
+---no control characters, no invisible or re-ordering ones, at most `MAX_LINE`
+---characters. A tab becomes a space; any other control byte (ESC, CR, NUL, DEL,
+---...) becomes `?` so nothing in the text can move the cursor, recolour the
+---terminal or hide a character. The C1 controls (U+0080..U+009F, two bytes in
+---UTF-8) go too: a terminal in UTF-8 mode reads U+009B as a CSI. So do the
+---characters that change how text is ORDERED or hide it -- zero-width and bidi
+---marks (U+200B-200F, U+202A-202E, U+2060-206F), the line/paragraph separators
+---U+2028/2029, the Arabic letter mark U+061C, the byte-order mark U+FEFF, the
+---interlinear annotation marks U+FFF9-FFFB and the Unicode tag block
+---(U+E0000-E0FFF, which can spell a sentence nobody sees). Variation selectors
+---(emoji presentation) stay.
+---@param s string
+---@return string
+function M.clean(s)
+  if #s > CLEAN_CAP then s = s:sub(1, CLEAN_CAP) end
+  s = M.utf8(s)
+  -- An explicit byte class, not `%c`: `iscntrl` follows the C locale, and in some
+  -- locales (macOS UTF-8, Latin-1) it also covers 0x80..0x9F, which would break
+  -- the continuation bytes of "…", "€" or any CJK character.
+  s = s:gsub("\t", " "):gsub("[%z\1-\31\127]", "?"):gsub("\194[\128-\159]", "?")
+  if s:find("[\194-\244]") then
+    s = s
+      :gsub("\226\128[\139-\143]", "?") -- U+200B-200F
+      :gsub("\226\128[\168-\174]", "?") -- U+2028-202E
+      :gsub("\226\129[\160-\175]", "?") -- U+2060-206F
+      :gsub("\216\156", "?") -- U+061C
+      :gsub("\239\187\191", "?") -- U+FEFF
+      :gsub("\239\191[\185-\187]", "?") -- U+FFF9-FFFB
+      :gsub("\243[\160-\163][\128-\191][\128-\191]", "?") -- U+E0000-E0FFF
+  end
+  if vim.fn.strchars(s) > M.MAX_LINE then s = vim.fn.strcharpart(s, 0, M.MAX_LINE) .. "…" end
+  return s
+end
+
 ---The first line of `s`, cleaned: what goes into a notification, a window title
 ---or a header. A multi-line git error must not turn a one-line message into a
 ---hit-enter prompt.
@@ -97,15 +115,35 @@ function M.one_line(s)
   return M.clean((s:match("^[^\r\n]*")))
 end
 
+---Lines counted at most this far (a body of millions of lines is not walked to
+---the end just to say how many there are).
+local COUNT_CAP = 200000
+
 ---Split a multi-line text into cleaned lines.
+---
+---With `max`, only the first `max` lines are cleaned and returned; the rest are
+---only counted. The cost then follows what is shown, not the size of the text.
 ---@param text string
----@return string[]
-function M.lines(text)
-  local out = {}
-  for line in (text .. "\n"):gmatch("(.-)\n") do
-    out[#out + 1] = M.clean(line)
+---@param max? integer
+---@return string[] lines
+---@return integer total  How many lines there are (counted up to 200000).
+---@return boolean exact  `false` when the count stopped at the cap.
+function M.lines(text, max)
+  local out, total = {}, 0
+  local pos, n = 1, #text
+  while pos <= n + 1 do
+    local nl = text:find("\n", pos, true)
+    total = total + 1
+    if not max or #out < max then
+      local stop = (nl or n + 1) - 1
+      -- never copy more of a huge line than `clean` looks at
+      out[#out + 1] = M.clean(text:sub(pos, math.min(stop, pos + CLEAN_CAP)))
+    end
+    if not nl then return out, total, true end
+    if total >= COUNT_CAP and max and #out >= max then return out, total, false end
+    pos = nl + 1
   end
-  return out
+  return out, total, true
 end
 
 return M

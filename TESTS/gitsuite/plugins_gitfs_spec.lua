@@ -45,6 +45,8 @@ describe("gitsuite.features.plugins.gitfs", function()
 
     it("refuses ref names that could leave .git/", function()
       assert.is_true(gitfs.valid_refname("refs/heads/feature/x-1.2"))
+      -- legal for git, and no shell is involved anywhere
+      assert.is_true(gitfs.valid_refname("refs/heads/$(x)"))
       for _, bad in ipairs({
         "HEAD",
         "refs/heads/../../x",
@@ -52,7 +54,6 @@ describe("gitsuite.features.plugins.gitfs", function()
         "refs/heads/x/",
         "refs/heads/x.lock",
         "refs/heads/a b",
-        "refs/heads/$(x)",
         "/etc/passwd",
         ("refs/" .. ("a"):rep(300)),
       }) do

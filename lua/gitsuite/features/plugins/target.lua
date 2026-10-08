@@ -115,7 +115,9 @@ function M.resolve(ref, opts)
     if type(spec.tag) ~= "string" or not gitfs.valid_refname("refs/tags/" .. spec.tag) then
       return unknown("the spec's tag is not a usable tag name")
     end
-    if not vim.tbl_contains(gitfs.tag_names(dir), spec.tag) then
+    local names, incomplete = gitfs.tag_names(dir)
+    if not vim.tbl_contains(names, spec.tag) then
+      if incomplete then return unknown("the clone's tag list could not be read completely") end
       return unknown(("tag '%s' is not in the clone (not fetched yet)"):format(spec.tag))
     end
     return tag_target(dir, spec.tag, "tag")
@@ -128,7 +130,8 @@ function M.resolve(ref, opts)
     local range = semver.range(version)
     if not range then return unknown(("version range '%s' not understood"):format(version)) end
     local matching = {}
-    for _, name in ipairs(gitfs.tag_names(dir)) do
+    local names, incomplete = gitfs.tag_names(dir)
+    for _, name in ipairs(names) do
       local v = semver.version(name)
       if v and semver.matches(range, v) then
         v.tag = name
@@ -136,6 +139,9 @@ function M.resolve(ref, opts)
       end
     end
     local best = semver.last(matching)
+    if best and incomplete then
+      return unknown("the clone's tag list could not be read completely")
+    end
     if best then return tag_target(dir, best.tag, "version") end
     -- no tag matches yet: lazy falls through to the branch
   elseif version ~= nil and version ~= false then

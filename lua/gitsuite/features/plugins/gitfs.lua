@@ -1,17 +1,22 @@
 ---@module 'gitsuite.features.plugins.gitfs'
 --- Reading a clone's state straight from its `.git` directory -- no git
---- process. Fifty clones take a few dozen milliseconds this way instead of
---- tens of seconds of spawns, which is what makes "did anything change?" free.
+--- process. Fifty clones take roughly a hundred milliseconds this way instead of
+--- tens of seconds of spawns, which is what makes "did anything change?" cheap.
 ---
 --- The `.git` directory of a plugin belongs to whoever published the plugin, so
---- nothing here trusts it: every file is a regular file (no symlink, FIFO or
---- device), is read with a size cap, and is parsed strictly -- a ref name or a
---- hash that does not look like one is `nil`, not a surprise.
+--- nothing here trusts it:
+---   * every file is a regular file read below `.git` through plain directories
+---     -- not through a symlink or junction at ANY level (`.git/refs` pointing
+---     at an outside folder is refused as much as `HEAD` doing so);
+---   * every read is size-capped and parsed strictly: a ref name or a hash that
+---     does not look like one is `nil`, not a surprise.
 ---
 --- Covered: `HEAD`, loose and packed refs, tag names, the HEAD reflog, the
 --- mtime of a non-empty `FETCH_HEAD`, `index.lock`. Anything that needs git's
---- object database (peeling an annotated loose tag, ancestry) is NOT here.
+--- object database (peeling an annotated loose tag, ancestry) is NOT here, and
+--- neither is the `reftable` ref format (see `head`).
 
+local repos = require("gitsuite.util.repos")
 local uv = vim.uv or vim.loop
 
 local M = {}
@@ -26,6 +31,12 @@ M.MAX_REFLOG = 4 * 1024 * 1024
 M.MAX_MESSAGE = 200
 ---Latest time (year 2100) a reflog entry may claim; later ones are clamped.
 M.MAX_TIME = 4102444800
+---Upper bound on tag names listed from one clone.
+M.MAX_TAGS = 20000
+---A legitimate HEAD is a few dozen bytes; longer is not parsed at all.
+M.MAX_HEAD = 4096
+
+local IS_WIN = (uv.os_uname().sysname or ""):find("Windows", 1, true) ~= nil
 
 ---A hash as git writes it: 40 (SHA-1) or 64 (SHA-256) hex digits.
 ---@param s any
@@ -34,23 +45,27 @@ function M.valid_sha(s)
   return type(s) == "string" and (#s == 40 or #s == 64) and s:match("^%x+$") ~= nil
 end
 
----@param s any
----@return boolean
-local function is_zero_sha(s)
-  return type(s) == "string" and s:match("^0+$") ~= nil
-end
-
----A ref name that is safe to turn into a path below `.git/`.
+---A ref name that is safe to turn into a path below `.git/` and into a git
+---argument. Follows git's own rules (`git check-ref-format`) instead of an
+---allow-list of characters, so `fix/#12`, `feature/größe`, `release,2` and
+---`v1(beta)` are fine; what is refused is what git refuses plus what could
+---leave the folder or mean something to a file system.
 ---@param ref any
 ---@return boolean
 function M.valid_refname(ref)
-  return type(ref) == "string"
-    and #ref <= 255
-    and ref:match("^refs/[%w%._%-+@/]+$") ~= nil
-    and not ref:find("..", 1, true)
-    and not ref:find("//", 1, true)
-    and ref:sub(-1) ~= "/"
-    and ref:sub(-5) ~= ".lock"
+  if type(ref) ~= "string" or #ref > 255 or ref:sub(1, 5) ~= "refs/" then return false end
+  -- control bytes and space, ~ ^ : ? * [ \ and the characters Windows forbids
+  if ref:find('[%z\1-\32\127~^:?*%[\\"<>|]') then return false end
+  if ref:find("..", 1, true) or ref:find("@{", 1, true) or ref:find("//", 1, true) then
+    return false
+  end
+  if ref:sub(-1) == "/" or ref:sub(-1) == "." then return false end
+  for component in ref:gmatch("[^/]+") do
+    if component:sub(1, 1) == "." or component:sub(-5) == ".lock" or component == "@" then
+      return false
+    end
+  end
+  return true
 end
 
 ---Read a regular file, bounded.
@@ -86,13 +101,57 @@ local function gitdir(dir)
   return dir .. "/.git"
 end
 
+---The path of `rel` below `<dir>/.git`, after checking that every folder on the
+---way is a plain directory (not a symlink or junction).
+---@param dir string
+---@param rel string  e.g. `refs/heads/main`
+---@return string|nil path
+---@return string|nil err
+local function under_git(dir, rel)
+  local path = gitdir(dir)
+  local parts = vim.split(rel, "/", { plain = true })
+  for i = 1, #parts - 1 do
+    path = path .. "/" .. parts[i]
+    local st = uv.fs_lstat(path)
+    if not st then return nil, "missing" end
+    if st.type ~= "directory" then return nil, "not a plain folder" end
+  end
+  return path .. "/" .. parts[#parts], nil
+end
+
+---Read a file below `.git` (see `under_git`).
+---@param dir string
+---@param rel string
+---@param max integer
+---@param tail? boolean
+---@return string|nil text
+---@return string|nil err
+local function file_text(dir, rel, max, tail)
+  local path, err = under_git(dir, rel)
+  if not path then return nil, err end
+  return read_regular(path, max, tail)
+end
+
+---What `<dir>/.git` is: `"clone"` (a directory, git's own state),
+---`"file"` (a worktree or submodule: its state lives elsewhere), `"link"` (a
+---symlink or junction, which is not followed), `"other"` or `"none"`.
+---@param dir string
+---@return "clone"|"file"|"link"|"other"|"none"
+function M.clone_state(dir)
+  local st = uv.fs_lstat(gitdir(dir))
+  if not st then return "none" end
+  if st.type == "directory" then return "clone" end
+  if st.type == "file" then return "file" end
+  if st.type == "link" then return "link" end
+  return "other"
+end
+
 ---Whether `dir` has its own `.git` directory (a worktree's `.git` file does not
 ---count: its state lives elsewhere).
 ---@param dir string
 ---@return boolean
 function M.is_clone(dir)
-  local st = uv.fs_lstat(gitdir(dir))
-  return st ~= nil and st.type == "directory"
+  return M.clone_state(dir) == "clone"
 end
 
 ---@class GitSuite.Plugins.PackedRef
@@ -101,22 +160,28 @@ end
 
 ---`packed-refs` as a map `refs/... -> { sha, peeled? }`. Cached per file
 ---signature (mtime, size): resolving a plugin's target reads it several times.
----@type table<string, { stamp: string, refs: table<string, GitSuite.Plugins.PackedRef> }>
+---@type table<string, { stamp: string, refs: table<string, GitSuite.Plugins.PackedRef>, incomplete: string|nil }>
 local packed_cache = {}
+local packed_cache_n = 0
 
 ---@param dir string
----@return table<string, GitSuite.Plugins.PackedRef>
+---@return table<string, GitSuite.Plugins.PackedRef> refs
+---@return string|nil incomplete  Why the map may lack refs (the file is over `MAX_PACKED`); `nil` when it is complete.
 function M.packed_refs(dir)
-  local path = gitdir(dir) .. "/packed-refs"
+  local path, perr = under_git(dir, "packed-refs")
+  if not path then return {}, perr end
   local st = uv.fs_lstat(path)
-  if not st or st.type ~= "file" then return {} end
+  if not st or st.type ~= "file" then return {}, nil end
   local stamp = ("%d:%d:%d"):format(st.mtime.sec, st.mtime.nsec or 0, st.size)
   local cached = packed_cache[path]
-  if cached and cached.stamp == stamp then return cached.refs end
+  if cached and cached.stamp == stamp then return cached.refs, cached.incomplete end
 
-  local text = read_regular(path, M.MAX_PACKED)
+  local text, err = read_regular(path, M.MAX_PACKED)
   local refs = {}
-  if text then
+  local incomplete
+  if err == "too large" then
+    incomplete = ("packed-refs is larger than %d MiB"):format(M.MAX_PACKED / 1024 / 1024)
+  elseif text then
     local last
     for line in text:gmatch("[^\r\n]+") do
       local sha, name = line:match("^(%x+) (refs/%S+)$")
@@ -133,8 +198,25 @@ function M.packed_refs(dir)
       end
     end
   end
-  packed_cache[path] = { stamp = stamp, refs = refs }
-  return refs
+  -- bounded: one entry per clone ever looked at would grow with every plugin
+  -- that is installed and removed in a long session
+  if not packed_cache[path] then
+    packed_cache_n = packed_cache_n + 1
+    if packed_cache_n > 256 then
+      packed_cache, packed_cache_n = {}, 1
+    end
+  end
+  packed_cache[path] = { stamp = stamp, refs = refs, incomplete = incomplete }
+  return refs, incomplete
+end
+
+---Why the refs of `dir` cannot all be read from files (an oversized
+---`packed-refs`), or `nil`.
+---@param dir string
+---@return string|nil
+function M.refs_incomplete(dir)
+  local _, incomplete = M.packed_refs(dir)
+  return incomplete
 end
 
 ---The ref a symbolic ref points at (`refs/remotes/origin/HEAD` ->
@@ -144,7 +226,7 @@ end
 ---@return string|nil
 function M.symref(dir, ref)
   if not M.valid_refname(ref) and ref ~= "HEAD" then return nil end
-  local text = read_regular(gitdir(dir) .. "/" .. ref, M.MAX_SMALL)
+  local text = file_text(dir, ref, M.MAX_SMALL)
   local target = text and text:match("^ref:%s*(%S+)")
   if target and M.valid_refname(target) then return target end
   return nil
@@ -159,7 +241,7 @@ end
 function M.ref(dir, ref)
   for _ = 1, 5 do
     if not M.valid_refname(ref) then return nil end
-    local text = read_regular(gitdir(dir) .. "/" .. ref, M.MAX_SMALL)
+    local text = file_text(dir, ref, M.MAX_SMALL)
     if text then
       local sym = text:match("^ref:%s*(%S+)")
       if sym then
@@ -185,15 +267,24 @@ end
 
 ---Where HEAD is. Lazy detaches HEAD on every update, so `sha` -- not the
 ---branch -- is what is installed.
+---
+---A clone in the `reftable` ref format (git 2.45+, `init.defaultRefFormat`) keeps
+---a placeholder HEAD (`ref: refs/heads/.invalid`) and its refs in a binary
+---table: nothing in this module can read those, and it says so instead of
+---reporting a clone without commits.
 ---@param dir string
 ---@return GitSuite.Plugins.Head|nil head
 ---@return string|nil err
 function M.head(dir)
-  local text, err = read_regular(gitdir(dir) .. "/HEAD", M.MAX_SMALL)
+  local text, err = file_text(dir, "HEAD", M.MAX_SMALL)
   if not text then return nil, err end
-  text = text:gsub("%s+$", "")
+  if #text > M.MAX_HEAD then return nil, "unusual HEAD" end
+  text = repos.rtrim(text)
   local ref = text:match("^ref:%s*(.+)$")
   if ref then
+    if ref == "refs/heads/.invalid" then
+      return nil, "reftable ref storage (not readable without a git process)"
+    end
     if not M.valid_refname(ref) then return nil, "unusual HEAD" end
     return {
       ref = ref,
@@ -206,9 +297,6 @@ function M.head(dir)
   return nil, "unrecognised HEAD"
 end
 
----Upper bound on tag names listed from one clone.
-local MAX_TAGS = 20000
-
 ---@param dir string
 ---@param prefix string  Path below `refs/tags/`.
 ---@param out table<string, true>
@@ -217,9 +305,16 @@ local MAX_TAGS = 20000
 ---@return integer count
 local function scan_tags(dir, prefix, out, count, depth)
   if depth > 4 then return count end
-  local handle = uv.fs_scandir(gitdir(dir) .. "/refs/tags/" .. prefix)
+  -- `refs` and `refs/tags` must be plain folders; deeper levels are only
+  -- entered when the scan reports them as directories (a link shows as "link")
+  local base = gitdir(dir) .. "/refs"
+  local st = uv.fs_lstat(base)
+  if not st or st.type ~= "directory" then return count end
+  st = uv.fs_lstat(base .. "/tags")
+  if not st or st.type ~= "directory" then return count end
+  local handle = uv.fs_scandir(base .. "/tags/" .. prefix)
   if not handle then return count end
-  while count < MAX_TAGS do
+  while count < M.MAX_TAGS do
     local name, kind = uv.fs_scandir_next(handle)
     if not name then break end
     local full = prefix .. name
@@ -235,17 +330,22 @@ end
 
 ---All tag names of a clone (loose and packed).
 ---@param dir string
----@return string[]
+---@return string[] names
+---@return string|nil incomplete  Why the list may be missing tags (too many, or an oversized `packed-refs`); `nil` when complete.
 function M.tag_names(dir)
   local set = {}
-  scan_tags(dir, "", set, 0, 0)
-  for ref in pairs(M.packed_refs(dir)) do
+  local count = scan_tags(dir, "", set, 0, 0)
+  local incomplete
+  if count >= M.MAX_TAGS then incomplete = ("more than %d loose tags"):format(M.MAX_TAGS) end
+  local packed, packed_incomplete = M.packed_refs(dir)
+  incomplete = incomplete or packed_incomplete
+  for ref in pairs(packed) do
     local name = ref:match("^refs/tags/(.+)$")
     if name then set[name] = true end
   end
   local names = vim.tbl_keys(set)
   table.sort(names)
-  return names
+  return names, incomplete
 end
 
 ---The commit a tag points at, as far as files alone can tell.
@@ -256,7 +356,7 @@ end
 function M.tag_commit(dir, tag)
   local ref = "refs/tags/" .. tag
   if not M.valid_refname(ref) then return nil, false end
-  local text = read_regular(gitdir(dir) .. "/" .. ref, M.MAX_SMALL)
+  local text = file_text(dir, ref, M.MAX_SMALL)
   if text then
     local sha = text:match("^(%x+)")
     if M.valid_sha(sha) then return sha, false end
@@ -282,7 +382,7 @@ end
 ---@param dir string
 ---@return GitSuite.Plugins.ReflogEntry[]|nil entries  `nil` when there is no reflog file (the reflog expired, was never written or is not a regular file).
 function M.reflog(dir)
-  local text = read_regular(gitdir(dir) .. "/logs/HEAD", M.MAX_REFLOG, true)
+  local text = file_text(dir, "logs/HEAD", M.MAX_REFLOG, true)
   if not text then return nil end
   local entries = {}
   for line in text:gmatch("[^\r\n]+") do
@@ -305,11 +405,11 @@ function M.reflog(dir)
   return entries
 end
 
----Whether a reflog entry is the all-zero "before the first commit" hash.
----@param sha string
+---Whether a reflog entry hash is the all-zero "before the first commit" hash.
+---@param sha any
 ---@return boolean
 function M.is_zero(sha)
-  return is_zero_sha(sha)
+  return type(sha) == "string" and sha:match("^0+$") ~= nil
 end
 
 ---When the clone last fetched, if it did: the mtime of `FETCH_HEAD`, counted
@@ -329,6 +429,45 @@ end
 ---@return boolean
 function M.index_locked(dir)
   return uv.fs_lstat(gitdir(dir) .. "/index.lock") ~= nil
+end
+
+---Whether the first path of a text is a UNC/device path (`\\host\share`,
+---`//host/share`), after the leading blanks and quotes git allows.
+---@param text string
+---@return boolean
+local function starts_unc(text)
+  local s = text:gsub('^[%s"]+', "")
+  return s:match("^[/\\][/\\]") ~= nil
+end
+
+---On Windows: a reason when the clone's own files point git at a NETWORK path
+----- an object alternate, a `commondir`, an `include.path` in `.git/config`.
+---Every git process of this feature would touch that path first, and an SMB
+---connection to somebody else's server leaks the user's NTLM hash and stalls
+---until the timeout. `nil` elsewhere (a leading `//` is a plain local path on
+---POSIX) and when nothing points off the machine.
+---@param dir string
+---@return string|nil reason
+function M.network_path(dir)
+  if not IS_WIN then return nil end
+  local alternates = file_text(dir, "objects/info/alternates", M.MAX_SMALL)
+  if alternates then
+    for line in alternates:gmatch("[^\r\n]+") do
+      if starts_unc(line) then return "its object alternates point at a network path" end
+    end
+  end
+  local commondir = file_text(dir, "commondir", M.MAX_SMALL)
+  if commondir and starts_unc(commondir) then return "its commondir points at a network path" end
+  local config = file_text(dir, "config", 256 * 1024)
+  if config then
+    for line in config:gmatch("[^\r\n]+") do
+      local value = line:match("^%s*[Pp][Aa][Tt][Hh]%s*=%s*(.+)$")
+      if value and starts_unc(value) then
+        return "its config includes a file from a network path"
+      end
+    end
+  end
+  return nil
 end
 
 return M
