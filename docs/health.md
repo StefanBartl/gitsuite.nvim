@@ -1,6 +1,6 @@
 # Health check
 
-`:checkhealth gitsuite` runs five sections in order.
+`:checkhealth gitsuite` runs six sections in order.
 
 ## gitsuite
 
@@ -30,6 +30,21 @@ One line per adapter (`gitsigns`, `diffview`, `neogit`, `lazygit`,
 
 `native` is always ✅ inside a git repository — it needs nothing beyond
 `git` itself, already confirmed above.
+
+## gitsuite: plugin sources
+
+What `:Git plugins` reads. A source that is not there is `info`, never an error — `clones` needs nothing.
+
+| Line | Means |
+| --- | --- |
+| ✅ `lazy: available, N plugins, lazy.nvim 11.x` | lazy.nvim is loaded and its plugin table was readable |
+| ⚠️ `lazy.nvim X: gitsuite's adapter was written against 11.x` | lazy.nvim's data layout may have changed; set `plugins.sources = { "clones" }` if `:Git plugins` misbehaves |
+| ✅ `pack: available, N plugins` / ℹ️ `pack: not available` | `vim.pack` manages plugins / does not |
+| ✅ `clones: available, N plugins` | the plain-folder source found N clones |
+| ⚠️ `<source>: available but unreadable: ...` | the source exists but returned an unexpected shape |
+| ✅ `plugins source in use: ...` | the source `plugins.sources` resolved to |
+| ⚠️ `none of the configured plugins.sources is available: ...` | an explicit `plugins.sources` list names only sources that are absent; use `"auto"` or add `clones` |
+| ⚠️ `plugins.roots entry does not exist: ...` | a configured folder is missing |
 
 ## gitsuite: plugin state
 

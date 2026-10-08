@@ -120,4 +120,59 @@ describe("gitsuite.config", function()
       )
     end
   )
+
+  describe("plugins", function()
+    it("has defaults: auto sources, no extra roots, 50 commits, a 30 s timeout", function()
+      local p = config.get().plugins
+      assert.equals("auto", p.sources)
+      assert.same({}, p.roots)
+      assert.equals(50, p.log_limit)
+      assert.equals(30000, p.timeout_ms)
+    end)
+
+    it("accepts valid values, including an explicit source list", function()
+      config.setup({
+        plugins = {
+          sources = { "lazy", "clones" },
+          roots = { "~/plugins" },
+          log_limit = 10,
+          timeout_ms = 5000,
+        },
+      })
+      local p = config.get().plugins
+      assert.same({ "lazy", "clones" }, p.sources)
+      assert.same({ "~/plugins" }, p.roots)
+      assert.equals(10, p.log_limit)
+      assert.equals(5000, p.timeout_ms)
+      assert.same({}, config.issues())
+    end)
+
+    it("drops an unknown source name, a non-list roots and non-positive numbers", function()
+      config.setup({
+        plugins = {
+          sources = { "lazy", "packer" },
+          roots = "~/plugins",
+          log_limit = 0,
+          timeout_ms = -5,
+        },
+      })
+      local p = config.get().plugins
+      assert.equals("auto", p.sources)
+      assert.same({}, p.roots)
+      assert.equals(50, p.log_limit)
+      assert.equals(30000, p.timeout_ms)
+      assert.equals(4, #config.issues())
+    end)
+
+    it("drops a fractional count and an empty source list", function()
+      config.setup({ plugins = { log_limit = 2.5, sources = {} } })
+      assert.equals(50, config.get().plugins.log_limit)
+      assert.equals("auto", config.get().plugins.sources)
+    end)
+
+    it("reports an unknown key inside plugins", function()
+      config.setup({ plugins = { sourcez = "auto" } })
+      assert.is_truthy(config.issues()[1]:find("plugins.sourcez", 1, true))
+    end)
+  end)
 end)

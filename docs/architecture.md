@@ -2,7 +2,7 @@
 
 ## Own implementation where it pays off, a thin adapter where it doesn't
 
-Each of the nine feature families in [scope.md](scope.md) picked one of
+Each of the ten feature families in [scope.md](scope.md) picked one of
 two shapes on its own merits, not by a blanket rule:
 
 - **Own implementation** for conflict resolution, blame, browse, branch,
@@ -30,7 +30,12 @@ installed"; `hunk` wants `gitsigns` outright, with no priority list at all
 report "not installed" without it — only `preview` falls back on its own,
 to `:Git diff head`, not through the adapter registry). `resolve_first`
 exists for a feature that genuinely has an ordered list of interchangeable
-backends; no feature currently needs one, so nothing calls it yet.
+backends; `plugins` is its caller: "where do the installed plugins come from"
+has exactly that shape — lazy.nvim, then `vim.pack`, then plain clones — so
+`plugins.sources = "auto"` is `resolve_first({ "lazy", "pack", "clones" })`.
+Each of those source adapters reads data only (lazy's in-memory plugin table,
+`vim.pack`'s lockfile, a directory listing), type-guards what it reads, and
+reports an unexpected shape as an error so the next source takes over.
 
 **Availability is checked via `package.loaded`, never by `require`ing the
 foreign plugin.** `adapter.gitsigns.is_available()` reads

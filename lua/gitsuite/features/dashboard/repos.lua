@@ -19,29 +19,18 @@
 ---@class GitSuiteDashboardRepos
 local M = {}
 
--- Vim Utilities
-local uv = vim.uv or vim.loop
--- Resolves any path spec to its absolute, trailing-separator-free,
--- comparison-ready form -- including the separator-only edge case ("/",
--- "//", "\\\\", "\\/\\", ...), which used to be hand-rolled here and get
--- the POSIX side wrong (a bare "\" fallback is meaningless where backslash
--- is just an ordinary filename character). Centralized in lib.nvim so
--- every consumer shares one tested implementation instead of re-deriving
--- it -- see lib.nvim.cross.fs.to_absolute's own doc comment for why.
+-- The pure path/repository helpers live in util/repos.lua (shared with
+-- features/plugins, which must not import this module); re-exported below so
+-- every existing caller keeps its `repos.is_git_repo`/`collect_repos`/
+-- `normalize_path`.
+local util = require("gitsuite.util.repos")
 local to_absolute = require("lib.nvim.cross.fs.to_absolute")
-local unify_slashes = require("lib.nvim.cross.fs.separators.unify_slashes")
 -- Configuration
 local config = require("gitsuite.config")
-local is_windows = require("lib.nvim.cross.platform.is_windows")
 
----Checks whether a directory is a git repository.
----Accepts both a `.git` directory (normal clone) and a `.git` file (worktree/submodule).
----@param path string Absolute path to the candidate directory
----@return boolean
-function M.is_git_repo(path)
-  local stat = uv.fs_stat(path .. "/.git")
-  return stat ~= nil and (stat.type == "directory" or stat.type == "file")
-end
+M.is_git_repo = util.is_git_repo
+M.collect_repos = util.collect_repos
+M.normalize_path = util.normalize_path
 
 ---Resolves the base directory whose immediate subdirectories are scanned for repos.
 ---Precedence: explicit override > configured base directory (`dashboard.base_dir`).
@@ -57,61 +46,6 @@ function M.resolve_base_dir(override)
   if not dir or dir == "" then return nil end
 
   return to_absolute(dir)
-end
-
----Collects all immediate subdirectories of `base_dir` that are git repositories.
----@param base_dir string Absolute path to scan (without trailing separator)
----@return string[] repos Absolute paths of discovered repositories
-function M.collect_repos(base_dir)
-  ---@type string[]
-  local repos = {}
-
-  local handle = uv.fs_scandir(base_dir)
-  if not handle then return repos end
-
-  while true do
-    local name, typ = uv.fs_scandir_next(handle)
-    if not name then break end
-
-    if typ == "directory" then
-      local path = base_dir .. "/" .. name
-      if M.is_git_repo(path) then repos[#repos + 1] = path end
-    end
-  end
-
-  return repos
-end
-
----Normalizes a path for *comparison*: expanded (`~`, env vars), absolute,
----no trailing separator, slashes unified, and lowercased on Windows (whose
----filesystem is itself case-insensitive). This is the one key any two
----spellings of "the same path" -- `~/repos/x`, `E:\repos\x`,
----`e:/repos/x/` -- resolve to the same value under, used both for
----deduplicating a scan's results (below) and, more importantly, for
----recognizing "is this the path the user already added/removed" in
----`state/dashboard_pages.lua`: without going through this, a page's
----raw, as-typed `a`/`x` input never reliably matches a resolved
----`record.path`, or a differently-spelled `dashboard.extra_paths`/`groups`
----config entry.
----@param path string
----@return string
-function M.normalize_path(path)
-  local key = unify_slashes(to_absolute(path))
-  if is_windows() then key = key:lower() end
-  return key
-end
-
----@internal
----Same comparison key as `M.normalize_path`, for a `path` already known to
----be absolute (returned by `resolve_entry`/`collect_repos` in this same
----module) -- skips `to_absolute`'s `fnamemodify`/`expand` round-trip a
----second time on a string that already went through it once.
----@param path string
----@return string
-local function comparison_key(path)
-  local key = unify_slashes(path)
-  if is_windows() then key = key:lower() end
-  return key
 end
 
 ---Resolves one configured entry to the repository path(s) it names: itself,
@@ -150,7 +84,7 @@ function M.resolve_group_repos(entries, existing)
       -- `resolved` came straight out of `resolve_entry` above, already
       -- absolute -- `comparison_key`, not `M.normalize_path`, so it isn't
       -- run through `to_absolute`'s fnamemodify/expand a second time.
-      local key = comparison_key(resolved)
+      local key = util.comparison_key(resolved)
       if not seen[key] then
         seen[key] = true
         out[#out + 1] = resolved

@@ -393,6 +393,30 @@ local function build_routes()
         end)
       end,
     },
+
+    -- plugins: the history of the clones a plugin manager installed. Reads
+    -- only (never fetches, never changes a clone). So far `log`, a
+    -- single-repository action like `ui lazygit [dir]`.
+    {
+      path = { "plugins", "log" },
+      args = {
+        { name = "target", type = "GITSUITE_PLUGIN_OR_REPO", optional = true },
+        { name = "n", type = "INT", optional = true },
+      },
+      flags = {
+        { name = "out", type = "STRING", enum = { "picker", "buffer", "clipboard" } },
+        -- The positional count needs a target before it (`log lazy.nvim 20`);
+        -- for "this buffer's plugin" the count goes here: `log --count=20`.
+        { name = "count", type = "INT" },
+      },
+      desc = "Show the newest commits of an installed plugin (or any clone): picker with preview, --count=<n>, --out=buffer|clipboard",
+      run = function(ctx)
+        require("gitsuite.features.plugins").log(ctx.args.target, {
+          n = ctx.args.n or ctx.flags.count,
+          out = ctx.flags.out,
+        })
+      end,
+    },
   }
 end
 
@@ -436,11 +460,31 @@ local function register_dashboard_dir_type()
   })
 end
 
+---Registers `GITSUITE_PLUGIN_OR_REPO` (idempotent). A target is an installed
+---plugin's name, the `owner/repo` of its remote, or a path to a clone;
+---`validate` resolves it (never touching the network) to the table the route
+---receives. Completion offers the plugin names and directories without
+---starting a process.
+---@return nil
+local function register_plugin_target_type()
+  composer.register_type("GITSUITE_PLUGIN_OR_REPO", {
+    validate = function(raw)
+      local target, err = require("gitsuite.features.plugins.sources").resolve(raw)
+      if not target then return false, nil, err end
+      return true, target, nil
+    end,
+    complete = function(arg_lead)
+      return require("gitsuite.features.plugins.sources").complete(arg_lead)
+    end,
+  })
+end
+
 ---Register `:Git` (or the configured command name) with the full route tree.
 ---Idempotent at the nvim level (re-creates cleanly).
 ---@param cfg GitSuite.Config
 function M.register(cfg)
   register_dashboard_dir_type()
+  register_plugin_target_type()
   composer.verb(cfg.commands.git, {
     desc = "[gitsuite.nvim] :" .. cfg.commands.git .. " <scope> <action> -- see docs/BINDINGS.md",
     routes = build_routes(),

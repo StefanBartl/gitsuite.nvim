@@ -66,6 +66,61 @@ function M.check()
     end
   end
 
+  -- `:Git plugins` reads these. A source that is not there is `info` (UI-59):
+  -- `clones` needs nothing and is always available.
+  vim.health.start("gitsuite: plugin sources")
+  local plugin_sources = require("gitsuite.features.plugins.sources")
+  for _, name in ipairs({ "lazy", "pack", "clones" }) do
+    local source = adapter.resolve(name)
+    if source then
+      ---@diagnostic disable-next-line: undefined-field
+      local refs, err = source.list({ roots = require("gitsuite.config").get().plugins.roots })
+      if refs then
+        local detail = ""
+        if name == "lazy" then
+          local version = require("gitsuite.adapter.lazy").version()
+          detail = version and (", lazy.nvim " .. version) or ""
+          -- The adapter was written against lazy.nvim 11.x's data layout.
+          if version and not version:match("^11%.") then
+            vim.health.warn(
+              ("lazy.nvim %s: gitsuite's adapter was written against 11.x"):format(version),
+              {
+                "If :Git plugins misbehaves, update gitsuite.nvim or set plugins.sources = { 'clones' }",
+              }
+            )
+          end
+        end
+        vim.health.ok(
+          ("%s: available, %d plugin%s%s"):format(name, #refs, #refs == 1 and "" or "s", detail)
+        )
+      else
+        vim.health.warn(("%s: available but unreadable: %s"):format(name, err or "?"))
+      end
+    else
+      vim.health.info(("%s: not available"):format(name))
+    end
+  end
+  local plugins_cfg = require("gitsuite.config").get().plugins
+  vim.health.info("plugins.sources = " .. vim.inspect(plugins_cfg.sources):gsub("%s+", " "))
+  for _, root in ipairs(plugins_cfg.roots) do
+    if vim.fn.isdirectory(vim.fn.expand(root)) == 0 then
+      vim.health.warn(("plugins.roots entry does not exist: %s"):format(root))
+    end
+  end
+  local _, used, plugin_errors = plugin_sources.list()
+  if #used > 0 then
+    vim.health.ok("plugins source in use: " .. table.concat(used, ", "))
+  elseif plugins_cfg.sources ~= "auto" then
+    vim.health.warn(
+      "none of the configured plugins.sources is available: "
+        .. table.concat(plugins_cfg.sources, ", "),
+      { 'Use plugins.sources = "auto", or a source from: lazy, pack, clones' }
+    )
+  end
+  for _, e in ipairs(plugin_errors) do
+    vim.health.warn("plugins source failed: " .. e)
+  end
+
   vim.health.start("gitsuite: plugin state")
   if vim.g.loaded_gitsuite then
     vim.health.ok(

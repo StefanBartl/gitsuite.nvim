@@ -93,6 +93,27 @@ local function is_valid_groups(v)
   return true
 end
 
+---@internal
+---A positive whole number (a count or a timeout in milliseconds).
+---@param v any
+---@return boolean
+local function is_positive_int(v)
+  return type(v) == "number" and v >= 1 and v == math.floor(v)
+end
+
+---@internal
+---`plugins.sources`: the word "auto", or a list naming plugin sources.
+---@param v any
+---@return boolean
+local function is_sources(v)
+  if v == "auto" then return true end
+  if type(v) ~= "table" or not is_proper_list(v) or #v == 0 then return false end
+  for _, name in ipairs(v) do
+    if name ~= "lazy" and name ~= "pack" and name ~= "clones" then return false end
+  end
+  return true
+end
+
 ---Schema for `setup()`'s top-level and one-level-nested keys (ERR-50/ERR-22):
 ---an unknown key or a value that fails its check is dropped before the merge
 ---so the built-in default underneath actually applies, instead of silently
@@ -133,6 +154,12 @@ local KNOWN = {
       ok = is_valid_groups,
       expect = "a table (list of { name: non-empty string, paths?: list of strings })",
     },
+  },
+  plugins = {
+    sources = { ok = is_sources, expect = '"auto" or a list of "lazy", "pack", "clones"' },
+    roots = { ok = is_list_of_strings, expect = "a table (list of non-empty path strings)" },
+    log_limit = { ok = is_positive_int, expect = "a positive integer" },
+    timeout_ms = { ok = is_positive_int, expect = "a positive integer (milliseconds)" },
   },
   progress_style = { ok = is_string, expect = "a non-empty string" },
 }

@@ -59,6 +59,20 @@ local DEFAULTS = {
     -- get -- see docs/configuration.md).
     groups = {},
   },
+  -- `:Git plugins` -- the history of the clones a plugin manager installed.
+  plugins = {
+    -- "auto" = the first available of lazy.nvim, vim.pack, plain clones; or an
+    -- explicit list of those names (their union, deduplicated).
+    sources = "auto",
+    -- Folders of clones for the "clones" source; empty = stdpath("data")/lazy
+    -- and stdpath("data")/site/pack/*/{start,opt}, resolved at run time.
+    roots = {},
+    -- Commits `:Git plugins log` shows when no count is given.
+    log_limit = 50,
+    -- Timeout of each git process in milliseconds: a clone on a network drive
+    -- or a stalled antivirus scan must not hang the editor's request forever.
+    timeout_ms = 30000,
+  },
   -- Indicator style for `:Git dashboard`/`:Git dashboard update` over many
   -- repositories; "auto" picks fidget.nvim when installed, else `vim.notify`.
   -- Needs lib.nvim (always present), no-op otherwise.

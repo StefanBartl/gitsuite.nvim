@@ -60,6 +60,7 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 | `:Git hunk stage` | Stage the hunk under the cursor |
 | `:Git hunk stage-buffer` | Stage every hunk in the current buffer |
 | `:Git hunk toggle-deleted` | Toggle showing deleted lines inline |
+| `:Git plugins log [{target:GITSUITE_PLUGIN_OR_REPO}] [{n:INT}] [--out=<picker\|buffer\|clipboard>] [--count=<value>]` | Show the newest commits of an installed plugin (or any clone): picker with preview, --count=<n>, --out=buffer\|clipboard |
 | `:Git status lint` | Pre-commit gate: LSP diagnostics for the changed files that already have a loaded buffer |
 | `:Git status quickfix` | Export repo status to the quickfix list |
 | `:Git status relink` | Fix references (Markdown links, etc.) to files git status reports as renamed |

@@ -40,6 +40,13 @@
 ---@field extra_paths string[]  Repositories merged onto the default page's scan; each entry must itself be a repository.
 ---@field groups      GitSuite.Config.Dashboard.Group[]  Additional named pages, see `GitSuite.Config.Dashboard.Group`.
 
+--- `:Git plugins` -- reading the history of the clones a plugin manager installed.
+---@class GitSuite.Config.Plugins
+---@field sources    "auto"|string[]  Where the installed plugins come from: "auto" (the first available of lazy, pack, clones) or an explicit list of `"lazy"`, `"pack"`, `"clones"`.
+---@field roots      string[]  Folders of clones the `clones` source scans; empty = `stdpath("data")/lazy` and `stdpath("data")/site/pack/*/{start,opt}`.
+---@field log_limit  integer   Commits `:Git plugins log` lists when no count is given.
+---@field timeout_ms integer   Per-`git` timeout of `:Git plugins` (a clone on a network drive can hang).
+
 --- The **resolved** configuration, as `config.get()` returns it: DEFAULTS
 --- deep-merged with the user's `setup()` table. Every field below is
 --- therefore always present.
@@ -50,6 +57,7 @@
 ---@field browse   GitSuite.Config.Browse
 ---@field branch   GitSuite.Config.Branch
 ---@field dashboard GitSuite.Config.Dashboard
+---@field plugins  GitSuite.Config.Plugins
 ---@field progress_style string  Indicator style for `:Git dashboard`/`:Git dashboard update`; "auto" (default), "notify", "statusline", "fidget", "float" or "kit".
 
 --- The partial shape a caller hands to `require("gitsuite").setup(opts)`.
@@ -60,6 +68,7 @@
 ---@field browse?   table
 ---@field branch?   table
 ---@field dashboard? table
+---@field plugins? table
 ---@field progress_style? string
 
 --- One entry in `gitsuite.adapter`'s registry. Built-in adapter modules
@@ -88,3 +97,31 @@
 --- index or the file on disk, so `git status` has not moved.
 ---@class GitSuite.Event.StatusChanged
 ---@field dir string  Repo root the change happened in.
+
+--- How a plugin manager pins a plugin; every field is whatever its spec said.
+---@class GitSuite.Plugins.Spec
+---@field branch? string
+---@field tag? string
+---@field commit? string
+---@field version? string|boolean|table  A version range string (`"1.*"`), `false`, or a `vim.VersionRange`.
+---@field pin boolean
+
+--- One installed plugin, as a source adapter lists it.
+---@class GitSuite.Plugins.Ref
+---@field name string        Plugin name (the clone's folder name for the `clones` source).
+---@field dir string         Absolute path of the clone.
+---@field url? string        Where it was cloned from, when the source knows.
+---@field managed_by "lazy"|"pack"|"clones"
+---@field is_local boolean   A `dir`-mode plugin (lazy.nvim never updates it) -- usually one of your own.
+---@field spec GitSuite.Plugins.Spec
+
+--- A source of installed plugins: an adapter that can also list them.
+---@class GitSuite.PluginSource : GitSuite.Adapter
+---@field list fun(opts?: table): GitSuite.Plugins.Ref[]|nil, string|nil
+
+--- What a `:Git plugins` target resolves to: an installed plugin or a folder.
+---@class GitSuite.Plugins.Target
+---@field kind "plugin"|"path"
+---@field name string   Plugin name, or the folder's name.
+---@field dir string    Absolute path of the clone.
+---@field ref? GitSuite.Plugins.Ref  Set for `kind = "plugin"`.

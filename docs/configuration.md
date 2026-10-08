@@ -140,6 +140,27 @@ inside the dashboard add/remove paths per page at runtime, layered on top
 of this config without ever rewriting it — see
 [BINDINGS.md](BINDINGS.md#dashboard-keys-component-local).
 
+## `plugins`
+
+```lua
+plugins = {
+  sources = "auto",  -- "auto" or a list of "lazy", "pack", "clones"
+  roots = {},        -- folders of clones for the "clones" source
+  log_limit = 50,    -- commits `:Git plugins log` shows when no count is given
+  timeout_ms = 30000, -- timeout of each git process
+},
+```
+
+`:Git plugins` needs to know which clones are your plugins. `"auto"` takes the
+first available of **lazy.nvim** (read from its in-memory plugin table — nothing
+is called into lazy, nothing is required), **`vim.pack`** (only when it manages
+something) and plain **clones**; an explicit list is the union of those sources,
+deduplicated by path. `roots` replaces the folders the `clones` source scans
+(default: `stdpath("data")/lazy` and `stdpath("data")/site/pack/*/{start,opt}`);
+only a child with its own `.git` directory counts, a worktree (`.git` file) is
+skipped. `timeout_ms` bounds every git process so a clone on a network drive
+cannot hang the request.
+
 ## `progress_style`
 
 ```lua

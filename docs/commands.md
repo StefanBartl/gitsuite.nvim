@@ -11,7 +11,7 @@ That one tree drives three things at once, never out of sync with each
 other:
 
 - Dispatch — what actually runs.
-- `<Tab>` completion at every level (`:Git <Tab>` lists the nine scopes,
+- `<Tab>` completion at every level (`:Git <Tab>` lists the ten scopes,
   `:Git conflict <Tab>` lists its actions).
 - [BINDINGS.md](BINDINGS.md) itself, generated from the same tree rather
   than hand-maintained.
@@ -41,6 +41,37 @@ for `dashboard.base_dir`/`extra_paths`/`groups`.
 pull over every repository in `dir`/`dashboard.base_dir`, no UI, one
 summary notification when it's done — the same pair the dashboard's own
 `gu` key runs without leaving the panel.
+
+### `plugins` — the history of the clones a plugin manager installed
+
+```vim
+:Git plugins log [plugin|owner/repo|path] [n] [--count=n] [--out=picker|buffer|clipboard]
+```
+
+Shows the newest `n` commits (default `plugins.log_limit`, 50, at most 5000) of one clone:
+an installed plugin by name (`<Tab>` completes the names of whatever lazy.nvim,
+`vim.pack` or your plugin folders hold — no process is started), the
+`owner/repo` of its remote, or a path to any git repository. Without a target
+it uses the plugin the current buffer's file belongs to, else asks. The
+installed commit (`HEAD`) and release tags are marked. The positional `n` needs
+a target before it (`log lazy.nvim 20`); for the buffer's own plugin write
+`log --count=20`.
+
+In the **picker** (default) the right pane previews the message and the
+changed files of the commit under the cursor; `<CR>` opens the commit on its
+web host (or copies the hash when the host is not recognised), `<M-o>` does the
+same without closing the list, `<M-y>` copies the hash. There is deliberately no
+lazygit key: lazygit can change a clone, this feature never does — use
+`:Git ui lazygit <dir>` for that. `--out=buffer` keeps a read-only listing,
+`--out=clipboard` copies it.
+
+It only **reads**: one `git log` process per call, never a fetch, never a write
+to the clone, and no patch or file-content output (so neither a missing blob in a
+blobless clone nor a `textconv`/diff program named in the clone's own config is
+ever involved). In a blobless clone it
+works offline — it needs commits and file *names*, not file contents. A plugin
+that is not installed (`owner/repo` naming something you never installed) is
+refused with that reason: gitsuite does not clone or look anything up.
 
 ## Rename the command
 

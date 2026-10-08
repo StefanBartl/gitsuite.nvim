@@ -35,7 +35,10 @@ dashboard`, the one deliberate multi-repo exception: a git-status panel
 across a whole folder of clones, with push/pull/fetch per row, per marked
 set, or for the whole folder — moved here from
 [reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim), which
-stays scoped to GitHub/GitLab/Codeberg discovery.
+stays scoped to GitHub/GitLab/Codeberg discovery. And `:Git plugins log`:
+the newest commits of an installed plugin (or of any clone) in a picker with
+a preview — what changed in the plugin you just updated — read-only, offline,
+no fetch.
 
 ---
 

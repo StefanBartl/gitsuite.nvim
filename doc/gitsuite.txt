@@ -120,6 +120,16 @@ moved here from reposcope.nvim's former `:Reposcope dashboard`/`update`.
 See docs/BINDINGS.md for the full key table, docs/configuration.md for
 `dashboard.*`, and docs/scope.md for why this one scope is different.
 
+                                                          *gitsuite-plugins*
+`:Git plugins log [plugin|owner/repo|path] [n] [--count=n] [--out=picker|buffer|clipboard]`
+shows the newest commits of an installed plugin or of any clone: a picker with
+a preview of the message and changed files (`<CR>` opens the commit on its web
+host, `<M-o>` the same without closing, `<M-y>` copies the hash), a read-only
+buffer, or the clipboard. `<Tab>` completes the
+plugin names of lazy.nvim, `vim.pack` or your plugin folders without starting a
+process. It only reads -- one `git log`, never a fetch -- and works offline in a
+blobless clone. See docs/commands.md and docs/configuration.md (`plugins.*`).
+
 ==============================================================================
 5. CONFIGURATION                                                *gitsuite-config*
 >lua
@@ -130,6 +140,7 @@ See docs/BINDINGS.md for the full key table, docs/configuration.md for
     keymaps = { blame_full = "<leader>gb", ui_lazygit = "<leader>lg" },
     browse = { hosts = {} },
     dashboard = { base_dir = "", extra_paths = {}, groups = {} },
+    plugins = { sources = "auto", roots = {}, log_limit = 50, timeout_ms = 30000 },
     progress_style = "auto",
   })
 <
@@ -200,6 +211,7 @@ full wiring (heirline, the native statusline) and why the cache is keyed by
   - lib.nvim / diff.nvim presence (hard dependencies -- error if missing)
   - `git` on `$PATH`
   - each adapter's availability (info, not warn/error -- see |gitsuite-adapters|)
+  - the plugin sources `:Git plugins` reads (lazy, pack, clones)
   - rejected `setup()` options, if any
   - the composer's own route-tree check for `:Git`
 

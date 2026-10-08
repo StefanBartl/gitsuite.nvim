@@ -2,7 +2,7 @@
 
 ## Does
 
-Nine `:Git <scope> <action>` families, each a real implementation unless
+Ten `:Git <scope> <action>` families, each a real implementation unless
 noted:
 
 - **`conflict`** — merge-conflict detection, highlighting and resolution
@@ -28,6 +28,11 @@ noted:
   a thin pass-through to the real plugin/binary.
 - **`status`** — repository status (branch, ahead/behind, dirty) and a
   quickfix export of the same, via `lib.nvim.git.status_porcelain`.
+- **`plugins`** — the newest commits of an installed plugin (or of any
+  clone): `:Git plugins log`. Reads the clones a plugin manager installed
+  (lazy.nvim, `vim.pack` or plain folders) with one `git log`; never fetches,
+  never changes a clone. Single-repository, like `ui lazygit [dir]` — the
+  target is named explicitly instead of being the current buffer's repository.
 - **`dashboard`** — the one deliberate exception to "one repository per
   command" below: a multi-repo git-status panel (branch, ahead/behind,
   dirty, last-commit age) across a whole directory of clones, or a
@@ -41,7 +46,7 @@ noted:
   here reimplements it.
 - **No side-by-side diff engine.** diffview.nvim and `diff.nvim` own that.
 - **No interactive rebase, no commit editor.** Outside every one of the
-  nine families above — `lazygit` or the terminal is the intended tool for
+  ten families above — `lazygit` or the terminal is the intended tool for
   those.
 - **`dashboard` is the one cross-repository view.** Every other family
   operates on the one repository the current buffer belongs to; see
