@@ -23,7 +23,7 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 
 ## :Git
 
-[gitsuite.nvim] :Git <scope> <action> -- see docs/BINDINGS.md
+> [gitsuite.nvim] :Git <scope> <action> -- see docs/BINDINGS.md
 
 | Invocation | Description |
 | --- | --- |
