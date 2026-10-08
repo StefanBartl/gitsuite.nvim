@@ -404,10 +404,20 @@ local function build_routes()
         { name = "n", type = "INT", optional = true },
       },
       flags = {
-        { name = "out", type = "STRING", enum = { "picker", "buffer", "clipboard" } },
+        {
+          name = "out",
+          type = "STRING",
+          enum = { "picker", "buffer", "clipboard" },
+          desc = "Where the commits are shown",
+          enum_desc = {
+            picker = "Picker with a preview of the message and changed files (default)",
+            buffer = "Read-only scratch buffer in a split",
+            clipboard = "Copy the listing to the clipboard",
+          },
+        },
         -- The positional count needs a target before it (`log lazy.nvim 20`);
         -- for "this buffer's plugin" the count goes here: `log --count=20`.
-        { name = "count", type = "INT" },
+        { name = "count", type = "INT", desc = "How many commits (default plugins.log_limit)" },
       },
       desc = "Show the newest commits of an installed plugin (or any clone): picker with preview, --count=<n>, --out=buffer|clipboard",
       run = function(ctx)
