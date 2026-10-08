@@ -23,9 +23,8 @@ describe("gitsuite.bindings.usrcmds option float", function()
       missing[#missing + 1] = ("%s %s"):format(m.route, m.name)
     end
 
-    -- The positional arguments too (`diff rev`, `dashboard [dir]`, `dashboard update [dir]`,
-    -- `plugins log [target]`): a text of their own or of their type (`GITSUITE_DASHBOARD_DIR`,
-    -- `GITSUITE_PLUGIN_OR_REPO`); the built-in `DIR` and `INT` explain themselves.
+    -- The positional arguments too (`diff rev`, `dashboard [dir]`, `dashboard update [dir]`): a
+    -- text of their own or of their type (`GITSUITE_DASHBOARD_DIR`); `DIR` explains itself.
     local missing_args = {}
     for _, m in ipairs(composer.help.undocumented("Git", { args = true })) do
       missing_args[#missing_args + 1] = ("%s %s"):format(m.route, m.name)
@@ -38,13 +37,10 @@ describe("gitsuite.bindings.usrcmds option float", function()
         if arg.desc then texts[#texts + 1] = arg.desc end
       end
     end
-    local argtypes = require("lib.nvim.bindings.usercmd.composer.argtypes")
-    for _, type_name in ipairs({ "GITSUITE_DASHBOARD_DIR", "GITSUITE_PLUGIN_OR_REPO" }) do
-      local def = argtypes.get(type_name)
-      assert.is_not_nil(def, type_name .. " is a registered argument type")
-      assert.is_truthy(def.desc and def.desc ~= "", type_name .. " has a help text")
-      texts[#texts + 1] = def.desc
-    end
+    local def = require("lib.nvim.bindings.usercmd.composer.argtypes").get("GITSUITE_DASHBOARD_DIR")
+    assert.is_not_nil(def, "GITSUITE_DASHBOARD_DIR is a registered argument type")
+    assert.is_truthy(def.desc and def.desc ~= "", "GITSUITE_DASHBOARD_DIR has a help text")
+    texts[#texts + 1] = def.desc
     local malformed = {}
     for _, text in ipairs(texts) do
       if text:find("\n", 1, true) or text:sub(-1) == "." or #text > 80 then
@@ -59,7 +55,7 @@ describe("gitsuite.bindings.usrcmds option float", function()
       #missing_args,
       ":Git arguments without a help text: " .. table.concat(missing_args, ", ")
     )
-    assert.is_true(#texts >= 4, "the argument texts were found (rev, dashboard dir, the two types)")
+    assert.is_true(#texts >= 3, "the argument texts were found (rev, dashboard dir, the type)")
     assert.equals(
       0,
       #malformed,
