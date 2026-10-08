@@ -45,7 +45,7 @@ require("gitsuite").setup({})
 
 | Path | Contains |
 | --- | --- |
-| `lua/gitsuite/adapter/` | The registry, plus one file per backend: gitsigns, diffview, neogit, lazygit, native |
+| `lua/gitsuite/adapter/` | The registry, plus one file per backend: gitsigns, diffview, neogit, lazygit, native — and the plugin sources `features/plugins` reads: lazy, pack, clones |
 | `lua/gitsuite/features/` | Every `:Git` scope's implementation, written against the adapter registry |
 | `lua/gitsuite/features/plugins/` | `:Git plugins`: `sources` (which clones), `gitfs` (process-free `.git` reader), `runs` (reflog → update runs), `target` + `semver` (lazy's update target), `gitlog` (the one read-only git runner), `report` + `state` + `markdown` (the report, its store and its text), `view` + `text` + `links` (output and untrusted-text handling) |
 | `lua/gitsuite/util/` | Helpers shared by features that must not import each other (`repos`, `notify`) |

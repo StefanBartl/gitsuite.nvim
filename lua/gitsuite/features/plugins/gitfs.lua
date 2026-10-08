@@ -101,14 +101,18 @@ local function gitdir(dir)
   return dir .. "/.git"
 end
 
----The path of `rel` below `<dir>/.git`, after checking that every folder on the
----way is a plain directory (not a symlink or junction).
+---The path of `rel` below `<dir>/.git`, after checking that `.git` and every
+---folder on the way are plain directories (not a symlink or junction).
 ---@param dir string
 ---@param rel string  e.g. `refs/heads/main`
 ---@return string|nil path
 ---@return string|nil err
 local function under_git(dir, rel)
   local path = gitdir(dir)
+  -- `.git` itself too: a symlink there would lead every read out of the clone.
+  local root = uv.fs_lstat(path)
+  if not root then return nil, "missing" end
+  if root.type ~= "directory" then return nil, "not a plain folder" end
   local parts = vim.split(rel, "/", { plain = true })
   for i = 1, #parts - 1 do
     path = path .. "/" .. parts[i]

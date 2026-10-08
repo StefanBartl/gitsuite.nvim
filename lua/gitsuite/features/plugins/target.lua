@@ -14,7 +14,7 @@
 --- A pinned plugin is not moved at all. When none of this can be decided the
 --- answer is `unknown` with the reason -- never "compare with origin/HEAD":
 --- for a plugin on a tag range that compares against a branch lazy will never
---- check out (on this machine it reported 315 phantom commits).
+--- check out (one installation reported 315 phantom commits).
 ---
 --- Reads files only (`gitfs`); no network, no process.
 

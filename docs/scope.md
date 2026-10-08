@@ -75,7 +75,7 @@ reasons:
 | Question | What is the git state of all these repositories? | What did the plugins I installed change? |
 | Repositories | A directory (`dashboard.base_dir`, `$REPOS_DIR`) or configured groups | The clones a plugin manager installed |
 | Acts on them | Yes — push, pull and fetch, per row, marked set or page | **No** — reads files and `git log`; nothing is fetched or changed |
-| Keeps | Nothing (a live view) | Reports under `stdpath("state")/gitsuite/` |
+| Keeps | Only the per-page paths you add or hide with `a`/`x` (`stdpath("data")/gitsuite/dashboard_pages.json`); the table itself is a live view | Reports under `stdpath("state")/gitsuite/` |
 | Switch | No `features.*` flag — always registered | No `features.*` flag — always registered |
 
 Both are bounded by the same rule: they work on the repositories they were

@@ -480,4 +480,92 @@ describe("gitsuite plugin sources", function()
       vim.api.nvim_buf_delete(other, { force = true })
     end)
   end)
+
+  describe("review fixes", function()
+    it("resolves a buffer to the DEEPEST plugin folder that contains it", function()
+      local base = F.tmpdir("-nested")
+      local outer, inner = base .. "/outer", base .. "/outer/inner"
+      for _, dir in ipairs({ outer, inner }) do
+        vim.fn.mkdir(dir, "p")
+        F.git(dir, { "init", "-q", "-b", "main" })
+      end
+      require("gitsuite.config").setup({
+        plugins = { roots = { base, outer }, sources = { "clones" } },
+      })
+      F.write(inner .. "/a.lua", "return 1\n")
+      F.write(outer .. "/b.lua", "return 2\n")
+      local function owner(file)
+        local buf = vim.api.nvim_create_buf(false, true)
+        vim.api.nvim_buf_set_name(buf, file)
+        local target = sources.of_buffer(buf)
+        vim.api.nvim_buf_delete(buf, { force = true })
+        return target and target.name
+      end
+      assert.equals("inner", owner(inner .. "/a.lua"))
+      assert.equals("outer", owner(outer .. "/b.lua"))
+    end)
+
+    it("takes a source whose adapter throws for a failed source, not a crashed list", function()
+      local root = clone_root()
+      require("gitsuite.config").setup({ plugins = { roots = { root } } })
+      package.loaded["lazy.core.config"] = {
+        plugins = {
+          bad = setmetatable({}, {
+            __index = function()
+              error("boom from lazy internals")
+            end,
+          }),
+        },
+      }
+      local ok, refs, used, errors = pcall(function()
+        return sources.list()
+      end)
+      assert.is_true(ok, tostring(refs))
+      assert.same({ "clones" }, used)
+      assert.equals(2, #refs)
+      assert.is_truthy(errors[1] and errors[1]:find("^lazy"))
+    end)
+
+    it("expands a typed path once: a $ in a variable's value stays literal", function()
+      local base = F.tmpdir("-literal")
+      local literal = base .. "/lit$NAMEX"
+      vim.fn.mkdir(literal .. "/repo", "p")
+      F.git(literal .. "/repo", { "init", "-q", "-b", "main" })
+      local saved = { vim.env.GS_BASE, vim.env.NAMEX }
+      vim.env.GS_BASE = literal
+      vim.env.NAMEX = "other"
+      local target = sources.resolve("$GS_BASE/repo")
+      vim.env.GS_BASE, vim.env.NAMEX = saved[1], saved[2]
+      assert.is_not_nil(target)
+      assert.is_truthy(target.dir:find("lit$NAMEX/repo", 1, true))
+    end)
+
+    it("reaches a repository through a UNC path (Windows)", function()
+      if not require("lib.nvim.cross.platform.is_windows")() then return end
+      local repo = F.init("-unc-target")
+      local drive, rest = repo:match("^(%a):[/\\](.*)$")
+      if not drive then return end
+      local unc = ("//localhost/%s$/%s"):format(drive, rest:gsub("\\", "/"))
+      if not vim.uv.fs_stat(unc) then return end -- the admin share is not reachable here
+      local target, err = sources.resolve(unc)
+      assert.is_not_nil(target, err)
+      assert.equals("path", target.kind)
+      assert.is_truthy(target.dir:find("^//localhost/"))
+    end)
+
+    it("completes names without reading any clone's configuration", function()
+      local root = clone_root()
+      require("gitsuite.config").setup({ plugins = { roots = { root }, sources = { "clones" } } })
+      local opened = 0
+      local original = io.open
+      io.open = function(...)
+        opened = opened + 1
+        return original(...)
+      end
+      local names = sources.complete("al")
+      io.open = original
+      assert.same({ "alpha.nvim" }, names)
+      assert.equals(0, opened)
+    end)
+  end)
 end)

@@ -34,6 +34,16 @@ local function plain_name(s, allow_slash)
   return true
 end
 
+---A remote URL for a message: without the credentials a URL may carry
+---(`https://user:token@host/...`), which would otherwise land in the
+---notification history.
+---@param url string
+---@return string
+local function shown(url)
+  local without = url:gsub("^(%a[%w+.-]*://)[^/@]*@", "%1")
+  return text.one_line(without)
+end
+
 ---The forge the clone at `dir` was cloned from.
 ---@param dir string
 ---@return { kind: "github"|"gitlab"|"codeberg", remote: { host: string, owner: string, repo: string } }|nil
@@ -42,10 +52,9 @@ function M.forge(dir)
   local url = repos.origin_url(dir)
   if not url then return nil, "no 'origin' remote" end
   local parsed = remote.parse_remote(url)
-  if not parsed then return nil, "could not parse the remote URL: " .. text.one_line(url) end
+  if not parsed then return nil, "could not parse the remote URL: " .. shown(url) end
   if not plain_name(parsed.owner, true) or not plain_name(parsed.repo, false) then
-    return nil,
-      "the remote's owner or repository name has unusual characters: " .. text.one_line(url)
+    return nil, "the remote's owner or repository name has unusual characters: " .. shown(url)
   end
   local kind = remote.host_kind(parsed.host, require("gitsuite.config").get().browse.hosts)
   if not kind then

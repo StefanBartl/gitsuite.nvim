@@ -38,7 +38,8 @@ frozen yet: breaking changes are still possible.
 - `git` on `$PATH`
 - StefanBartl/lib.nvim (hard dependency)
 - StefanBartl/diff.nvim (hard dependency, used by `:Git diff *`/`:Git hunk *`)
-- StefanBartl/ui.nvim (hard dependency, used by `:Git dashboard`)
+- StefanBartl/ui.nvim (hard dependency, used by `:Git dashboard` and the picker of
+  `:Git plugins log`)
 
 See docs/requirements.md for the optional tools (gitsigns, diffview,
 neogit, lazygit, nvr, open.nvim, pickers.nvim) and exactly what each one
@@ -100,7 +101,7 @@ ours|theirs|both|base|none` asks which `=======` is the real one via
 `vim.ui.select` (a line-before/line-after preview per candidate) instead of
 guessing where our side ends -- the parser itself still never guesses, only
 the user does, with the buffer content in front of them. With exactly one
-candidate the *base* marker itself is what is ambiguous instead (two or more
+candidate the `base` marker itself is what is ambiguous instead (two or more
 `|||||||` before it), which no separator choice can resolve -- that case still
 refuses with a message; `*.md conflict-marker-size=10` in `.gitattributes`
 avoids either case for the next merge. diff3/zdiff3 are otherwise affected
@@ -192,7 +193,7 @@ ran in, `branch` the ref now checked out.
 
                                                     *GitsuiteConflictsResolved*
 `GitsuiteConflictsResolved`  `{ bufnr }` -- after `gitsuite.features.conflict
-.choose()` resolves the *last* remaining conflict region in a buffer, not on
+.choose()` resolves the last remaining conflict region in a buffer, not on
 every `choose()` call -- only once the buffer has none left.
 
                                                         *GitsuiteStatusChanged*
@@ -230,11 +231,13 @@ full wiring (heirline, the native statusline) and why the cache is keyed by
 9. HEALTH CHECK                                                  *gitsuite-health*
 
 `:checkhealth gitsuite` reports:
-  - lib.nvim / diff.nvim presence (hard dependencies -- error if missing)
+  - lib.nvim / diff.nvim / ui.nvim presence (hard dependencies -- error if missing)
   - `git` on `$PATH`
   - each adapter's availability (info, not warn/error -- see |gitsuite-adapters|)
   - the plugin sources `:Git plugins` reads (lazy, pack, clones)
   - the stored `:Git plugins report` reports (readable? from this machine?)
+  - plugin state (`vim.g.loaded_gitsuite`)
+  - `dashboard.extra_paths` entries (are they git repositories?)
   - rejected `setup()` options, if any
   - the composer's own route-tree check for `:Git`
 

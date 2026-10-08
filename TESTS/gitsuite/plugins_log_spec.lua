@@ -249,6 +249,29 @@ describe("gitsuite :Git plugins log", function()
         end, chunks))
       end
 
+      it("shows the newest MAX_PICKER_ROWS commits and says it cut the list", function()
+        local many = {}
+        for i = 1, view.MAX_PICKER_ROWS + 200 do
+          many[i] = vim.tbl_extend("force", entry, { sha = ("%040x"):format(i) })
+        end
+        local notify = require("gitsuite.util.notify")
+        local original, warned = notify.warn, {}
+        notify.warn = function(msg)
+          warned[#warned + 1] = msg
+        end
+        view.show({ kind = "path", name = "p", dir = "/d" }, many, "picker")
+        notify.warn = original
+        assert.equals(view.MAX_PICKER_ROWS, #spec.items)
+        assert.equals(many[1].sha, spec.items[1].sha)
+        assert.is_truthy(warned[1] and warned[1]:find("1000 of 1200", 1, true))
+      end)
+
+      it("searches on cleaned text, so a hostile message cannot hide in the filter", function()
+        local hostile = vim.tbl_extend("force", entry, { subject = "a\27[2Jb\0c" })
+        view.show({ kind = "path", name = "p", dir = "/d" }, { hostile }, "picker")
+        assert.is_nil(spec.text(hostile):find("[%c]"))
+      end)
+
       it("cleans every piece of foreign text it shows and drops the lazygit key", function()
         local target = { kind = "path", name = "n\27[2J", dir = "/d", ref = nil }
         view.show(target, { entry }, "picker")
@@ -486,6 +509,22 @@ describe("gitsuite :Git plugins log", function()
       local got, err = links.commit_url(repo, sha)
       assert.is_nil(got)
       assert.is_nil(err:find("\27", 1, true))
+    end)
+
+    it("keeps the credentials of a remote URL out of the messages", function()
+      local links = require("gitsuite.features.plugins.links")
+      local repo = F.init("-links-credentials")
+      local sha = F.commit(repo, "one")
+      for _, url in ipairs({
+        "https://user:ghp_SECRETTOKEN@github.com/%24HOME/thing.git",
+        "https://user:ghp_SECRETTOKEN@",
+      }) do
+        F.git(repo, { "config", "remote.origin.url", url })
+        local got, err = links.commit_url(repo, sha)
+        assert.is_nil(got, url)
+        assert.is_truthy(err, url)
+        assert.is_nil(err:find("ghp_SECRETTOKEN", 1, true), err)
+      end
     end)
 
     it("takes only a hex string as a commit hash", function()

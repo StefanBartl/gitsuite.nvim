@@ -409,8 +409,9 @@ local function build_routes()
     },
 
     -- plugins: the history of the clones a plugin manager installed. Reads
-    -- only (never fetches, never changes a clone). So far `log`, a
-    -- single-repository action like `ui lazygit [dir]`.
+    -- only (never fetches, never changes a clone). `log` is a
+    -- single-repository action like `ui lazygit [dir]`; `report` covers every
+    -- installed plugin.
     {
       path = { "plugins", "log" },
       args = {

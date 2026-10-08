@@ -52,7 +52,7 @@ summary notification when it's done — the same pair the dashboard's own
 Shows the newest `n` commits (default `plugins.log_limit`, 50, at most 5000) of one clone:
 an installed plugin by name (`<Tab>` completes the names of whatever lazy.nvim,
 `vim.pack` or your plugin folders hold — no process is started), the
-`owner/repo` of its remote, or a path to any git repository. Without a target
+`owner/repo` of its remote, or a path to the top of a git checkout that has its own `.git` directory (a worktree or submodule, whose `.git` is a file, is refused: point at the main checkout). Without a target
 it uses the plugin the current buffer's file belongs to, else asks. The
 installed commit (`HEAD`) and release tags are marked. The positional `n` needs
 a target before it (`log lazy.nvim 20`); for the buffer's own plugin write
@@ -115,7 +115,7 @@ previous commit) are shown as such, not as "N new commits".
 
 Reports live in `stdpath("state")/gitsuite/plugins_reports.json` — one file per
 machine, written atomically, never silently overwritten (an unreadable one is
-moved to `.corrupt`, one from another host or a newer gitsuite is left alone).
+moved to `.corrupt`; one written on another host is kept aside as `.foreign-<host>.bak` and this machine starts its own; one from a newer gitsuite, or a store that is not a plain file, is not touched and the report is not saved).
 `plugins.keep_reports`/`max_age_days` bound it, the newest report is never
 rotated out. After each report `User GitsuitePluginsReported` fires (see
 `doc/gitsuite.txt` §7).

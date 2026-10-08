@@ -73,7 +73,10 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 | `:Git ui lazygit [{dir:DIR}]` | Open lazygit in a floating terminal (optionally for the repo containing <dir>) |
 | `:Git ui neogit` | Open neogit |
 
-`--out` ∈ `popup | buffer | split | vsplit | clipboard | path`
+`--mode` ∈ `updated | pending`  
+`--out` ∈ `buffer | clipboard | path`  
+`--out` ∈ `picker | buffer | clipboard`  
+`--out` ∈ `popup | buffer | split | vsplit | clipboard | path`  
 
 ## Dashboard keys (component-local)
 

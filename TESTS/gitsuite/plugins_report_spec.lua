@@ -502,6 +502,70 @@ describe("gitsuite.features.plugins.markdown", function()
     assert.is_truthy(out:find("Nothing to report", 1, true))
   end)
 
+  it("words a pending rollback as something that would happen, not something that did", function()
+    local out = joined(markdown.render(
+      base("pending", {
+        {
+          name = "down",
+          status = "rollback",
+          source = "pending",
+          from = ("a"):rep(40),
+          to_label = "v1.0.0",
+          commits = { commit("c", "still installed", "<") },
+        },
+        {
+          name = "split",
+          status = "diverged",
+          source = "pending",
+          from = ("a"):rep(40),
+          to_label = "main",
+          commits = { commit("d", "would come", ">"), commit("e", "would go", "<") },
+        },
+      }),
+      NOW
+    ))
+    assert.is_truthy(out:find("update would roll back", 1, true))
+    assert.is_truthy(out:find("Commits the update would remove", 1, true))
+    assert.is_truthy(out:find("The update would add", 1, true))
+    assert.is_nil(out:find("rolled back", 1, true))
+    assert.is_nil(out:find("no longer installed", 1, true))
+    assert.is_nil(out:find("Only in the new state", 1, true))
+  end)
+
+  it(
+    "judges the age of the remote state over every clone looked at, not the listed ones",
+    function()
+      local pending = base("pending", {})
+      pending.fetch =
+        { checked = 5, known = 4, oldest = NOW - 40 * 86400, newest = NOW - 3 * 86400 }
+      local out = joined(markdown.render(pending, NOW))
+      assert.is_nil(out:find("No fetch is recorded", 1, true))
+      assert.is_truthy(out:find("last fetched 3 days ago (oldest 40 days ago)", 1, true))
+      assert.is_truthy(out:find("1 clone without a recorded fetch", 1, true))
+
+      pending.fetch = { checked = 5, known = 0 }
+      assert.is_truthy(joined(markdown.render(pending, NOW)):find("No fetch is recorded", 1, true))
+    end
+  )
+
+  it("renders a report whose sources or hashes are junk without raising", function()
+    local junk = base("updated", {
+      {
+        name = "p",
+        status = "forward",
+        source = "reflog",
+        from = "\27[2J|\nevil",
+        to = ("b"):rep(40),
+        commits = { commit("b", "x") },
+      },
+    })
+    junk.sources = { {}, true, "lazy" }
+    local lines = markdown.render(junk, NOW)
+    for _, l in ipairs(lines) do
+      assert.is_nil(l:find("[%c]"), l)
+    end
+  end)
+
   it("lists a rollback and a divergence honestly, not as new commits", function()
     local out = joined(markdown.render(
       base("updated", {
@@ -1185,6 +1249,293 @@ describe("gitsuite.features.plugins.report", function()
       build({ mode = "pending", persist = false, refs = { ref("current") } })
       gitlog.range = original
       assert.equals(0, spawned)
+    end)
+  end)
+
+  describe("hostile and odd input", function()
+    ---Replace `gitlog.range` for one test; returns the restore function.
+    local function stub_range(fn)
+      local original = gitlog.range
+      gitlog.range = fn
+      return function()
+        gitlog.range = original
+      end
+    end
+
+    it("leaves every clone exactly as it found it (both modes, and the log)", function()
+      local sroot = scenario()
+
+      ---Every file below the clones: path, size, modification time.
+      local function snapshot(base)
+        local out = {}
+        for path, kind in vim.fs.dir(base, { depth = 12 }) do
+          local abs = base .. "/" .. path
+          local st = vim.uv.fs_lstat(abs)
+          out[#out + 1] = ("%s %s %s %s"):format(
+            path,
+            kind,
+            st and st.size or "?",
+            st and st.mtime.sec or "?"
+          )
+        end
+        table.sort(out)
+        return out
+      end
+
+      local before = snapshot(sroot)
+      assert.is_true(#before > 20)
+      require("gitsuite.config").setup({ plugins = { roots = { sroot }, sources = { "clones" } } })
+      build({ mode = "updated", refs = refs_of(ALL, sroot), persist = false })
+      build({ mode = "pending", refs = refs_of(ALL, sroot), persist = false })
+      local done
+      plugins.log(sroot .. "/alpha", {
+        n = 5,
+        out = "clipboard",
+        on_done = function()
+          done = true
+        end,
+      })
+      vim.wait(30000, function()
+        return done
+      end, 10)
+      assert.is_true(done)
+      assert.same(before, snapshot(sroot))
+    end)
+
+    it("never stores the remote URL, so credentials in it stay out of the store", function()
+      local sroot = scenario()
+      local refs = refs_of({ "alpha" }, sroot)
+      refs[1].url = "https://user:ghp_SECRETTOKEN@github.com/o/alpha.git"
+      local report = build({ mode = "updated", refs = refs, store_path = store_path })
+      assert.is_nil(report.save_error)
+      assert.is_nil(report.plugins[1].url)
+      local f = assert(io.open(store_path, "rb"))
+      local raw = f:read("*a")
+      f:close()
+      assert.is_nil(raw:find("ghp_SECRETTOKEN", 1, true))
+    end)
+
+    it("stores a report even when a commit claims an impossible date", function()
+      local sroot = scenario()
+      local restore = stub_range(function(_, _, _, _, on_done)
+        vim.schedule(function()
+          on_done({
+            {
+              sha = ("a"):rep(40),
+              subject = "s",
+              body = "",
+              author = "a",
+              refs = {},
+              side = ">",
+              commit_time = math.huge,
+            },
+          })
+        end)
+        return { stop = function() end }
+      end)
+      local report = build({
+        mode = "updated",
+        refs = refs_of({ "alpha" }, sroot),
+        store_path = store_path,
+      })
+      restore()
+      assert.is_nil(report.save_error)
+      assert.is_nil(report.plugins[1].commits[1].time)
+      assert.is_not_nil(vim.uv.fs_stat(store_path))
+    end)
+
+    it("does not store a report of zero plugins over the real ones", function()
+      local sroot = scenario()
+      local real = build({
+        mode = "updated",
+        refs = refs_of(ALL, sroot),
+        store_path = store_path,
+      })
+      local empty = build({ mode = "updated", refs = {}, store_path = store_path })
+      assert.is_truthy(empty.save_error)
+      assert.equals(real.id, state.load(store_path).reports[1].id)
+    end)
+
+    it("falls back to the configured mode for a mode it does not know", function()
+      local report = build({ mode = "bogus", refs = {}, persist = false })
+      assert.equals(require("gitsuite.config").get().plugins.mode, report.mode)
+    end)
+
+    it("isolates a plugin whose version spec would blow the stack", function()
+      local sroot = scenario()
+      local refs = refs_of({ "alpha", "beta" }, sroot)
+      refs[2].spec = { version = ("1 - "):rep(10000) .. "2", pin = false }
+      local report = build({ mode = "pending", refs = refs, persist = false })
+      local by = by_name(report)
+      assert.is_not_nil(by.beta)
+      assert.equals("unknown_target", by.beta.status)
+    end)
+
+    it("records how many clones have a fetch on record (pending)", function()
+      local sroot = scenario()
+      local report = build({
+        mode = "pending",
+        refs = refs_of({ "alpha", "beta" }, sroot),
+        persist = false,
+      })
+      assert.equals(2, report.fetch.checked)
+      assert.equals(0, report.fetch.known) -- the scenario's clones were never fetched
+      assert.is_nil(
+        build({ mode = "updated", refs = refs_of({ "alpha" }, sroot), persist = false }).fetch
+      )
+    end)
+
+    it("counts failed rows, and reports them as errors in the event", function()
+      local sroot = scenario()
+      local report = build({ mode = "updated", refs = refs_of(ALL, sroot), persist = false })
+      assert.equals(1, report.counts.failed) -- forced: its previous state is gone
+    end)
+  end)
+
+  describe("the command, review fixes", function()
+    it("refuses an unknown mode", function()
+      local box
+      plugins.report({
+        mode = "x",
+        out = "clipboard",
+        on_done = function(report, err)
+          box = { report = report, err = err }
+        end,
+      })
+      assert.is_nil(box.report)
+      assert.is_truthy(box.err:find("unknown mode", 1, true))
+      assert.is_nil(vim.uv.fs_stat(store_path))
+    end)
+
+    it("runs one report at a time", function()
+      local sroot = scenario()
+      require("gitsuite.config").setup({ plugins = { roots = { sroot }, sources = { "clones" } } })
+      local calls = 0
+      local original = gitlog.range
+      gitlog.range = function(...)
+        calls = calls + 1
+        local args = { ... }
+        local on_done = args[5]
+        args[5] = function(...)
+          local results = { ... }
+          vim.defer_fn(function()
+            on_done(unpack(results))
+          end, 150)
+        end
+        return original(unpack(args))
+      end
+
+      local first, second
+      local handle = plugins.report({
+        mode = "updated",
+        out = "clipboard",
+        on_done = function(report)
+          first = report
+        end,
+      })
+      plugins.report({
+        mode = "updated",
+        out = "clipboard",
+        on_done = function(report, err)
+          second = { report = report, err = err }
+        end,
+      })
+      assert.is_nil(second.report)
+      assert.equals("already running", second.err)
+      vim.wait(30000, function()
+        return first ~= nil
+      end, 10)
+      assert.is_not_nil(first)
+      local per_run = calls
+      assert.is_true(per_run > 0)
+
+      -- finished: the next call is accepted again
+      local third
+      plugins.report({
+        mode = "updated",
+        out = "clipboard",
+        on_done = function(report)
+          third = report
+        end,
+      })
+      vim.wait(30000, function()
+        return third ~= nil
+      end, 10)
+      gitlog.range = original
+      assert.is_not_nil(third)
+      assert.is_not_nil(handle)
+    end)
+
+    it("--last leaves a broken store where it is and says why nothing is shown", function()
+      vim.fn.mkdir(vim.fs.dirname(store_path), "p")
+      F.write(store_path, "{ this is not json")
+      local box
+      plugins.report({
+        last = true,
+        out = "clipboard",
+        on_done = function(report, err)
+          box = { report = report, err = err }
+        end,
+      })
+      assert.is_nil(box.report)
+      assert.is_truthy(box.err:find("cannot be read", 1, true))
+      assert.is_not_nil(vim.uv.fs_stat(store_path), "a display command does not move the file")
+      assert.is_nil(vim.uv.fs_stat(store_path .. ".corrupt"))
+    end)
+
+    it("--last --mode names the other kind of report that is stored", function()
+      local sroot = scenario()
+      build({ mode = "updated", refs = refs_of(ALL, sroot), store_path = store_path })
+      local box
+      plugins.report({
+        last = true,
+        mode = "pending",
+        out = "clipboard",
+        on_done = function(report, err)
+          box = { report = report, err = err }
+        end,
+      })
+      assert.is_nil(box.report)
+      assert.is_truthy(box.err:find("no stored 'pending' report", 1, true))
+      assert.is_truthy(box.err:find("'updated'", 1, true))
+    end)
+  end)
+
+  describe("the route, review fixes", function()
+    it("--to=<file> alone means --out=path", function()
+      local sroot = scenario()
+      require("gitsuite.config").setup({ plugins = { roots = { sroot } } })
+      require("gitsuite.bindings.usrcmds").register(require("gitsuite.config").get())
+      local target = F.tmpdir("-route-out") .. "/report.md"
+      vim.cmd("Git plugins report --mode=updated --to=" .. vim.fn.fnameescape(target))
+      vim.wait(30000, function()
+        return vim.uv.fs_stat(target) ~= nil
+      end, 10)
+      local f = assert(io.open(target, "rb"), "the report file was written")
+      assert.is_truthy(f:read("*a"):find("## alpha", 1, true))
+      f:close()
+    end)
+
+    it("warns that --to is ignored with another output, and writes no file", function()
+      local sroot = scenario()
+      require("gitsuite.config").setup({ plugins = { roots = { sroot } } })
+      require("gitsuite.bindings.usrcmds").register(require("gitsuite.config").get())
+      local target = F.tmpdir("-route-ignored") .. "/report.md"
+      local notify = require("gitsuite.util.notify")
+      local original, warned = notify.warn, {}
+      notify.warn = function(msg)
+        warned[#warned + 1] = msg
+      end
+      vim.fn.setreg('"', "")
+      vim.cmd(
+        "Git plugins report --mode=updated --out=clipboard --to=" .. vim.fn.fnameescape(target)
+      )
+      vim.wait(30000, function()
+        return vim.fn.getreg('"'):find("Plugin changes", 1, true) ~= nil
+      end, 10)
+      notify.warn = original
+      assert.is_truthy(table.concat(warned, " "):find("--to is only used with --out=path", 1, true))
+      assert.is_nil(vim.uv.fs_stat(target))
     end)
   end)
 

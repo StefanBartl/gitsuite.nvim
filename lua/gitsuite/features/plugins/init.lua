@@ -1,8 +1,10 @@
 ---@module 'gitsuite.features.plugins'
 --- `:Git plugins` -- the history of the clones a plugin manager installed.
---- So far one action, `log` (the newest commits of one plugin or of any
---- clone). A whole-report over every installed plugin builds on the same
---- parts: `sources` (which clones), `gitlog` (read-only git), `view`.
+--- Two actions: `log` (the newest commits of one plugin or of any clone) and
+--- `report` (what the last update changed, or what the next one would bring,
+--- for every installed plugin). Both are built from the same parts: `sources`
+--- (which clones), `gitfs` (process-free `.git` reader), `gitlog` (read-only
+--- git), `view`.
 ---
 --- Strictly reading: nothing here installs, updates, pins or cleans anything,
 --- and no process started from this feature fetches (see `gitlog`).

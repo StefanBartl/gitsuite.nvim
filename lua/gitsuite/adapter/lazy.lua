@@ -63,32 +63,37 @@ function M.list(_opts)
 
   ---@type GitSuite.Plugins.Ref[]
   local refs = {}
-  for key, plugin in pairs(config.plugins) do
-    if type(plugin) == "table" then
-      local name = str(plugin.name) or str(key)
-      local dir = str(plugin.dir)
-      local state = type(plugin._) == "table" and plugin._ or {}
-      -- `virtual` plugins (lazy's own `dir = "/dev/null/..."` placeholders) have
-      -- no clone; a plugin lazy knows is not installed has none yet.
-      local virtual = plugin.virtual == true or (dir ~= nil and dir:find("^/dev/null") ~= nil)
-      if name and dir and not virtual and state.installed ~= false then
-        refs[#refs + 1] = {
-          name = name,
-          dir = dir,
-          url = str(plugin.url),
-          managed_by = "lazy",
-          is_local = state.is_local == true,
-          spec = {
-            branch = str(plugin.branch),
-            tag = str(plugin.tag),
-            commit = str(plugin.commit),
-            version = plugin.version,
-            pin = plugin.pin == true,
-          },
-        }
+  -- lazy's plugin objects are proxies over a metatable chain; a future version
+  -- may make an access throw. That is "unreadable", so the next source takes over.
+  local ok, err = pcall(function()
+    for key, plugin in pairs(config.plugins) do
+      if type(plugin) == "table" then
+        local name = str(plugin.name) or str(key)
+        local dir = str(plugin.dir)
+        local state = type(plugin._) == "table" and plugin._ or {}
+        -- `virtual` plugins (lazy's own `dir = "/dev/null/..."` placeholders) have
+        -- no clone; a plugin lazy knows is not installed has none yet.
+        local virtual = plugin.virtual == true or (dir ~= nil and dir:find("^/dev/null") ~= nil)
+        if name and dir and not virtual and state.installed ~= false then
+          refs[#refs + 1] = {
+            name = name,
+            dir = dir,
+            url = str(plugin.url),
+            managed_by = "lazy",
+            is_local = state.is_local == true,
+            spec = {
+              branch = str(plugin.branch),
+              tag = str(plugin.tag),
+              commit = str(plugin.commit),
+              version = plugin.version,
+              pin = plugin.pin == true,
+            },
+          }
+        end
       end
     end
-  end
+  end)
+  if not ok then return nil, "lazy.nvim: unreadable plugin data: " .. tostring(err) end
   table.sort(refs, function(a, b)
     return a.name < b.name
   end)

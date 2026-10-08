@@ -22,6 +22,20 @@ describe("gitsuite.config", function()
     assert.is_true(c.features.hunk)
   end)
 
+  it("rejects counts that are not usable numbers and keeps the default", function()
+    config.setup({})
+    local defaults = vim.deepcopy(config.get().plugins)
+    for _, key in ipairs({ "max_commits", "log_limit", "timeout_ms", "parallel", "keep_reports" }) do
+      for _, bad in ipairs({ math.huge, 1e300, 2 ^ 63, 0, -5, 2.5, 0 / 0 }) do
+        package.loaded["gitsuite.config"] = nil
+        config = require("gitsuite.config")
+        config.setup({ plugins = { [key] = bad } })
+        assert.equals(defaults[key], config.get().plugins[key], key .. " = " .. tostring(bad))
+        assert.is_true(#config.issues() > 0, key .. " = " .. tostring(bad))
+      end
+    end
+  end)
+
   it("drops an unknown top-level key and records it in issues() (ERR-50)", function()
     config.setup({ not_a_real_key = true })
     local issues = config.issues()

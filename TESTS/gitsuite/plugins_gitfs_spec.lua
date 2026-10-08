@@ -314,6 +314,96 @@ describe("gitsuite.features.plugins.gitfs", function()
     -- budget from the task: 50 clones under 200 ms; generous here for slow CI
     assert.is_true(ms < 1000, ("50 clones took %.0f ms"):format(ms))
   end)
+  describe("hostile contents", function()
+    ---Replace `path` by a symlink to `target`; false when symlinks are not allowed here.
+    local function link(target, path)
+      vim.uv.fs_unlink(path)
+      return vim.uv.fs_symlink(target, path) == true
+    end
+
+    it("does not follow a symlinked HEAD or ref file", function()
+      local repo, _, b = two_commits("-sym")
+      local secret = F.tmpdir("-sym-target") .. "/secret"
+      F.write(secret, b .. "\n")
+      if not link(secret, repo .. "/.git/refs/heads/main") then return end
+      assert.is_nil(gitfs.ref(repo, "refs/heads/main"))
+      assert.is_true(link(secret, repo .. "/.git/HEAD"))
+      local head, err = gitfs.head(repo)
+      assert.is_nil(head)
+      assert.is_truthy(err)
+    end)
+
+    it("does not take a symlinked .git for a clone", function()
+      local real = F.init("-link-real")
+      F.commit(real, "one")
+      local outer = F.tmpdir("-link-outer")
+      if not vim.uv.fs_symlink(real .. "/.git", outer .. "/.git", { dir = true }) then return end
+      assert.equals("link", gitfs.clone_state(outer))
+      assert.is_false(gitfs.is_clone(outer))
+      assert.is_nil(gitfs.head(outer))
+    end)
+
+    it("says so when packed-refs is too big to read, instead of reading it as empty", function()
+      local repo = two_commits("-big-packed")
+      F.write(repo .. "/.git/packed-refs", ("%s refs/tags/v1\n"):format(("a"):rep(40)):rep(10))
+      local original = gitfs.MAX_PACKED
+      gitfs.MAX_PACKED = 64
+      local refs, incomplete = gitfs.packed_refs(repo)
+      local names, tags_incomplete = gitfs.tag_names(repo)
+      local reason = gitfs.refs_incomplete(repo)
+      gitfs.MAX_PACKED = original
+      assert.same({}, refs)
+      assert.is_truthy(incomplete)
+      assert.is_truthy(tags_incomplete)
+      assert.same({}, names)
+      assert.is_truthy(reason)
+    end)
+
+    it("caps the loose tags it lists and says it did", function()
+      local repo, a = two_commits("-many-tags")
+      for i = 1, 5 do
+        F.write(repo .. "/.git/refs/tags/t" .. i, a .. "\n")
+      end
+      local original = gitfs.MAX_TAGS
+      gitfs.MAX_TAGS = 3
+      local names, incomplete = gitfs.tag_names(repo)
+      gitfs.MAX_TAGS = original
+      assert.is_true(#names <= 3)
+      assert.is_truthy(incomplete)
+    end)
+
+    it("does not read a HEAD that is far longer than any real one", function()
+      local repo = two_commits("-long-head")
+      F.write(repo .. "/.git/HEAD", "ref: refs/heads/" .. ("a"):rep(5000) .. "\n")
+      local head, err = gitfs.head(repo)
+      assert.is_nil(head)
+      assert.is_truthy(err)
+    end)
+
+    it("recognises the reftable placeholder instead of mistaking it for a branch", function()
+      local repo = two_commits("-reftable")
+      F.write(repo .. "/.git/HEAD", "ref: refs/heads/.invalid\n")
+      local head, err = gitfs.head(repo)
+      assert.is_nil(head)
+      assert.is_truthy(err:find("reftable", 1, true))
+    end)
+
+    it("refuses ref names with a line break, NUL or a '..' component", function()
+      for _, bad in ipairs({ "refs/heads/a\nb", "refs/heads/a\0b", "refs/heads/a/../b" }) do
+        assert.is_false(gitfs.valid_refname(bad))
+      end
+    end)
+
+    it("sees a network path in the clone's own files before git is started (Windows)", function()
+      local repo = two_commits("-unc")
+      F.write(repo .. "/.git/objects/info/alternates", "//attacker/share/objects\n")
+      if require("lib.nvim.cross.platform.is_windows")() then
+        assert.is_truthy(gitfs.network_path(repo))
+      else
+        assert.is_nil(gitfs.network_path(repo))
+      end
+    end)
+  end)
 end)
 
 describe("gitsuite.features.plugins.semver (lazy's version ranges)", function()

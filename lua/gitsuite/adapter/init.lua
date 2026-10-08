@@ -1,6 +1,7 @@
 ---@module 'gitsuite.adapter'
 --- Adapter registry: load, resolve and cache the git-UI backends (gitsigns,
---- diffview, neogit, lazygit, native). Template: filetree.nvim's
+--- diffview, neogit, lazygit, native) and the plugin sources `features/plugins`
+--- reads (lazy, pack, clones). Template: filetree.nvim's
 --- `adapter/init.lua` (register/resolve/get/list), adjusted for gitsuite's
 --- shape -- unlike a file explorer, gitsuite has several independent feature
 --- families (hunk, ui, blame, ...) that each prefer a different backend, so

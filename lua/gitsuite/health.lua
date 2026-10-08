@@ -33,10 +33,10 @@ function M.check()
   end
 
   if pcall(require, "ui.kit") then
-    vim.health.ok("ui.nvim detected (:Git dashboard available)")
+    vim.health.ok("ui.nvim detected (:Git dashboard and :Git plugins log available)")
   else
     vim.health.error(
-      "ui.nvim not found -- :Git dashboard will fail",
+      "ui.nvim not found -- :Git dashboard and :Git plugins log will fail",
       { 'Install "StefanBartl/ui.nvim" as a dependency' }
     )
   end
