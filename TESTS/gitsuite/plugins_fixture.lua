@@ -90,6 +90,67 @@ return function()
     return (F.git(dir, { "rev-parse", "HEAD" }))
   end
 
+  ---Run a `git fast-import` stream in `dir` -- one process for any number of
+  ---commits and refs (a spawn costs 100+ ms on Windows, so building a history
+  ---commit by commit makes a spec file crawl). Returns the hash of every mark.
+  ---@param dir string
+  ---@param stream string
+  ---@return table<integer, string> marks  `marks[n]` is the hash of `:n`.
+  function F.fast_import(dir, stream)
+    local marks_file = vim.fn.tempname()
+    local argv = vim.list_extend(vim.deepcopy(BASE), {
+      "-C",
+      dir,
+      "fast-import",
+      "--quiet",
+      "--export-marks=" .. marks_file,
+    })
+    local res = vim.system(argv, { stdin = stream, text = true }):wait()
+    assert(res.code == 0, "fixture: fast-import failed: " .. (res.stderr or ""))
+    local marks = {}
+    for line in io.lines(marks_file) do
+      local n, sha = line:match("^:(%d+) (%x+)$")
+      if n then marks[tonumber(n)] = sha end
+    end
+    vim.fn.delete(marks_file)
+    return marks
+  end
+
+  ---A fast-import `data` block.
+  ---@param s string
+  ---@return string
+  function F.data(s)
+    return ("data %d\n%s\n"):format(#s, s)
+  end
+
+  ---`n` linear commits on `branch` (file `f.txt` holds the commit number),
+  ---dated `first + 100 * i`. Mark `:i` is commit `i`.
+  ---@param dir string
+  ---@param n integer
+  ---@param opts? { branch?: string, first?: integer, extra?: string }  `extra` is more stream text appended (tags, resets).
+  ---@return string[] shas
+  function F.history(dir, n, opts)
+    opts = opts or {}
+    local branch = opts.branch or "main"
+    local first = opts.first or 1700000000
+    local parts = {}
+    for i = 1, n do
+      parts[#parts + 1] = ("commit refs/heads/%s\nmark :%d\ncommitter T <t@example.invalid> %d +0000\n"):format(
+        branch,
+        i,
+        first + 100 * i
+      ) .. F.data("c" .. i) .. (i > 1 and ("from :%d\n"):format(i - 1) or "") .. "M 100644 inline f.txt\n" .. F.data(
+        i .. "\n"
+      ) .. "\n"
+    end
+    local marks = F.fast_import(dir, table.concat(parts) .. (opts.extra or ""))
+    local shas = {}
+    for i = 1, n do
+      shas[i] = marks[i]
+    end
+    return shas
+  end
+
   function F.cleanup()
     for _, dir in ipairs(created) do
       vim.fn.delete(dir, "rf")

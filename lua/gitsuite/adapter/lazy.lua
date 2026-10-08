@@ -38,6 +38,17 @@ function M.version()
   return type(config) == "table" and str(config.version) or nil
 end
 
+---lazy's `defaults.version` option: the version range that applies to a plugin
+---whose spec has neither `version` nor `branch`. `nil` when unset or when the
+---structure is not what this adapter knows.
+---@return any
+function M.defaults_version()
+  local config = package.loaded["lazy.core.config"]
+  local options = type(config) == "table" and config.options or nil
+  local defaults = type(options) == "table" and options.defaults or nil
+  return type(defaults) == "table" and defaults.version or nil
+end
+
 ---Every plugin lazy.nvim has installed (including the `dir`-mode ones, flagged
 ---`is_local`), sorted by name.
 ---@param _opts? table
