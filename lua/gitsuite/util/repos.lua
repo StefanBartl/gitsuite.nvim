@@ -100,6 +100,32 @@ end
 ---Longest `.git/config` line `origin_url` looks at; a real URL is far shorter.
 M.MAX_CONFIG_LINE = 4096
 
+---The value of a `key = value` line as git reads it: a double-quoted value is
+---taken up to its closing quote (`\"` and `\\` unescaped); an unquoted one ends
+---at the first `;` or `#` (a comment) and loses the whitespace around it.
+---@param raw string  Everything after the `=`
+---@return string
+local function parse_config_value(raw)
+  local value = raw:gsub("^%s+", "")
+  if value:sub(1, 1) == '"' then
+    local out, i = {}, 2
+    while i <= #value do
+      local c = value:sub(i, i)
+      if c == "\\" then
+        out[#out + 1] = value:sub(i + 1, i + 1)
+        i = i + 2
+      elseif c == '"' then
+        break
+      else
+        out[#out + 1] = c
+        i = i + 1
+      end
+    end
+    return table.concat(out)
+  end
+  return M.rtrim((value:gsub("[;#].*$", "")))
+end
+
 ---The URL of the `origin` remote, read from `<dir>/.git/config` **without
 ---running git** -- so it needs no process, no timeout and cannot be reached by
 ---anything git does with a hostile configuration. Bounded: only a regular file
@@ -108,23 +134,23 @@ M.MAX_CONFIG_LINE = 4096
 ---@param dir string
 ---@return string|nil
 function M.origin_url(dir)
-  local path = dir .. "/.git/config"
-  local stat = uv.fs_lstat(path)
-  if not stat or stat.type ~= "file" or stat.size > 262144 then return nil end
-  local f = io.open(path, "rb")
-  if not f then return nil end
-  local text = f:read("*a") or ""
-  f:close()
+  local text =
+    require("lib.nvim.fs.read_bounded")(dir .. "/.git/config", 262144, { follow_symlinks = false })
+  if not text then return nil end
   local in_origin = false
   for line in (text:gsub("\r\n", "\n")):gmatch("[^\n]+") do
     if #line <= M.MAX_CONFIG_LINE then
-      local section = line:match("^%s*%[(.-)%]%s*$")
-      if section then
-        in_origin = section:match('^remote%s+"origin"$') ~= nil
-      elseif in_origin then
-        local value = line:match("^%s*url%s*=(.*)$")
-        if value then
-          local url = M.rtrim(value):gsub("^%s+", "")
+      local header, rest = line:match("^%s*%[(.-)%]%s*(.*)$")
+      if header then
+        -- section names are case-insensitive, the quoted subsection is not
+        local name, sub = header:match('^(%S+)%s+"(.*)"$')
+        in_origin = name ~= nil and name:lower() == "remote" and sub == "origin"
+        line = rest -- `[remote "origin"] url = x` keeps its entry on the header line
+      end
+      if in_origin then
+        local key, value = line:match("^%s*([%w%-]+)%s*=(.*)$")
+        if key and key:lower() == "url" then
+          local url = parse_config_value(value)
           if url ~= "" then return url end
         end
       end
