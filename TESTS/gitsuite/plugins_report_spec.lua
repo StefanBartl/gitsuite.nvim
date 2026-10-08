@@ -765,6 +765,19 @@ describe("gitsuite.features.plugins.report", function()
       assert.is_nil(by.forced.commits)
     end)
 
+    it("gives a worktree-style clone (.git is a file) its own honest row", function()
+      local dir = root .. "/worktree"
+      vim.fn.mkdir(dir, "p")
+      F.write(dir .. "/.git", "gitdir: /elsewhere/.git/worktrees/x\n")
+      for _, mode in ipairs({ "updated", "pending" }) do
+        local report = build({ mode = mode, refs = refs_of({ "worktree" }), persist = false })
+        local entry = assert(by_name(report).worktree, mode)
+        assert.equals("no_git", entry.status)
+        assert.is_truthy(entry.reason:find("not a directory", 1, true))
+        assert.equals(0, report.counts.changed)
+      end
+    end)
+
     it("says when nothing was updated", function()
       clone("lonely", 2, 2, function(s)
         return {
