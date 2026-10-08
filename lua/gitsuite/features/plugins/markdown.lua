@@ -42,7 +42,7 @@ end
 ---@param sha any
 ---@return string
 local function short(sha)
-  return type(sha) == "string" and sha:sub(1, 8) or "?"
+  return type(sha) == "string" and (sha:match("^%x+") or "?"):sub(1, 8) or "?"
 end
 
 ---@param t any
@@ -91,7 +91,10 @@ local STATUS_LABEL = {
 ---@param mode string
 ---@return string
 local function status_label(entry, mode)
-  if entry.status == "forward" and mode == "pending" then return "update available" end
+  if mode == "pending" then
+    if entry.status == "forward" then return "update available" end
+    if entry.status == "rollback" then return "update would roll back" end
+  end
   return STATUS_LABEL[entry.status] or esc(entry.status)
 end
 
@@ -134,7 +137,10 @@ local function commit_list(lines, commits, side, heading)
   lines[#lines + 1] = ""
   for i, commit in ipairs(picked) do
     if i > M.MAX_LISTED then
-      lines[#lines + 1] = ("- … %d more"):format(#picked - M.MAX_LISTED)
+      lines[#lines + 1] = ("- … %d more (display limit %d per list; the stored report has them all)"):format(
+        #picked - M.MAX_LISTED,
+        M.MAX_LISTED
+      )
       break
     end
     commit_line(lines, commit)
@@ -158,7 +164,12 @@ function M.render(report, now)
   add(
     ("- Host: %s · sources: %s%s"):format(
       cell(report.host or "?"),
-      cell(table.concat(report.sources or {}, ", ")),
+      cell(table.concat(
+        vim.tbl_filter(function(v)
+          return type(v) == "string"
+        end, report.sources or {}),
+        ", "
+      )),
       report.lazy and (" · lazy.nvim " .. cell(report.lazy)) or ""
     )
   )
@@ -185,19 +196,29 @@ function M.render(report, now)
     add(
       "- Compares the current state with the target lazy.nvim would move to — as of each clone's last fetch. gitsuite does not fetch; `:Lazy check` does."
     )
-    local oldest, newest
-    for _, entry in ipairs(report.plugins) do
-      local at = entry.fetched_at
-      if type(at) == "number" then
-        oldest = oldest and math.min(oldest, at) or at
-        newest = newest and math.max(newest, at) or at
+    -- The age of the remote state is judged over EVERY clone looked at (the
+    -- report carries it: up-to-date plugins are not listed); a report stored
+    -- before that was recorded falls back to the plugins it lists.
+    local fetch = report.fetch
+    if type(fetch) ~= "table" then
+      fetch = { checked = #report.plugins, known = 0 }
+      for _, entry in ipairs(report.plugins) do
+        local at = entry.fetched_at
+        if type(at) == "number" then
+          fetch.known = fetch.known + 1
+          fetch.oldest = fetch.oldest and math.min(fetch.oldest, at) or at
+          fetch.newest = fetch.newest and math.max(fetch.newest, at) or at
+        end
       end
     end
-    if oldest then
+    if fetch.oldest and fetch.newest then
       add(
-        ("- Remote state: last fetched %s ago (oldest %s ago)."):format(
-          age(newest, now),
-          age(oldest, now)
+        ("- Remote state: last fetched %s ago (oldest %s ago)%s."):format(
+          age(fetch.newest, now),
+          age(fetch.oldest, now),
+          fetch.known < fetch.checked
+              and ("; " .. plural(fetch.checked - fetch.known, "clone") .. " without a recorded fetch")
+            or ""
         )
       )
     else
@@ -213,7 +234,7 @@ function M.render(report, now)
   add("## Summary")
   add("")
   add(
-    ("%s checked · %s changed · %s listed · %s unchanged or not compared"):format(
+    ("%s checked · %s changed · %s in the report · %s unchanged or not compared"):format(
       plural(counts.checked or 0, "plugin"),
       tostring(counts.changed or 0),
       plural(counts.commits or 0, "commit"),
@@ -222,10 +243,7 @@ function M.render(report, now)
   )
   add("")
 
-  local shown = {}
-  for _, entry in ipairs(report.plugins) do
-    shown[#shown + 1] = entry
-  end
+  local shown = report.plugins
   if #shown == 0 then
     add("Nothing to report.")
     add("")
@@ -264,10 +282,26 @@ function M.render(report, now)
       end
       if has_commits then
         if entry.status == "rollback" then
-          commit_list(lines, entry.commits, nil, "Commits no longer installed:")
+          commit_list(
+            lines,
+            entry.commits,
+            nil,
+            mode == "pending" and "Commits the update would remove:"
+              or "Commits no longer installed:"
+          )
         elseif entry.status == "diverged" then
-          commit_list(lines, entry.commits, ">", "Only in the new state:")
-          commit_list(lines, entry.commits, "<", "Only in the old state:")
+          commit_list(
+            lines,
+            entry.commits,
+            ">",
+            mode == "pending" and "The update would add:" or "Only in the new state:"
+          )
+          commit_list(
+            lines,
+            entry.commits,
+            "<",
+            mode == "pending" and "The update would remove:" or "Only in the old state:"
+          )
         else
           commit_list(
             lines,

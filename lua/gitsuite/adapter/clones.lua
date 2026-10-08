@@ -50,22 +50,27 @@ function M.roots(opts)
   return out
 end
 
----@param opts? { roots?: string[] }
+---@param opts? { roots?: string[], urls?: boolean }  `urls = false` skips reading each clone's `.git/config` (completion needs names only).
 ---@return GitSuite.Plugins.Ref[] refs
 function M.list(opts)
   ---@type GitSuite.Plugins.Ref[]
   local refs = {}
   local seen = {}
+  local with_urls = not (opts and opts.urls == false)
   for _, root in ipairs(M.roots(opts)) do
-    for _, dir in ipairs(repos.collect_repos(root)) do
-      dir = vim.fs.normalize(dir)
-      local key = repos.comparison_key(dir)
-      if repos.is_git_dir(dir) and not seen[key] then
+    local handle = uv.fs_scandir(root)
+    while handle do
+      local name, typ = uv.fs_scandir_next(handle)
+      if not name then break end
+      -- (one `.git` stat per child; a plain file can never be a clone)
+      local dir = typ ~= "file" and vim.fs.normalize(root .. "/" .. name) or nil
+      local key = dir and repos.comparison_key(dir)
+      if dir and key and not seen[key] and repos.git_marker(dir) == "directory" then
         seen[key] = true
         refs[#refs + 1] = {
           name = vim.fs.basename(dir),
           dir = dir,
-          url = repos.origin_url(dir),
+          url = with_urls and repos.origin_url(dir) or nil,
           managed_by = "clones",
           is_local = false,
           spec = { pin = false },

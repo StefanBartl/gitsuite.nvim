@@ -493,10 +493,23 @@ local function build_routes()
       },
       desc = "Report what changed in the installed plugins: the last update (--mode=updated) or what is pending (--mode=pending); reads local state only",
       run = function(ctx)
+        -- `--to=<file>` names a file, so it means `--out=path`; with another output
+        -- it would be silently ignored.
+        local to = ctx.flags.to
+        if to == "" then to = nil end
+        local out = ctx.flags.out
+        if to and out == nil then
+          out = "path"
+        elseif to and out ~= "path" then
+          require("gitsuite.util.notify").warn(
+            ("plugins report: --to is only used with --out=path (ignored for --out=%s)"):format(out)
+          )
+          to = nil
+        end
         require("gitsuite.features.plugins").report({
           mode = ctx.flags.mode,
-          out = ctx.flags.out,
-          to = ctx.flags.to,
+          out = out,
+          to = to,
           all = ctx.flags.all == true,
           last = ctx.flags.last == true,
         })

@@ -94,11 +94,15 @@ local function is_valid_groups(v)
 end
 
 ---@internal
----A positive whole number (a count or a timeout in milliseconds).
----@param v any
----@return boolean
-local function is_positive_int(v)
-  return type(v) == "number" and v >= 1 and v == math.floor(v)
+---A whole number from 1 to `max` (a count, or a timeout in milliseconds). The
+---upper bound keeps `math.huge`, `1e300` and `2^63` out: they pass a bare
+---"is it integral" test, then break the git command line or print as garbage.
+---@param max integer
+---@return fun(v: any): boolean
+local function int_in(max)
+  return function(v)
+    return type(v) == "number" and v >= 1 and v <= max and v == math.floor(v)
+  end
 end
 
 ---@internal
@@ -166,16 +170,19 @@ local KNOWN = {
   plugins = {
     sources = { ok = is_sources, expect = '"auto" or a list of "lazy", "pack", "clones"' },
     roots = { ok = is_list_of_strings, expect = "a table (list of non-empty path strings)" },
-    log_limit = { ok = is_positive_int, expect = "a positive integer" },
-    timeout_ms = { ok = is_positive_int, expect = "a positive integer (milliseconds)" },
+    log_limit = { ok = int_in(1000000), expect = "a whole number from 1 to 1000000" },
+    timeout_ms = {
+      ok = int_in(2147483647),
+      expect = "a whole number of milliseconds (1 to 2147483647)",
+    },
     include_local = { ok = is_boolean, expect = "a boolean" },
     mode = { ok = is_report_mode, expect = '"updated" or "pending"' },
-    max_commits = { ok = is_positive_int, expect = "a positive integer" },
-    parallel = { ok = is_positive_int, expect = "a positive integer" },
-    run_window_s = { ok = is_positive_int, expect = "a positive integer (seconds)" },
+    max_commits = { ok = int_in(1000000), expect = "a whole number from 1 to 1000000" },
+    parallel = { ok = int_in(64), expect = "a whole number from 1 to 64" },
+    run_window_s = { ok = int_in(31536000), expect = "a whole number of seconds (1 to 31536000)" },
     merges = { ok = is_boolean, expect = "a boolean" },
-    keep_reports = { ok = is_positive_int, expect = "a positive integer" },
-    max_age_days = { ok = is_positive_int, expect = "a positive integer (days)" },
+    keep_reports = { ok = int_in(10000), expect = "a whole number from 1 to 10000" },
+    max_age_days = { ok = int_in(36500), expect = "a whole number of days (1 to 36500)" },
   },
   progress_style = { ok = is_string, expect = "a non-empty string" },
 }

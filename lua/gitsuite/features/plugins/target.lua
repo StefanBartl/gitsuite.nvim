@@ -35,6 +35,8 @@ local M = {}
 
 ---@class GitSuite.Plugins.TargetOpts
 ---@field defaults_version? any  lazy's `defaults.version` option.
+---@field head? GitSuite.Plugins.Head  The clone's HEAD, when the caller has read it already (saves a second read).
+---@field cloned? boolean  The caller has checked that `ref.dir` has its own `.git` directory.
 
 ---@param reason string
 ---@return GitSuite.Plugins.TargetResolution
@@ -71,9 +73,9 @@ end
 function M.resolve(ref, opts)
   opts = opts or {}
   local dir = ref.dir
-  if not gitfs.is_clone(dir) then return unknown("no .git directory") end
+  if opts.cloned ~= true and not gitfs.is_clone(dir) then return unknown("no .git directory") end
   local spec = ref.spec or {}
-  local head = gitfs.head(dir)
+  local head = opts.head or gitfs.head(dir)
 
   local function default_branch()
     local target = gitfs.symref(dir, "refs/remotes/origin/HEAD")
@@ -86,7 +88,11 @@ function M.resolve(ref, opts)
     if not valid_branch(branch) then return unknown("cannot tell which branch it follows") end
     local sha = gitfs.ref(dir, "refs/remotes/origin/" .. branch)
       or gitfs.ref(dir, "refs/heads/" .. branch)
-    if not sha then return unknown(("branch '%s' is not known locally"):format(branch)) end
+    if not sha then
+      local incomplete = gitfs.refs_incomplete(dir)
+      if incomplete then return unknown("too many refs to read without git: " .. incomplete) end
+      return unknown(("branch '%s' is not known locally"):format(branch))
+    end
     return { tier = "branch", rev = sha, sha = sha, certain = true, label = branch, branch = branch }
   end
 

@@ -73,8 +73,13 @@ function M.check()
   for _, name in ipairs({ "lazy", "pack", "clones" }) do
     local source = adapter.resolve(name)
     if source then
-      ---@diagnostic disable-next-line: undefined-field
-      local refs, err = source.list({ roots = require("gitsuite.config").get().plugins.roots })
+      -- (a throwing adapter is a finding, not the end of this check)
+      local called, refs, err = pcall(source.list, {
+        roots = require("gitsuite.config").get().plugins.roots,
+      })
+      if not called then
+        refs, err = nil, tostring(refs)
+      end
       if refs then
         local detail = ""
         if name == "lazy" then
@@ -102,9 +107,22 @@ function M.check()
   end
   local plugins_cfg = require("gitsuite.config").get().plugins
   vim.health.info("plugins.sources = " .. vim.inspect(plugins_cfg.sources):gsub("%s+", " "))
-  for _, root in ipairs(plugins_cfg.roots) do
-    if vim.fn.isdirectory(vim.fn.expand(root)) == 0 then
-      vim.health.warn(("plugins.roots entry does not exist: %s"):format(root))
+  if #plugins_cfg.roots > 0 then
+    -- Resolved the way the `clones` source resolves them (`~`, `$VAR`, `%VAR%`),
+    -- not with `expand()`, which would also run backtick commands and read
+    -- wildcards in a config string.
+    local resolved_ok, resolved = pcall(function()
+      return require("gitsuite.adapter.clones").roots({ roots = plugins_cfg.roots })
+    end)
+    if resolved_ok then
+      local is_dir = require("lib.nvim.fs.is_dir")
+      for i, abs in ipairs(resolved) do
+        if not is_dir(abs) then
+          vim.health.warn(("plugins.roots entry does not exist: %s"):format(plugins_cfg.roots[i]))
+        end
+      end
+    else
+      vim.health.warn("plugins.roots could not be resolved: " .. tostring(resolved))
     end
   end
   local _, used, plugin_errors = plugin_sources.list()
@@ -127,9 +145,15 @@ function M.check()
   local report_state = require("gitsuite.features.plugins.state")
   local store, store_info = report_state.load(nil, { peek = true })
   if store_info.readonly then
+    local advice = {
+      newer = "Update gitsuite.nvim, or remove " .. report_state.path(),
+      not_file = "Replace " .. report_state.path() .. " by a regular file (or remove it)",
+      unopenable = "Close whatever holds " .. report_state.path() .. " open and try again",
+      unmovable = "Remove or rename " .. report_state.path() .. " by hand",
+    }
     vim.health.warn(
       store_info.readonly,
-      { "Update gitsuite.nvim, or remove " .. report_state.path() }
+      { advice[store_info.readonly_kind] or ("Check " .. report_state.path()) }
     )
   elseif store_info.recovered then
     vim.health.warn(

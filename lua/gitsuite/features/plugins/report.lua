@@ -48,7 +48,6 @@ M.MAX_BODY = 2048
 ---@class GitSuite.Plugins.ReportEntry
 ---@field name string
 ---@field dir string
----@field url? string
 ---@field managed_by string
 ---@field status "forward"|"rollback"|"diverged"|"same"|"new"|"pinned"|"unknown_target"|"from_missing"|"error"|"no_git"
 ---@field source "reflog"|"snapshot"|"pending"
@@ -78,7 +77,8 @@ M.MAX_BODY = 2048
 ---@field run? { first: integer, last: integer, older: integer, plugins: integer }
 ---@field plugins GitSuite.Plugins.ReportEntry[]
 ---@field heads table<string, string>  Where every plugin looked at stood (clone path -> commit), changed or not: the fallback for "from" when a reflog says nothing.
----@field counts { checked: integer, changed: integer, commits: integer, unchanged: integer }
+---@field counts { checked: integer, changed: integer, commits: integer, unchanged: integer, failed?: integer }
+---@field fetch? { checked: integer, known: integer, oldest?: integer, newest?: integer }  `pending` only: how many clones have a recorded fetch and when (unchanged clones are not listed, but they are what "up to date" is judged against).
 ---@field errors string[]
 ---@field save_error? string
 
@@ -99,12 +99,62 @@ M.MAX_BODY = 2048
 local function base_entry(entry, ref, head)
   entry.name = ref.name
   entry.dir = ref.dir
-  entry.url = ref.url
   entry.managed_by = ref.managed_by
   entry.head = head and head.sha or nil
   entry.fetched_at = gitfs.fetch_time(ref.dir)
   entry.locked = gitfs.index_locked(ref.dir) or nil
   return entry
+end
+
+---Why a clone's `.git` cannot be used, by what `gitfs.clone_state` found.
+local NO_GIT = {
+  file = "its .git is a file (a worktree or submodule): its history lives elsewhere",
+  link = "its .git is a symbolic link, which is not followed",
+  other = "its .git is not a directory",
+  none = "it has no .git",
+}
+
+---The row for a clone whose state cannot be read: no usable `.git`, or a HEAD
+---that does not name a commit.
+---@param ref GitSuite.Plugins.Ref
+---@param head GitSuite.Plugins.Head|nil
+---@param herr string|nil
+---@param source "reflog"|"pending"
+---@return GitSuite.Plugins.ReportEntry
+local function unreadable_row(ref, head, herr, source)
+  local clone = gitfs.clone_state(ref.dir)
+  if clone ~= "clone" then
+    return base_entry({
+      status = "no_git",
+      source = source,
+      confidence = "exact",
+      reason = NO_GIT[clone] or NO_GIT.other,
+    }, ref, nil)
+  end
+  return base_entry({
+    status = "error",
+    source = source,
+    confidence = "exact",
+    reason = "HEAD could not be read: " .. text.one_line(herr or "no commit"),
+  }, ref, head)
+end
+
+---Run `fn` for one plugin; an error in it makes that plugin's row, not the
+---report's failure (a hostile spec or clone must not take the others with it).
+---@param ctx table
+---@param ref GitSuite.Plugins.Ref
+---@param source "reflog"|"pending"
+---@param fn fun()
+local function guarded(ctx, ref, source, fn)
+  local ok, err = pcall(fn)
+  if not ok then
+    ctx.rows[#ctx.rows + 1] = base_entry({
+      status = "error",
+      source = source,
+      confidence = "exact",
+      reason = "planning failed: " .. text.one_line(err),
+    }, ref, nil)
+  end
 end
 
 ---A subject or author line is stored up to this many bytes: a hostile commit
@@ -119,6 +169,16 @@ local function cap(s, max)
   return s:sub(1, max) .. "…"
 end
 
+---A commit time that can be stored: a real, finite point in time. A hostile
+---commit can carry a 400-digit date, which parses as infinity and which JSON
+---cannot encode -- the whole report would then never be saved.
+---@param t any
+---@return integer|nil
+local function finite_time(t)
+  if type(t) ~= "number" or t ~= t or t < 0 or t > gitfs.MAX_TIME then return nil end
+  return t
+end
+
 ---@param commit Lib.Git.LogEntry
 ---@return GitSuite.Plugins.ReportCommit
 local function to_commit(commit)
@@ -129,7 +189,7 @@ local function to_commit(commit)
     subject = text.utf8(cap(commit.subject or "", M.MAX_LINE)),
     body = text.utf8(body),
     author = text.utf8(cap(commit.author or "", M.MAX_LINE)),
-    time = commit.commit_time,
+    time = finite_time(commit.commit_time),
     side = (commit.side == "<" or commit.side == ">") and commit.side or nil,
   }
 end
@@ -190,23 +250,17 @@ local function plan_updated(refs, ctx)
   local cands = {}
   local times = {}
   for _, ref in ipairs(refs) do
-    local head, herr = gitfs.head(ref.dir)
-    if head and head.sha then ctx.heads[ref.dir] = head.sha end
-    if not gitfs.is_clone(ref.dir) then
-      ctx.rows[#ctx.rows + 1] = base_entry({
-        status = "no_git",
-        source = "reflog",
-        confidence = "exact",
-        reason = "its .git is not a directory (a worktree or submodule)",
-      }, ref, nil)
-    elseif not head or not head.sha then
-      ctx.rows[#ctx.rows + 1] = base_entry({
-        status = "error",
-        source = "reflog",
-        confidence = "exact",
-        reason = "HEAD could not be read: " .. text.one_line(herr or "no commit"),
-      }, ref, head)
-    else
+    guarded(ctx, ref, "reflog", function()
+      local clone = gitfs.is_clone(ref.dir)
+      local head, herr
+      if clone then
+        head, herr = gitfs.head(ref.dir)
+      end
+      if head and head.sha then ctx.heads[ref.dir] = head.sha end
+      if not clone or not head or not head.sha then
+        ctx.rows[#ctx.rows + 1] = unreadable_row(ref, head, herr, "reflog")
+        return
+      end
       local reflog = gitfs.reflog(ref.dir)
       local analysis = reflog and runs.last_update(reflog, { head = head.sha, now = ctx.now })
         or { state = "none" }
@@ -216,7 +270,7 @@ local function plan_updated(refs, ctx)
         times[#times + 1] = analysis.time
         cand.index = #times
       end
-    end
+    end)
   end
 
   local run = runs.latest_run(times, cfg.run_window_s)
@@ -228,7 +282,6 @@ local function plan_updated(refs, ctx)
   end
 
   local jobs = {}
-  local skipped = 0
   for _, cand in ipairs(cands) do
     local a, ref, head = cand.analysis, cand.ref, cand.head
     if a.state == "updated" then
@@ -245,8 +298,6 @@ local function plan_updated(refs, ctx)
           rev = a.to,
           cache_to = a.to,
         }
-      else
-        skipped = skipped + 1
       end
     elseif a.state == "installed" then
       if
@@ -262,8 +313,6 @@ local function plan_updated(refs, ctx)
           time = a.time,
           reason = "installed in this run",
         }, ref, head)
-      else
-        skipped = skipped + 1
       end
     else
       -- The reflog says nothing usable (expired, never written, ends elsewhere,
@@ -281,13 +330,11 @@ local function plan_updated(refs, ctx)
           rev = head.sha,
           cache_to = head.sha,
         }
-      else
-        skipped = skipped + 1
       end
     end
   end
 
-  local meta = { skipped = skipped }
+  local meta = {}
   if run then
     meta.run = {
       first = run.first_time,
@@ -308,26 +355,31 @@ end
 local function plan_pending(refs, ctx)
   local lazy_ok, lazy = pcall(require, "gitsuite.adapter.lazy")
   local defaults_version = lazy_ok and lazy.is_available() and lazy.defaults_version() or nil
-  local jobs, skipped = {}, 0
+  local jobs = {}
   for _, ref in ipairs(refs) do
-    local head, herr = gitfs.head(ref.dir)
-    if head and head.sha then ctx.heads[ref.dir] = head.sha end
-    if not gitfs.is_clone(ref.dir) then
-      ctx.rows[#ctx.rows + 1] = base_entry({
-        status = "no_git",
-        source = "pending",
-        confidence = "exact",
-        reason = "its .git is not a directory (a worktree or submodule)",
-      }, ref, nil)
-    elseif not head or not head.sha then
-      ctx.rows[#ctx.rows + 1] = base_entry({
-        status = "error",
-        source = "pending",
-        confidence = "exact",
-        reason = "HEAD could not be read: " .. text.one_line(herr or "no commit"),
-      }, ref, head)
-    else
-      local t = target.resolve(ref, { defaults_version = defaults_version })
+    guarded(ctx, ref, "pending", function()
+      local clone = gitfs.is_clone(ref.dir)
+      local head, herr
+      if clone then
+        head, herr = gitfs.head(ref.dir)
+      end
+      if head and head.sha then ctx.heads[ref.dir] = head.sha end
+      if not clone or not head or not head.sha then
+        ctx.rows[#ctx.rows + 1] = unreadable_row(ref, head, herr, "pending")
+        return
+      end
+
+      local fetched = gitfs.fetch_time(ref.dir)
+      local f = ctx.fetch
+      f.checked = f.checked + 1
+      if fetched then
+        f.known = f.known + 1
+        f.oldest = f.oldest and math.min(f.oldest, fetched) or fetched
+        f.newest = f.newest and math.max(f.newest, fetched) or fetched
+      end
+
+      local t =
+        target.resolve(ref, { defaults_version = defaults_version, head = head, cloned = true })
       if t.tier == "pin" then
         ctx.rows[#ctx.rows + 1] = base_entry({
           status = "pinned",
@@ -343,7 +395,7 @@ local function plan_pending(refs, ctx)
           reason = "cannot tell what lazy.nvim would update to: " .. text.one_line(t.reason),
         }, ref, head)
       elseif t.sha and t.sha == head.sha then
-        skipped = skipped + 1
+        return
       else
         jobs[#jobs + 1] = {
           entry = base_entry({
@@ -358,9 +410,9 @@ local function plan_pending(refs, ctx)
           cache_to = t.certain and t.sha or nil,
         }
       end
-    end
+    end)
   end
-  return ctx.rows, jobs, { skipped = skipped }
+  return ctx.rows, jobs, {}
 end
 
 ---Build a report. Asynchronous (one git process per changed plugin, `parallel`
@@ -370,7 +422,8 @@ end
 ---@return { stop: fun() } handle
 function M.build(opts, on_done)
   local cfg = config.get().plugins
-  local mode = opts.mode or cfg.mode
+  local mode = opts.mode
+  if mode ~= "updated" and mode ~= "pending" then mode = cfg.mode end
   local now = opts.now or os.time()
   local store, store_info = state.load(opts.store_path)
 
@@ -383,7 +436,14 @@ function M.build(opts, on_done)
       sources.list({ include_local = (opts.all or cfg.include_local) and true or false })
   end
 
-  local ctx = { cfg = cfg, store = store, rows = {}, heads = {}, now = now }
+  local ctx = {
+    cfg = cfg,
+    store = store,
+    rows = {},
+    heads = {},
+    now = now,
+    fetch = { checked = 0, known = 0 },
+  }
   local rows, jobs, meta
   if mode == "pending" then
     rows, jobs, meta = plan_pending(refs, ctx)
@@ -393,7 +453,6 @@ function M.build(opts, on_done)
 
   local cache = state.cache_index(store)
   local max = cfg.max_commits
-  local handle
   local stopped = false
 
   ---@param j GitSuite.Plugins.Job
@@ -470,11 +529,18 @@ function M.build(opts, on_done)
       return a.dir < b.dir
     end)
 
-    local changed, commits = 0, 0
+    local changed, commits, failed = 0, 0, 0
     for _, entry in ipairs(plugins) do
       if entry.status == "forward" or entry.status == "rollback" or entry.status == "diverged" then
         changed = changed + 1
         commits = commits + #(entry.commits or {})
+      elseif
+        entry.status == "error"
+        or entry.status == "from_missing"
+        or entry.status == "no_git"
+        or entry.status == "unknown_target"
+      then
+        failed = failed + 1
       end
     end
 
@@ -498,13 +564,19 @@ function M.build(opts, on_done)
         changed = changed,
         commits = commits,
         unchanged = #refs - #plugins,
+        failed = failed,
       },
+      fetch = mode == "pending" and ctx.fetch or nil,
       errors = errors,
       heads = ctx.heads,
     }
 
     local info = store_info
-    if opts.persist ~= false then
+    if opts.persist ~= false and #refs == 0 then
+      -- An empty report would become the newest one and push real reports out
+      -- of the store.
+      report.save_error = "no installed plugins found; nothing was stored"
+    elseif opts.persist ~= false then
       local ok, err, add_info = state.add(report, cfg, opts.store_path)
       if not ok then report.save_error = err end
       -- `build` read the store first, and that read may have moved a broken file
@@ -515,15 +587,10 @@ function M.build(opts, on_done)
     on_done(report, info)
   end
 
-  handle = async.map_limit(jobs, cfg.parallel, work, function(results, worker_errors, was_stopped)
+  return async.map_limit(jobs, cfg.parallel, work, function(results, worker_errors, was_stopped)
     stopped = was_stopped
     finish(results, worker_errors)
-  end, {
-    on_progress = opts.on_progress and function(done, total)
-      opts.on_progress(done, total)
-    end or nil,
-  })
-  return handle
+  end, { on_progress = opts.on_progress })
 end
 
 return M

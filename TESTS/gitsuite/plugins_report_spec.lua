@@ -207,7 +207,7 @@ describe("gitsuite.features.plugins.state (the report store)", function()
             name = "mixed",
             dir = "/p/b",
             status = "forward",
-            commits = { "junk", { subject = "no sha" }, { sha = "abc", subject = "ok" } },
+            commits = { "junk", { subject = "no sha" }, { sha = "abcdef1", subject = "ok" } },
             time = 1e300,
           },
         },
@@ -228,7 +228,7 @@ describe("gitsuite.features.plugins.state (the report store)", function()
       assert.equals(1, #r.plugins[2].commits)
       assert.is_nil(r.plugins[2].time)
       assert.is_nil(r.run)
-      assert.same({ checked = 0, changed = 0, commits = 0, unchanged = 0 }, r.counts)
+      assert.same({ checked = 0, changed = 0, commits = 0, unchanged = 0, failed = 0 }, r.counts)
       assert.same({}, r.errors)
       assert.same({}, r.sources)
       assert.same({}, r.heads)
@@ -250,6 +250,105 @@ describe("gitsuite.features.plugins.state (the report store)", function()
     local store, info = state.load(path)
     assert.equals(1, #store.reports)
     assert.equals(3, info.dropped)
+  end)
+
+  it("keeps only text and hashes in the fields it hands to the renderer, and no url", function()
+    vim.fn.mkdir(vim.fs.dirname(path), "p")
+    local hostile = report("hostile", NOW, {
+      sources = { {}, true, "lazy" },
+      errors = { 5, "lazy: failed" },
+      heads = { ["/p/a"] = "\27[2J", ["/p/b"] = ("c"):rep(40) },
+      plugins = {
+        {
+          name = "evil",
+          dir = "/p/evil",
+          status = "forward",
+          url = "https://user:ghp_SECRET@host/o/r.git",
+          from = "\27[2J|\nevil",
+          to = ("b"):rep(40),
+          commits = { { sha = "ab\ncdef1", subject = "x" }, { sha = ("d"):rep(40), subject = 5 } },
+        },
+      },
+    })
+    F.write(
+      path,
+      vim.json.encode({ version = state.VERSION, host = state.host(), reports = { hostile } })
+    )
+    local r = assert(state.load(path).reports[1])
+    assert.same({ "lazy" }, r.sources)
+    assert.same({ "lazy: failed" }, r.errors)
+    assert.same({ ["/p/b"] = ("c"):rep(40) }, r.heads)
+    local entry = r.plugins[1]
+    assert.is_nil(entry.url)
+    assert.is_nil(entry.from)
+    assert.equals(("b"):rep(40), entry.to)
+    assert.equals(1, #entry.commits)
+    assert.equals("", entry.commits[1].subject)
+
+    -- the next write scrubs what an older version stored
+    assert.is_true((state.add(report("next", NOW + 1), CFG, path)))
+    local f = assert(io.open(path, "rb"))
+    local raw = f:read("*a")
+    f:close()
+    assert.is_nil(raw:find("ghp_SECRET", 1, true))
+  end)
+
+  it("keeps the old file once when it drops reports it cannot use", function()
+    vim.fn.mkdir(vim.fs.dirname(path), "p")
+    F.write(
+      path,
+      vim.json.encode({
+        version = state.VERSION,
+        host = state.host(),
+        reports = { report("ok", NOW), { id = 5 } },
+      })
+    )
+    assert.is_true((state.add(report("new", NOW + 1), CFG, path)))
+    local backup = assert(io.open(path .. ".dropped.bak", "rb"), "the dropped reports are kept")
+    assert.is_truthy(backup:read("*a"):find('"ok"', 1, true))
+    backup:close()
+  end)
+
+  it("reads and writes a store that is a symbolic link where it points", function()
+    local real_dir = F.tmpdir("-real-store")
+    local real = real_dir .. "/real.json"
+    vim.fn.mkdir(vim.fs.dirname(path), "p")
+    assert.is_true((state.add(report("a", NOW), CFG, real)))
+    if not vim.uv.fs_symlink(real, path) then return end -- no symlinks here
+    assert.is_true((state.add(report("b", NOW + 1), CFG, path)))
+    assert.equals("link", vim.uv.fs_lstat(path).type, "the link is still a link")
+    local store = state.load(real)
+    assert.same(
+      { "b", "a" },
+      vim.tbl_map(function(r)
+        return r.id
+      end, store.reports)
+    )
+  end)
+
+  it("takes a host name in another case or with a domain for the same machine", function()
+    vim.fn.mkdir(vim.fs.dirname(path), "p")
+    F.write(
+      path,
+      vim.json.encode({
+        version = state.VERSION,
+        host = state.host():upper() .. ".local",
+        reports = { report("mine", NOW) },
+      })
+    )
+    local store, info = state.load(path)
+    assert.is_nil(info.foreign)
+    assert.equals(1, #store.reports)
+  end)
+
+  it("says what kind of problem keeps the store read-only", function()
+    vim.fn.mkdir(vim.fs.dirname(path), "p")
+    F.write(
+      path,
+      vim.json.encode({ version = state.VERSION + 1, host = state.host(), reports = {} })
+    )
+    local _, info = state.load(path)
+    assert.equals("newer", info.readonly_kind)
   end)
 
   describe("retention", function()
@@ -714,7 +813,10 @@ describe("gitsuite.features.plugins.report", function()
       assert.equals("new", by.newcomer.status)
 
       assert.same({ first = TU, last = TU + 60, older = 1, plugins = 4 }, report.run)
-      assert.same({ checked = 7, changed = 3, commits = 10, unchanged = 2 }, report.counts)
+      assert.same(
+        { checked = 7, changed = 3, commits = 10, unchanged = 2, failed = 1 },
+        report.counts
+      )
     end)
 
     it("lists the commits that changed, newest first, and only those", function()
@@ -773,7 +875,7 @@ describe("gitsuite.features.plugins.report", function()
         local report = build({ mode = mode, refs = refs_of({ "worktree" }), persist = false })
         local entry = assert(by_name(report).worktree, mode)
         assert.equals("no_git", entry.status)
-        assert.is_truthy(entry.reason:find("not a directory", 1, true))
+        assert.is_truthy(entry.reason:find("a worktree or submodule", 1, true))
         assert.equals(0, report.counts.changed)
       end
     end)
@@ -1190,7 +1292,7 @@ describe("gitsuite.features.plugins.report", function()
         end,
       })
       notify.error = original
-      assert.equals("no stored report", got)
+      assert.equals("no stored report yet", got)
       assert.is_truthy(notices[1]:find("no stored report", 1, true))
     end)
 

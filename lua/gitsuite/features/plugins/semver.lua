@@ -90,18 +90,25 @@ function M.matches(range, version)
   return le(range.from, version) and (range.to == nil or M.lt(version, range.to))
 end
 
+---Longest version spec read (a real one is a few characters).
+M.MAX_SPEC = 256
+
 ---@param spec string
+---@param nested? boolean  Internal: parsing one side of "a - b".
 ---@return GitSuite.Plugins.SemverRange|nil
-function M.range(spec)
-  if type(spec) ~= "string" then return nil end
+function M.range(spec, nested)
+  if type(spec) ~= "string" or #spec > M.MAX_SPEC then return nil end
   if spec == "*" or spec == "" then return { from = M.version("0.0.0") } end
 
   local hyphen = spec:find(" - ", 1, true)
   if hyphen then
+    -- "a - b": each side is a plain version, never another hyphen range (a spec
+    -- of ten thousand " - " would otherwise recurse until the stack is gone).
+    if nested then return nil end
     local a = spec:sub(1, hyphen - 1)
     local b = spec:sub(hyphen + 3)
     local parts = vim.split(b, ".", { plain = true })
-    local ra, rb = M.range(a), M.range(b)
+    local ra, rb = M.range(a, true), M.range(b, true)
     return { from = ra and ra.from, to = rb and (#parts == 3 and rb.from or rb.to) }
   end
 

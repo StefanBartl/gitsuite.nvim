@@ -158,33 +158,85 @@ describe("gitsuite plugin sources", function()
   end)
 
   describe("adapter.pack", function()
-    it("is available only when vim.pack manages something", function()
-      if not (vim.pack and vim.pack.get) then return end
-      local pack = require("gitsuite.adapter.pack")
-      vim.pack.get = function()
-        return {}
+    ---Point `stdpath("config")` / `stdpath("data")` at throwaway folders for one test.
+    ---@return string config, string data, fun() restore
+    local function fake_stdpath()
+      local config, data = F.tmpdir("-pack-config"), F.tmpdir("-pack-data")
+      local original = vim.fn.stdpath
+      vim.fn.stdpath = function(what)
+        if what == "config" then return config end
+        if what == "data" then return data end
+        return original(what)
       end
-      assert.is_false(pack.is_available())
-      vim.pack.get = function()
-        return {
-          {
-            path = "/p/x.nvim",
-            rev = "abc",
-            spec = { name = "x.nvim", src = "https://github.com/o/x.nvim", version = "main" },
-          },
-          {
-            path = "/p/y.nvim",
-            rev = "def",
-            spec = { name = "y.nvim", src = "https://github.com/o/y.nvim" },
-          },
-        }
+      return config, data, function()
+        vim.fn.stdpath = original
       end
-      assert.is_true(pack.is_available())
-      local refs = assert(pack.list())
-      assert.equals(2, #refs)
-      assert.equals("x.nvim", refs[1].name)
-      assert.equals("main", refs[1].spec.branch)
-      assert.equals("pack", refs[1].managed_by)
+    end
+
+    it("reads the lockfile and the folders on disk, without calling vim.pack.get", function()
+      local config, data, restore = fake_stdpath()
+      local calls = 0
+      local original_get = vim.pack and vim.pack.get
+      if vim.pack then
+        vim.pack.get = function()
+          calls = calls + 1
+          return {}
+        end
+      end
+      local ok, err = pcall(function()
+        local pack = require("gitsuite.adapter.pack")
+        assert.is_false(pack.is_available(), "no lockfile: nothing is managed")
+
+        local lock = config .. "/nvim-pack-lock.json"
+        F.write(
+          lock,
+          vim.json.encode({
+            plugins = {
+              ["x.nvim"] = { rev = "abc", src = "https://github.com/o/x.nvim", version = "'main'" },
+              ["y.nvim"] = { rev = "def", src = "https://github.com/o/y.nvim" },
+              ["gone.nvim"] = { rev = "123", src = "https://github.com/o/gone.nvim" },
+              ["../escape"] = { rev = "456" },
+            },
+          })
+        )
+        local before = table.concat(vim.fn.readfile(lock, "b"), "\n")
+        vim.fn.mkdir(data .. "/site/pack/core/opt/x.nvim", "p")
+        vim.fn.mkdir(data .. "/site/pack/core/opt/y.nvim", "p")
+
+        assert.is_true(pack.is_available())
+        local refs = assert(pack.list())
+        assert.equals(2, #refs, "only plugins that are on disk")
+        assert.equals("x.nvim", refs[1].name)
+        assert.equals("main", refs[1].spec.branch)
+        assert.equals("https://github.com/o/x.nvim", refs[1].url)
+        assert.is_nil(refs[2].spec.branch)
+        assert.equals("pack", refs[1].managed_by)
+        assert.equals(
+          vim.fs.normalize(data .. "/site/pack/core/opt/x.nvim"),
+          vim.fs.normalize(refs[1].dir)
+        )
+
+        assert.equals(before, table.concat(vim.fn.readfile(lock, "b"), "\n"), "lockfile untouched")
+        assert.is_nil(vim.uv.fs_stat(data .. "/site/pack/core/opt/gone.nvim"), "nothing was cloned")
+      end)
+      restore()
+      if vim.pack then vim.pack.get = original_get end
+      assert(ok, err)
+      assert.equals(0, calls, "vim.pack.get synchronises the lockfile and must not be called")
+    end)
+
+    it("treats an oversized or malformed lockfile as 'not managed'", function()
+      local config, _, restore = fake_stdpath()
+      local ok, err = pcall(function()
+        local pack = require("gitsuite.adapter.pack")
+        F.write(config .. "/nvim-pack-lock.json", "{ not json")
+        assert.is_false(pack.is_available())
+        local refs, why = pack.list()
+        assert.is_nil(refs)
+        assert.is_truthy(why)
+      end)
+      restore()
+      assert(ok, err)
     end)
   end)
 

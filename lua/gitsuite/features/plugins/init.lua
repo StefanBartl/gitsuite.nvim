@@ -49,7 +49,7 @@ end
 local function read(target, opts)
   local n = opts.n or config.get().plugins.log_limit
   if n > M.MAX_COMMITS then
-    notify.warn(("plugins log: showing %d commits, not %d"):format(M.MAX_COMMITS, n))
+    notify.warn(("plugins log: showing %d commits, not %s"):format(M.MAX_COMMITS, n))
     n = M.MAX_COMMITS
   end
   -- Changed-file lists are only shown in the picker's preview; the buffer and
@@ -79,14 +79,14 @@ end
 ---@return { stop: fun() }|nil handle
 function M.log(target, opts)
   opts = opts or {}
-  -- `n ~= n` is NaN; `math.huge` fails the integer test.
+  -- `n ~= n` is NaN; above 2^31 (and so `math.huge`) is not a count git takes.
   if
     opts.n ~= nil
     and (
       type(opts.n) ~= "number"
       or opts.n ~= opts.n
       or opts.n < 1
-      or opts.n == math.huge
+      or opts.n > 2147483647
       or opts.n ~= math.floor(opts.n)
     )
   then
@@ -145,6 +145,42 @@ local function present(report, opts)
   view.show_markdown(lines, report.id, opts.out, opts.to)
 end
 
+---The report run in flight, if any: a second `:Git plugins report` before the
+---first finished would read the same clones and run every git process twice.
+---@type { stop: fun() }|nil
+local running
+
+---Tell the user (and `on_done`) that the call gave up.
+---@param opts GitSuite.Plugins.ReportCmdOpts
+---@param message string
+local function report_fail(opts, message)
+  notify.error("plugins report: " .. text.one_line(message))
+  if opts.on_done then opts.on_done(nil, message) end
+end
+
+---What `--last` has to say when there is nothing to show.
+---@param store GitSuite.Plugins.Store
+---@param info GitSuite.Plugins.StoreInfo
+---@param mode? string
+---@return string
+local function nothing_stored(store, info, mode)
+  if info.recovered then
+    return ("the report store cannot be read (%s); the next `:Git plugins report` moves it aside"):format(
+      info.recovered
+    )
+  end
+  if info.foreign then
+    return ("the report store was written on another machine (%s); `:Git plugins report` starts this machine's own"):format(
+      info.foreign
+    )
+  end
+  if info.readonly then return info.readonly end
+  if mode and #store.reports > 0 then
+    return ("no stored '%s' report (the newest is a '%s' one)"):format(mode, store.reports[1].mode)
+  end
+  return "no stored report yet"
+end
+
 ---Build a report of what changed in the installed plugins -- the last update's
 ---changes (`mode = "updated"`) or what the next one would bring
 ---(`"pending"`) -- store it and show it. Reads local state only: no fetch, no
@@ -155,8 +191,14 @@ function M.report(opts)
   opts = opts or {}
   local state = require("gitsuite.features.plugins.state")
 
+  if opts.mode ~= nil and opts.mode ~= "updated" and opts.mode ~= "pending" then
+    report_fail(opts, ("unknown mode '%s' (updated or pending)"):format(tostring(opts.mode)))
+    return nil
+  end
+
   if opts.last then
-    local store, info = state.load()
+    -- A display command does not tidy up: `peek` leaves a broken store where it is.
+    local store, info = state.load(nil, { peek = true })
     local newest
     for _, stored in ipairs(store.reports) do
       if opts.mode == nil or stored.mode == opts.mode then
@@ -165,9 +207,7 @@ function M.report(opts)
       end
     end
     if not newest then
-      local why = info.readonly and (": " .. info.readonly) or ""
-      notify.error("plugins report: no stored report yet" .. text.one_line(why))
-      if opts.on_done then opts.on_done(nil, "no stored report") end
+      report_fail(opts, nothing_stored(store, info, opts.mode))
       return nil
     end
     present(newest, opts)
@@ -175,17 +215,24 @@ function M.report(opts)
     return nil
   end
 
+  if running then
+    notify.warn("plugins report: already running")
+    if opts.on_done then opts.on_done(nil, "already running") end
+    return running
+  end
+
   notify.info("plugins report: reading the clones ...")
-  return require("gitsuite.features.plugins.report").build(
+  local handle = require("gitsuite.features.plugins.report").build(
     { mode = opts.mode, all = opts.all },
     function(report, info)
+      running = nil
       require("gitsuite.events").plugins_reported({
         id = report.id,
         mode = report.mode,
         at = report.at,
         plugins = report.counts.changed,
         commits = report.counts.commits,
-        errors = #report.errors,
+        errors = #report.errors + (report.counts.failed or 0),
         saved = report.save_error == nil,
       })
       if info.recovered then
@@ -201,6 +248,15 @@ function M.report(opts)
           )
         )
       end
+      if info.dropped then
+        notify.warn(
+          ("plugins report: %d stored report%s could not be used and %s left out (the old file is kept as .dropped.bak)"):format(
+            info.dropped,
+            info.dropped == 1 and "" or "s",
+            info.dropped == 1 and "was" or "were"
+          )
+        )
+      end
       if report.save_error then
         notify.warn("plugins report: not saved: " .. text.one_line(report.save_error))
       end
@@ -208,6 +264,14 @@ function M.report(opts)
       if opts.on_done then opts.on_done(report, nil) end
     end
   )
+  -- (the callback is always scheduled, so `running` is set before it can clear it)
+  running = {
+    stop = function()
+      running = nil
+      handle.stop()
+    end,
+  }
+  return running
 end
 
 return M

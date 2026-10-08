@@ -37,6 +37,7 @@ M.MAX_READ = 64 * 1024 * 1024
 ---@field foreign? string    The host a store found on disk was written by, when it is not this machine.
 ---@field recovered? string  Where an unreadable file was moved to.
 ---@field readonly? string   Why the store must not be written (newer format, not a plain file).
+---@field readonly_kind? "newer"|"not_file"|"unopenable"|"unmovable"  What `readonly` is about, for advice that fits the cause.
 ---@field dropped? integer   Reports in the file that were not usable and are left out.
 
 ---@return string
@@ -47,6 +48,25 @@ end
 ---@return string
 function M.host()
   return uv.os_gethostname() or "unknown"
+end
+
+---Host names compared the way a machine's name is: a case-folded name without
+---its domain (`Laptop`, `laptop` and `laptop.local` are one machine).
+---@param host any
+---@return string
+local function host_key(host)
+  return (tostring(host or ""):lower():match("^[^.]*"))
+end
+
+---The file a path really names: a store that is a symbolic link (a dotfiles
+---manager, a synced folder) is read and written where it points; renaming a
+---new file over the link would replace the link instead.
+---@param path string
+---@return string
+local function real_path(path)
+  local st = uv.fs_lstat(path)
+  if st and st.type == "link" then return uv.fs_realpath(path) or path end
+  return path
 end
 
 ---@return GitSuite.Plugins.Store
@@ -80,6 +100,109 @@ local function is_list(list)
   return type(list) == "table" and (next(list) == nil or vim.islist(list))
 end
 
+---Longest string kept from a stored report (the writer caps its own fields far
+---lower; this only bounds a hand-edited or hostile file).
+local MAX_STR = 8192
+
+---@param v any
+---@param max? integer
+---@return string|nil
+local function str(v, max)
+  if type(v) ~= "string" then return nil end
+  max = max or MAX_STR
+  return #v <= max and v or v:sub(1, max)
+end
+
+---@param v any
+---@return string|nil
+local function hex(v)
+  if type(v) == "string" and #v >= 7 and #v <= 64 and v:match("^%x+$") then return v end
+  return nil
+end
+
+---@param v any
+---@return boolean|nil
+local function bool(v)
+  if type(v) == "boolean" then return v end
+  return nil
+end
+
+---@param v any
+---@return number|nil
+local function count(v)
+  if type(v) == "number" and v == v and v >= 0 and v < 2 ^ 53 then return v end
+  return nil
+end
+
+---One stored commit, field by field; `nil` = unusable.
+---@param c any
+---@return table|nil
+local function normalize_commit(c)
+  local sha = type(c) == "table" and hex(c.sha) or nil
+  if not sha then return nil end
+  return {
+    sha = sha,
+    subject = str(c.subject, 1024) or "",
+    body = str(c.body, 4096) or "",
+    author = str(c.author, 1024) or "",
+    time = plausible_time(c.time) and c.time or nil,
+    side = (c.side == "<" or c.side == ">") and c.side or nil,
+  }
+end
+
+---One stored plugin entry, field by field (so nothing a renderer or the cache
+---indexes into can be of the wrong type); `nil` = unusable. `url` is not kept:
+---an older version stored it, and it may carry credentials.
+---@param entry any
+---@return table|nil
+local function normalize_entry(entry)
+  if type(entry) ~= "table" then return nil end
+  local name, dir, status = str(entry.name, 1024), str(entry.dir, 4096), str(entry.status, 64)
+  if not (name and dir and status) then return nil end
+  local out = {
+    name = name,
+    dir = dir,
+    status = status,
+    managed_by = str(entry.managed_by, 64),
+    source = str(entry.source, 32),
+    confidence = str(entry.confidence, 32),
+    head = hex(entry.head),
+    from = hex(entry.from),
+    to = hex(entry.to),
+    to_label = str(entry.to_label, 512),
+    reason = str(entry.reason, 2048),
+    time = plausible_time(entry.time) and entry.time or nil,
+    fetched_at = plausible_time(entry.fetched_at) and entry.fetched_at or nil,
+    ahead = count(entry.ahead),
+    behind = count(entry.behind),
+    truncated = bool(entry.truncated),
+    locked = bool(entry.locked),
+    merges = bool(entry.merges),
+  }
+  if entry.commits ~= nil and is_list(entry.commits) then
+    local commits = {}
+    for _, c in ipairs(entry.commits) do
+      local usable = normalize_commit(c)
+      if usable then commits[#commits + 1] = usable end
+    end
+    out.commits = commits
+  end
+  return out
+end
+
+---@param list any
+---@return string[]
+local function string_list(list)
+  local out = {}
+  if is_list(list) then
+    for _, v in ipairs(list) do
+      local item = str(v, 2048)
+      if item then out[#out + 1] = item end
+    end
+  end
+  return out
+end
+
 ---Make a report read from disk safe for the code that renders and reuses it:
 ---the file may come from another version, another tool or a hand edit, and
 ---every field is checked before anything indexes into it. Entries that do not
@@ -87,7 +210,9 @@ end
 ---@param r any
 ---@return table|nil
 local function normalize(r)
-  if type(r) ~= "table" or type(r.id) ~= "string" or r.id:find("[%c]") then return nil end
+  if type(r) ~= "table" or type(r.id) ~= "string" or #r.id > 128 or r.id:find("[%c]") then
+    return nil
+  end
   -- a report "from the future" would stay the newest one forever
   if not plausible_time(r.at) or r.at > os.time() + 86400 then return nil end
   if r.mode ~= "updated" and r.mode ~= "pending" then return nil end
@@ -95,53 +220,59 @@ local function normalize(r)
 
   local plugins = {}
   for _, entry in ipairs(r.plugins) do
-    if
-      type(entry) == "table"
-      and type(entry.name) == "string"
-      and type(entry.dir) == "string"
-      and type(entry.status) == "string"
-    then
-      if entry.commits ~= nil then
-        if is_list(entry.commits) then
-          local commits = {}
-          for _, c in ipairs(entry.commits) do
-            if type(c) == "table" and type(c.sha) == "string" then commits[#commits + 1] = c end
-          end
-          entry.commits = commits
-        else
-          entry.commits = nil
-        end
-      end
-      for _, key in ipairs({ "time", "fetched_at" }) do
-        if entry[key] ~= nil and not plausible_time(entry[key]) then entry[key] = nil end
-      end
-      plugins[#plugins + 1] = entry
-    end
+    local usable = normalize_entry(entry)
+    if usable then plugins[#plugins + 1] = usable end
   end
-  r.plugins = plugins
 
-  if type(r.counts) ~= "table" then r.counts = {} end
-  for _, key in ipairs({ "checked", "changed", "commits", "unchanged" }) do
-    if type(r.counts[key]) ~= "number" then r.counts[key] = 0 end
+  local counts = {}
+  for _, key in ipairs({ "checked", "changed", "commits", "unchanged", "failed" }) do
+    counts[key] = count(type(r.counts) == "table" and r.counts[key] or nil) or 0
   end
-  if r.run ~= nil then
-    local run = r.run
-    if
-      type(run) ~= "table"
-      or not plausible_time(run.first)
-      or not plausible_time(run.last)
-      or type(run.older) ~= "number"
-      or type(run.plugins) ~= "number"
-    then
-      r.run = nil
+
+  local run
+  if type(r.run) == "table" then
+    local first, last = r.run.first, r.run.last
+    local older, n = count(r.run.older), count(r.run.plugins)
+    if plausible_time(first) and plausible_time(last) and older and n then
+      run = { first = first, last = last, older = older, plugins = n }
     end
   end
-  if not is_list(r.errors) then r.errors = {} end
-  if not is_list(r.sources) then r.sources = {} end
-  if type(r.heads) ~= "table" then r.heads = {} end
-  if type(r.host) ~= "string" then r.host = "?" end
-  if r.lazy ~= nil and type(r.lazy) ~= "string" then r.lazy = nil end
-  return r
+
+  local fetch
+  if type(r.fetch) == "table" then
+    local checked, known = count(r.fetch.checked), count(r.fetch.known)
+    if checked and known then
+      fetch = {
+        checked = checked,
+        known = known,
+        oldest = plausible_time(r.fetch.oldest) and r.fetch.oldest or nil,
+        newest = plausible_time(r.fetch.newest) and r.fetch.newest or nil,
+      }
+    end
+  end
+
+  local heads = {}
+  if type(r.heads) == "table" then
+    for dir, sha in pairs(r.heads) do
+      if type(dir) == "string" and #dir <= 4096 and hex(sha) then heads[dir] = sha end
+    end
+  end
+
+  return {
+    version = count(r.version) or M.VERSION,
+    id = r.id,
+    at = r.at,
+    mode = r.mode,
+    host = str(r.host, 256) or "?",
+    lazy = str(r.lazy, 64),
+    sources = string_list(r.sources),
+    errors = string_list(r.errors),
+    run = run,
+    fetch = fetch,
+    plugins = plugins,
+    heads = heads,
+    counts = counts,
+  }
 end
 
 ---Read the store. Never throws; never writes except to move a broken file
@@ -152,7 +283,7 @@ end
 ---@return GitSuite.Plugins.Store store
 ---@return GitSuite.Plugins.StoreInfo info
 function M.load(path, opts)
-  path = path or M.path()
+  path = real_path(path or M.path())
   local peek = opts ~= nil and opts.peek == true
   ---@type GitSuite.Plugins.StoreInfo
   local info = {}
@@ -160,6 +291,7 @@ function M.load(path, opts)
   if not st then return empty(), info end
   if st.type ~= "file" or st.size > M.MAX_READ then
     info.readonly = "the report store is not a plain file of a sane size: " .. path
+    info.readonly_kind = "not_file"
     return empty(), info
   end
 
@@ -167,11 +299,12 @@ function M.load(path, opts)
   if not f then
     -- Busy (an antivirus scan, another instance) is not "broken": leave it be.
     info.readonly = "the report store could not be opened: " .. path
+    info.readonly_kind = "unopenable"
     return empty(), info
   end
   local text = f:read("*a")
   f:close()
-  local ok, data = pcall(vim.json.decode, text or "", { luanil = { object = true, array = true } })
+  local ok, data = pcall(vim.json.decode, text or "", { luanil = { object = true } })
   if
     not (
       ok
@@ -186,6 +319,7 @@ function M.load(path, opts)
       info.recovered = move_aside(path, ".corrupt")
       if not info.recovered then
         info.readonly = "the report store is unreadable and could not be moved aside: " .. path
+        info.readonly_kind = "unmovable"
       end
     end
     return empty(), info
@@ -194,12 +328,13 @@ function M.load(path, opts)
     info.readonly = ("the report store was written by a newer gitsuite (format %d)"):format(
       data.version
     )
+    info.readonly_kind = "newer"
     return empty(), info
   end
 
   local store = empty()
   local dropped = 0
-  if type(data.host) == "string" and data.host ~= M.host() then
+  if type(data.host) == "string" and host_key(data.host) ~= host_key(M.host()) then
     -- Another machine's store: its clones, reflogs and heads are not ours, so
     -- nothing of it is used (`add` keeps the file aside before writing).
     info.foreign = data.host
@@ -246,9 +381,16 @@ end
 ---@return string|nil err
 ---@return GitSuite.Plugins.StoreInfo|nil info
 function M.add(report, cfg, path)
-  path = path or M.path()
+  path = real_path(path or M.path())
   local store, info = M.load(path)
   if info.readonly then return false, info.readonly, info end
+
+  if info.dropped then
+    -- The rewrite below leaves the unusable reports out: keep the file as it was
+    -- once, so a report of a newer build or a hand edit is not lost for good.
+    local backup = path .. ".dropped.bak"
+    if not uv.fs_stat(backup) then pcall(uv.fs_copyfile, path, backup) end
+  end
 
   if info.foreign then
     -- Another machine's store (the state folder is synced): keep it, start ours.
@@ -265,17 +407,26 @@ function M.add(report, cfg, path)
   table.insert(store.reports, 1, report)
   M.prune(store, cfg, report.at)
 
-  local ok_enc, json = pcall(vim.json.encode, store)
-  while ok_enc and #json > M.MAX_BYTES and #store.reports > 1 do
-    table.remove(store.reports)
-    ok_enc, json = pcall(vim.json.encode, store)
+  -- Size each report once, drop the oldest until the file fits, encode once more.
+  local sizes, total = {}, 64
+  for i, stored in ipairs(store.reports) do
+    local ok_one, one = pcall(vim.json.encode, stored)
+    if not ok_one then return false, "could not encode the report: " .. tostring(one), info end
+    sizes[i] = #one + 1
+    total = total + sizes[i]
   end
-  if not ok_enc then return false, "could not encode the report: " .. tostring(json), info end
-  if #json > M.MAX_BYTES then
+  while total > M.MAX_BYTES and #store.reports > 1 do
+    total = total - sizes[#store.reports]
+    sizes[#store.reports] = nil
+    table.remove(store.reports)
+  end
+  if total > M.MAX_BYTES then
     -- One report alone is over the cap: writing it would leave a file the next
     -- run refuses to read.
     return false, "the report is too large to store (lower plugins.max_commits)", info
   end
+  local ok_enc, json = pcall(vim.json.encode, store)
+  if not ok_enc then return false, "could not encode the report: " .. tostring(json), info end
 
   local ok, err = atomic(path, json, { mkdirp = true })
   if not ok then return false, err, info end

@@ -15,9 +15,10 @@ local config = require("gitsuite.config")
 local repos = require("gitsuite.util.repos")
 local text = require("gitsuite.features.plugins.text")
 local remote = require("lib.nvim.git.remote")
-local expand_path = require("lib.nvim.cross.fs.expand_path")
 local to_absolute = require("lib.nvim.cross.fs.to_absolute")
-local uv = vim.uv or vim.loop
+local is_dir = require("lib.nvim.fs.is_dir")
+local is_subpath = require("lib.nvim.fs.is_subpath")
+local is_windows = require("lib.nvim.cross.platform.is_windows")
 
 local M = {}
 
@@ -27,7 +28,21 @@ local AUTO = { "lazy", "pack", "clones" }
 ---@class GitSuite.Plugins.ListOpts
 ---@field sources? "auto"|string[]  Overrides `plugins.sources`.
 ---@field roots? string[]           Overrides `plugins.roots`.
+---@field urls? boolean            `false`: names and folders only (a source may then skip reading remote URLs) -- what `<Tab>` completion needs.
 ---@field include_local? boolean    `false` drops `dir`-mode plugins (lazy.nvim never updates them; usually your own repos). Default `true`.
+
+---`source.list`, with a throw turned into the `nil, err` the adapters promise: a
+---plugin manager's internals are foreign data, and one source failing must not
+---take the others (or `:checkhealth`) with it.
+---@param source table
+---@param list_opts table
+---@return GitSuite.Plugins.Ref[]|nil
+---@return string|nil err
+local function safe_list(source, list_opts)
+  local ok, got, err = pcall(source.list, list_opts)
+  if not ok then return nil, text.one_line(got) end
+  return got, err
+end
 
 ---The installed plugins and where the list came from.
 ---@param opts? GitSuite.Plugins.ListOpts
@@ -38,7 +53,7 @@ function M.list(opts)
   opts = opts or {}
   local cfg = config.get().plugins
   local sources = opts.sources or cfg.sources
-  local list_opts = { roots = opts.roots or cfg.roots }
+  local list_opts = { roots = opts.roots or cfg.roots, urls = opts.urls }
 
   ---@type GitSuite.Plugins.Ref[], string[], string[]
   local refs, used, errors = {}, {}, {}
@@ -46,10 +61,13 @@ function M.list(opts)
   if sources == "auto" then
     local remaining = vim.list_slice(AUTO)
     while #remaining > 0 do
-      local source, name = adapter.resolve_first(remaining)
+      local resolved, source, name = pcall(adapter.resolve_first, remaining)
+      if not resolved then
+        errors[#errors + 1] = text.one_line(source)
+        break
+      end
       if not source or not name then break end
-      ---@diagnostic disable-next-line: undefined-field
-      local got, err = source.list(list_opts)
+      local got, err = safe_list(source, list_opts)
       -- An empty list is not an answer while another source is left: a plugin
       -- manager that is loaded but manages nothing yet (or lazy.nvim before its
       -- first install) must not hide clones the next source would find.
@@ -66,10 +84,11 @@ function M.list(opts)
     local seen = {}
     local explicit = sources --[[@as string[] ]]
     for _, name in ipairs(explicit) do
-      local source = adapter.resolve(name)
-      if source then
-        ---@diagnostic disable-next-line: undefined-field
-        local got, err = source.list(list_opts)
+      local resolved, source = pcall(adapter.resolve, name)
+      if not resolved then
+        errors[#errors + 1] = ("%s: %s"):format(name, text.one_line(source))
+      elseif source then
+        local got, err = safe_list(source, list_opts)
         if got then
           used[#used + 1] = name
           for _, ref in ipairs(got) do
@@ -112,6 +131,18 @@ local function suggestions(refs, needle)
     end
   end
   return out
+end
+
+---A typed path as an absolute one, expanded once (`~`, `$VAR`). A UNC path
+---(server/share, wsl$/distro) keeps its leading double separator on Windows:
+---`to_absolute` would collapse it to the current drive's root.
+---@param raw string
+---@return string
+function M.absolute(raw)
+  if is_windows() and raw:match("^[/\\][/\\][^/\\]") then
+    return (vim.fs.normalize(vim.fn.fnamemodify(raw, ":p")):gsub("/+$", ""))
+  end
+  return to_absolute(raw)
 end
 
 ---Resolve what the user typed to a clone: an installed plugin's name, the
@@ -162,9 +193,8 @@ function M.resolve(raw, opts)
     end
   end
 
-  local abs = to_absolute(expand_path(raw))
-  local stat = uv.fs_stat(abs)
-  if not stat or stat.type ~= "directory" then
+  local abs = M.absolute(raw)
+  if not is_dir(abs) then
     if raw:match("^[%w_.-]+/[%w_.-]+$") then
       return nil,
         ("'%s' is not an installed plugin (gitsuite only reads local clones and never fetches or clones)"):format(
@@ -198,35 +228,26 @@ function M.of_buffer(bufnr)
   if file == "" then return nil end
   local refs = M.list()
 
-  ---Whether `path` lies inside `ref.dir`, comparing the spellings `resolve`
-  ---gives each (lexical, or both after symlinks are resolved).
-  ---@param ref GitSuite.Plugins.Ref
-  ---@param path string
-  ---@param resolved boolean
-  ---@return boolean
-  local function inside(ref, path, resolved)
-    local dir = ref.dir
-    if resolved then dir = uv.fs_realpath(dir) or dir end
-    local prefix = repos.normalize_path(dir) .. "/"
-    return repos.normalize_path(path):sub(1, #prefix) == prefix
-  end
-
-  for _, ref in ipairs(refs) do
-    if inside(ref, file, false) then
-      return { kind = "plugin", name = ref.name, dir = ref.dir, ref = ref }
-    end
-  end
-  -- A symlinked plugin folder (or a symlinked temp dir, as on macOS): the
-  -- buffer's name and the manager's path may spell the same place differently.
-  local real = uv.fs_realpath(file)
-  if real then
+  ---The plugin whose folder contains `file`: the DEEPEST one, so a plugin
+  ---folder nested in another resolves to the inner one.
+  ---@param opts? table  `is_subpath` options (`{ realpath = true }` sees through symlinks).
+  ---@return GitSuite.Plugins.Ref|nil
+  local function containing(opts)
+    local best, best_len
     for _, ref in ipairs(refs) do
-      if inside(ref, real, true) then
-        return { kind = "plugin", name = ref.name, dir = ref.dir, ref = ref }
+      if is_subpath(file, ref.dir, opts) and (not best_len or #ref.dir > best_len) then
+        best, best_len = ref, #ref.dir
       end
     end
+    return best
   end
-  return nil
+
+  -- Lexical first (no system call); then through symlinks: a symlinked plugin
+  -- folder (or a symlinked temp dir, as on macOS) lets the buffer's name and the
+  -- manager's path spell the same place differently.
+  local ref = containing() or containing({ realpath = true })
+  if not ref then return nil end
+  return { kind = "plugin", name = ref.name, dir = ref.dir, ref = ref }
 end
 
 ---`<Tab>` candidates for a target: installed plugin names that start with the
@@ -244,7 +265,7 @@ function M.complete(lead)
   end
 
   local needle = lead:lower()
-  local ok, refs = pcall(M.list)
+  local ok, refs = pcall(M.list, { urls = false })
   for _, ref in ipairs(ok and refs or {}) do
     if needle == "" or ref.name:lower():sub(1, #needle) == needle then add(ref.name) end
   end
