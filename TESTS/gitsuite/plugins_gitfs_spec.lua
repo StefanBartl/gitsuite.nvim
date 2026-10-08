@@ -405,11 +405,15 @@ describe("gitsuite.features.plugins.gitfs", function()
     end)
 
     it("refuses network paths the clone's files name (Windows)", function()
-      if not require("lib.nvim.cross.platform.is_windows")() then return end
       local function check(rel, content)
         local repo = two_commits("-unc-" .. rel:gsub("%W", ""))
         F.write(repo .. "/.git/" .. rel, content)
         return gitfs.network_path(repo)
+      end
+      if not require("lib.nvim.cross.platform.is_windows")() then
+        -- elsewhere a leading // is a plain local path: nothing is refused
+        assert.is_nil(check("config", "[mailmap]\n\tfile = //h/s/m\n"))
+        return
       end
       assert.is_truthy(check("config", "[mailmap]\n\tfile = //h/s/m\n"))
       assert.is_truthy(check("config", "[include] path = //h/s/x\n"))

@@ -545,7 +545,9 @@ describe("gitsuite plugin sources", function()
 
     it("reaches a repository through a UNC path (Windows)", function()
       if not require("lib.nvim.cross.platform.is_windows")() then
-        print("skip  plugins_sources_spec.lua: UNC paths exist on Windows only")
+        -- elsewhere "//host/share" is just a path that does not exist
+        local target = sources.resolve("//localhost/c$/nowhere")
+        assert.is_nil(target)
         return
       end
       local repo = F.init("-unc-target")
