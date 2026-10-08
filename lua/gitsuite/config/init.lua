@@ -102,6 +102,14 @@ local function is_positive_int(v)
 end
 
 ---@internal
+---`plugins.mode`: what a report compares.
+---@param v any
+---@return boolean
+local function is_report_mode(v)
+  return v == "updated" or v == "pending"
+end
+
+---@internal
 ---`plugins.sources`: the word "auto", or a list naming plugin sources.
 ---@param v any
 ---@return boolean
@@ -160,6 +168,14 @@ local KNOWN = {
     roots = { ok = is_list_of_strings, expect = "a table (list of non-empty path strings)" },
     log_limit = { ok = is_positive_int, expect = "a positive integer" },
     timeout_ms = { ok = is_positive_int, expect = "a positive integer (milliseconds)" },
+    include_local = { ok = is_boolean, expect = "a boolean" },
+    mode = { ok = is_report_mode, expect = '"updated" or "pending"' },
+    max_commits = { ok = is_positive_int, expect = "a positive integer" },
+    parallel = { ok = is_positive_int, expect = "a positive integer" },
+    run_window_s = { ok = is_positive_int, expect = "a positive integer (seconds)" },
+    merges = { ok = is_boolean, expect = "a boolean" },
+    keep_reports = { ok = is_positive_int, expect = "a positive integer" },
+    max_age_days = { ok = is_positive_int, expect = "a positive integer (days)" },
   },
   progress_style = { ok = is_string, expect = "a non-empty string" },
 }

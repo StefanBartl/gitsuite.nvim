@@ -130,6 +130,17 @@ plugin names of lazy.nvim, `vim.pack` or your plugin folders without starting a
 process. It only reads -- one `git log`, never a fetch -- and works offline in a
 blobless clone. See docs/commands.md and docs/configuration.md (`plugins.*`).
 
+`:Git plugins report [--mode=updated|pending] [--all] [--last] [--out=buffer|clipboard|path]
+[--to=path]` says what changed across ALL installed plugins: `updated` (default) is what
+the last update changed -- each clone's own HEAD reflog, so it survives a restart --
+and `pending` what the next update would bring, against the target lazy.nvim itself
+would check out, as of the last fetch (gitsuite never fetches; `:Lazy check` does).
+The output is Markdown (a buffer, the clipboard or a file); a rollback, a diverged
+branch and a force-pushed-away old state are named as such. Reports are kept in
+`stdpath("state")/gitsuite/plugins_reports.json` and `User GitsuitePluginsReported`
+fires after each. It reads local state only -- no install, update, pin or clean.
+See docs/commands.md.
+
 ==============================================================================
 5. CONFIGURATION                                                *gitsuite-config*
 >lua
@@ -140,7 +151,9 @@ blobless clone. See docs/commands.md and docs/configuration.md (`plugins.*`).
     keymaps = { blame_full = "<leader>gb", ui_lazygit = "<leader>lg" },
     browse = { hosts = {} },
     dashboard = { base_dir = "", extra_paths = {}, groups = {} },
-    plugins = { sources = "auto", roots = {}, log_limit = 50, timeout_ms = 30000 },
+    plugins = { sources = "auto", roots = {}, log_limit = 50, timeout_ms = 30000,
+      include_local = false, mode = "updated", max_commits = 1000, parallel = 4,
+      run_window_s = 300, merges = false, keep_reports = 20, max_age_days = 365 },
     progress_style = "auto",
   })
 <
@@ -189,6 +202,15 @@ completion callback rather than merely after the (async) action was
 requested. Not fired for a hunk reset: gitsigns' reset only rewrites the
 buffer's in-memory lines, never the index or the file on disk.
 
+                                                     *GitsuitePluginsReported*
+`GitsuitePluginsReported`  `{ id, mode, at, plugins, commits, errors, saved }`
+-- after `:Git plugins report` has built a report: `id` names it in the report
+store, `mode` is "updated" or "pending", `at` the Unix time, `plugins` how many
+plugins changed, `commits` how many commits that came to, `errors` how many
+sources or plugins could not be read, `saved` whether the report reached the
+store. gitsuite has no consumer of its own; a notifier or statusline chip
+subscribes.
+
 ==============================================================================
 8. STATUSLINE                                                *gitsuite-statusline*
 
@@ -212,6 +234,7 @@ full wiring (heirline, the native statusline) and why the cache is keyed by
   - `git` on `$PATH`
   - each adapter's availability (info, not warn/error -- see |gitsuite-adapters|)
   - the plugin sources `:Git plugins` reads (lazy, pack, clones)
+  - the stored `:Git plugins report` reports (readable? from this machine?)
   - rejected `setup()` options, if any
   - the composer's own route-tree check for `:Git`
 

@@ -1,0 +1,484 @@
+---@module 'gitsuite.features.plugins.report'
+--- Building a report: for every installed plugin, what changed between two
+--- states -- and nothing else.
+---
+--- Two questions, same machinery:
+---   * `updated`  what did the last `:Lazy sync` (or any update) change?
+---                from = the state before the update, to = now; both from the
+---                clone's HEAD reflog (`runs`).
+---   * `pending`  what would the next update bring?
+---                from = what is installed, to = the commit lazy.nvim would
+---                check out (`target`), as of the last fetch.
+---
+--- The cost is the number of plugins that CHANGED, not the number installed:
+--- everything to decide whether one did is read from files (`gitfs`), a
+--- plugin that did not change costs no process, and one that did costs one
+--- `git log from...to --left-right` (`gitlog.range`), which also tells the
+--- direction. A range of two commits never changes, so a range seen in an
+--- earlier report is taken from the store instead of asking git again.
+---
+--- Nothing here writes a clone, fetches or installs; the one thing written is
+--- the report itself (`state`).
+
+local async = require("lib.nvim.async")
+local config = require("gitsuite.config")
+local gitfs = require("gitsuite.features.plugins.gitfs")
+local gitlog = require("gitsuite.features.plugins.gitlog")
+local runs = require("gitsuite.features.plugins.runs")
+local sources = require("gitsuite.features.plugins.sources")
+local state = require("gitsuite.features.plugins.state")
+local target = require("gitsuite.features.plugins.target")
+local text = require("gitsuite.features.plugins.text")
+
+local uv = vim.uv or vim.loop
+
+local M = {}
+
+---A commit message is stored up to this many bytes.
+M.MAX_BODY = 2048
+
+---@class GitSuite.Plugins.ReportCommit
+---@field sha string
+---@field subject string
+---@field body string
+---@field author string
+---@field time? integer  Committer time.
+---@field side? "<"|">"  For a symmetric range: which side the commit is on.
+
+---@class GitSuite.Plugins.ReportEntry
+---@field name string
+---@field dir string
+---@field url? string
+---@field managed_by string
+---@field status "forward"|"rollback"|"diverged"|"same"|"new"|"pinned"|"unknown_target"|"from_missing"|"error"|"no_git"
+---@field source "reflog"|"snapshot"|"pending"
+---@field confidence "exact"|"approx"
+---@field head? string        Where the clone stood when the report was made.
+---@field from? string
+---@field to? string
+---@field to_label? string    The tag or branch the target is called.
+---@field time? integer       When the update happened (`updated`).
+---@field ahead? integer
+---@field behind? integer
+---@field truncated? boolean
+---@field commits? GitSuite.Plugins.ReportCommit[]
+---@field reason? string
+---@field fetched_at? integer
+---@field locked? boolean
+
+---@class GitSuite.Plugins.Report
+---@field version integer
+---@field id string
+---@field at integer
+---@field mode "updated"|"pending"
+---@field host string
+---@field lazy? string
+---@field sources string[]
+---@field run? { first: integer, last: integer, older: integer, plugins: integer }
+---@field plugins GitSuite.Plugins.ReportEntry[]
+---@field heads table<string, string>  Where every plugin looked at stood (clone path -> commit), changed or not: the fallback for "from" when a reflog says nothing.
+---@field counts { checked: integer, changed: integer, commits: integer, unchanged: integer }
+---@field errors string[]
+---@field save_error? string
+
+---@class GitSuite.Plugins.BuildOpts
+---@field mode? "updated"|"pending"
+---@field all? boolean                         Take `dir`-mode plugins too.
+---@field refs? GitSuite.Plugins.Ref[]         Plugins to look at (default: the configured sources).
+---@field now? integer
+---@field store_path? string                   Report store (default: below `stdpath("state")`).
+---@field persist? boolean                     Write the report to the store (default true).
+---@field on_progress? fun(done: integer, total: integer)
+
+---Fill the fields every entry has, from the plugin and what its clone says.
+---@param entry table  The fields specific to this entry.
+---@param ref GitSuite.Plugins.Ref
+---@param head GitSuite.Plugins.Head|nil
+---@return GitSuite.Plugins.ReportEntry
+local function base_entry(entry, ref, head)
+  entry.name = ref.name
+  entry.dir = ref.dir
+  entry.url = ref.url
+  entry.managed_by = ref.managed_by
+  entry.head = head and head.sha or nil
+  entry.fetched_at = gitfs.fetch_time(ref.dir)
+  entry.locked = gitfs.index_locked(ref.dir) or nil
+  return entry
+end
+
+---@param commit Lib.Git.LogEntry
+---@return GitSuite.Plugins.ReportCommit
+local function to_commit(commit)
+  local body = commit.body or ""
+  if #body > M.MAX_BODY then body = body:sub(1, M.MAX_BODY) .. "…" end
+  return {
+    sha = commit.sha,
+    subject = text.utf8(commit.subject or ""),
+    body = text.utf8(body),
+    author = text.utf8(commit.author or ""),
+    time = commit.commit_time,
+    side = (commit.side == "<" or commit.side == ">") and commit.side or nil,
+  }
+end
+
+---What a finished `from...to` log means for the plugin.
+---@param entry GitSuite.Plugins.ReportEntry
+---@param entries Lib.Git.LogEntry[]
+---@param max integer
+local function apply_log(entry, entries, max)
+  local ahead, behind = 0, 0
+  for _, commit in ipairs(entries) do
+    if commit.side == ">" then
+      ahead = ahead + 1
+    elseif commit.side == "<" then
+      behind = behind + 1
+    end
+  end
+  entry.ahead, entry.behind = ahead, behind
+  entry.status = runs.direction(ahead, behind)
+  entry.truncated = #entries > max or nil
+
+  local kept = {}
+  for _, commit in ipairs(entries) do
+    local wanted = entry.status == "diverged"
+      or (entry.status == "forward" and commit.side == ">")
+      or (entry.status == "rollback" and commit.side == "<")
+    if wanted then
+      kept[#kept + 1] = to_commit(commit)
+      if #kept >= max then break end
+    end
+  end
+  entry.commits = kept
+end
+
+---@class GitSuite.Plugins.Job
+---@field entry GitSuite.Plugins.ReportEntry
+---@field from string
+---@field rev string      What git turns into the target commit.
+---@field cache_to? string  The target as a full hash, when known (then the range can be cached).
+
+---Collect the entries and jobs of mode `updated`.
+---@param refs GitSuite.Plugins.Ref[]
+---@param ctx table
+---@return GitSuite.Plugins.ReportEntry[] rows
+---@return GitSuite.Plugins.Job[] jobs
+---@return table meta
+local function plan_updated(refs, ctx)
+  local cfg = ctx.cfg
+  local cands = {}
+  local times = {}
+  for _, ref in ipairs(refs) do
+    local head, herr = gitfs.head(ref.dir)
+    if head and head.sha then ctx.heads[ref.dir] = head.sha end
+    if not gitfs.is_clone(ref.dir) then
+      ctx.rows[#ctx.rows + 1] = base_entry({
+        status = "no_git",
+        source = "reflog",
+        confidence = "exact",
+        reason = "its .git is not a directory (a worktree or submodule)",
+      }, ref, nil)
+    elseif not head or not head.sha then
+      ctx.rows[#ctx.rows + 1] = base_entry({
+        status = "error",
+        source = "reflog",
+        confidence = "exact",
+        reason = "HEAD could not be read: " .. text.one_line(herr or "no commit"),
+      }, ref, head)
+    else
+      local reflog = gitfs.reflog(ref.dir)
+      local analysis = reflog and runs.last_update(reflog, { head = head.sha })
+        or { state = "none" }
+      local cand = { ref = ref, head = head, analysis = analysis }
+      cands[#cands + 1] = cand
+      if analysis.state == "updated" then
+        times[#times + 1] = analysis.time
+        cand.index = #times
+      end
+    end
+  end
+
+  local run = runs.latest_run(times, cfg.run_window_s)
+  local in_run = {}
+  if run then
+    for _, member in ipairs(run.members) do
+      in_run[member] = true
+    end
+  end
+
+  local jobs = {}
+  local skipped = 0
+  for _, cand in ipairs(cands) do
+    local a, ref, head = cand.analysis, cand.ref, cand.head
+    if a.state == "updated" then
+      if cand.index and in_run[cand.index] then
+        jobs[#jobs + 1] = {
+          entry = base_entry({
+            source = "reflog",
+            confidence = "exact",
+            from = a.from,
+            to = a.to,
+            time = a.time,
+          }, ref, head),
+          from = a.from,
+          rev = a.to,
+          cache_to = a.to,
+        }
+      else
+        skipped = skipped + 1
+      end
+    elseif a.state == "installed" then
+      if
+        run
+        and a.time >= run.first_time - cfg.run_window_s
+        and a.time <= run.last_time + cfg.run_window_s
+      then
+        ctx.rows[#ctx.rows + 1] = base_entry({
+          status = "new",
+          source = "reflog",
+          confidence = "exact",
+          to = a.to,
+          time = a.time,
+          reason = "installed in this run",
+        }, ref, head)
+      else
+        skipped = skipped + 1
+      end
+    else
+      -- The reflog says nothing usable (expired, never written, ends elsewhere,
+      -- only the user's own commits): the state of the last report stands in.
+      local snapshot = state.snapshot(ctx.store, ref.dir)
+      if snapshot and snapshot ~= head.sha then
+        jobs[#jobs + 1] = {
+          entry = base_entry({
+            source = "snapshot",
+            confidence = "approx",
+            from = snapshot,
+            to = head.sha,
+          }, ref, head),
+          from = snapshot,
+          rev = head.sha,
+          cache_to = head.sha,
+        }
+      else
+        skipped = skipped + 1
+      end
+    end
+  end
+
+  local meta = { skipped = skipped }
+  if run then
+    meta.run = {
+      first = run.first_time,
+      last = run.last_time,
+      older = run.older,
+      plugins = #run.members,
+    }
+  end
+  return ctx.rows, jobs, meta
+end
+
+---Collect the entries and jobs of mode `pending`.
+---@param refs GitSuite.Plugins.Ref[]
+---@param ctx table
+---@return GitSuite.Plugins.ReportEntry[] rows
+---@return GitSuite.Plugins.Job[] jobs
+---@return table meta
+local function plan_pending(refs, ctx)
+  local lazy_ok, lazy = pcall(require, "gitsuite.adapter.lazy")
+  local defaults_version = lazy_ok and lazy.is_available() and lazy.defaults_version() or nil
+  local jobs, skipped = {}, 0
+  for _, ref in ipairs(refs) do
+    local head, herr = gitfs.head(ref.dir)
+    if head and head.sha then ctx.heads[ref.dir] = head.sha end
+    if not gitfs.is_clone(ref.dir) then
+      ctx.rows[#ctx.rows + 1] = base_entry({
+        status = "no_git",
+        source = "pending",
+        confidence = "exact",
+        reason = "its .git is not a directory (a worktree or submodule)",
+      }, ref, nil)
+    elseif not head or not head.sha then
+      ctx.rows[#ctx.rows + 1] = base_entry({
+        status = "error",
+        source = "pending",
+        confidence = "exact",
+        reason = "HEAD could not be read: " .. text.one_line(herr or "no commit"),
+      }, ref, head)
+    else
+      local t = target.resolve(ref, { defaults_version = defaults_version })
+      if t.tier == "pin" then
+        ctx.rows[#ctx.rows + 1] = base_entry({
+          status = "pinned",
+          source = "pending",
+          confidence = "exact",
+          reason = t.reason,
+        }, ref, head)
+      elseif t.tier == "unknown" then
+        ctx.rows[#ctx.rows + 1] = base_entry({
+          status = "unknown_target",
+          source = "pending",
+          confidence = "exact",
+          reason = "cannot tell what lazy.nvim would update to: " .. text.one_line(t.reason),
+        }, ref, head)
+      elseif t.sha and t.sha == head.sha then
+        skipped = skipped + 1
+      else
+        jobs[#jobs + 1] = {
+          entry = base_entry({
+            source = "pending",
+            confidence = "exact",
+            from = head.sha,
+            to = t.sha,
+            to_label = t.label,
+          }, ref, head),
+          from = head.sha,
+          rev = t.rev,
+          cache_to = t.certain and t.sha or nil,
+        }
+      end
+    end
+  end
+  return ctx.rows, jobs, { skipped = skipped }
+end
+
+---Build a report. Asynchronous (one git process per changed plugin, `parallel`
+---at a time); `on_done` is called once, scheduled.
+---@param opts GitSuite.Plugins.BuildOpts
+---@param on_done fun(report: GitSuite.Plugins.Report, info: GitSuite.Plugins.StoreInfo)
+---@return { stop: fun() } handle
+function M.build(opts, on_done)
+  local cfg = config.get().plugins
+  local mode = opts.mode or cfg.mode
+  local now = opts.now or os.time()
+  local store, store_info = state.load(opts.store_path)
+
+  ---@type GitSuite.Plugins.Ref[], string[], string[]
+  local refs, used, errors
+  if opts.refs then
+    refs, used, errors = opts.refs, { "given" }, {}
+  else
+    refs, used, errors =
+      sources.list({ include_local = (opts.all or cfg.include_local) and true or false })
+  end
+
+  local ctx = { cfg = cfg, store = store, rows = {}, heads = {} }
+  local rows, jobs, meta
+  if mode == "pending" then
+    rows, jobs, meta = plan_pending(refs, ctx)
+  else
+    rows, jobs, meta = plan_updated(refs, ctx)
+  end
+
+  local cache = state.cache_index(store)
+  local max = cfg.max_commits
+  local handle
+  local stopped = false
+
+  ---@param j GitSuite.Plugins.Job
+  ---@param done fun(result: any, err: any)
+  local function work(j, _, done)
+    local entry = j.entry
+    local cached = j.cache_to and cache[state.cache_key(entry.dir, j.from, j.cache_to)]
+    if cached and type(cached.commits) == "table" and cached.status then
+      entry.status = cached.status
+      entry.ahead, entry.behind = cached.ahead, cached.behind
+      entry.truncated = cached.truncated
+      entry.commits = cached.commits
+      return done(entry)
+    end
+    return gitlog.range(
+      entry.dir,
+      j.from,
+      j.rev,
+      { max_count = max + 1, no_merges = not cfg.merges },
+      function(entries, err)
+        if entries then
+          apply_log(entry, entries, max)
+          return done(entry)
+        end
+        gitlog.has_commit(entry.dir, j.from, function(has)
+          if has then
+            entry.status = "error"
+            entry.reason = "git could not list the commits: " .. text.one_line(err)
+          else
+            entry.status = "from_missing"
+            entry.reason =
+              "the previous state is no longer in the clone (a force-push, or a pruned history)"
+          end
+          done(entry)
+        end)
+      end
+    )
+  end
+
+  local function finish(results)
+    if stopped then return end
+    local plugins = {}
+    for _, row in ipairs(rows) do
+      plugins[#plugins + 1] = row
+    end
+    for i = 1, #jobs do
+      plugins[#plugins + 1] = results[i] or jobs[i].entry
+      if not results[i] then
+        plugins[#plugins].status = "error"
+        plugins[#plugins].reason = "not finished"
+      end
+    end
+    table.sort(plugins, function(a, b)
+      return a.name:lower() < b.name:lower()
+    end)
+
+    local changed, commits = 0, 0
+    for _, entry in ipairs(plugins) do
+      if entry.status == "forward" or entry.status == "rollback" or entry.status == "diverged" then
+        changed = changed + 1
+        commits = commits + #(entry.commits or {})
+      end
+    end
+
+    local lazy_version
+    local lazy_ok, lazy = pcall(require, "gitsuite.adapter.lazy")
+    if lazy_ok and lazy.is_available() then lazy_version = lazy.version() end
+
+    ---@type GitSuite.Plugins.Report
+    local report = {
+      version = state.VERSION,
+      id = ("%s-%04x"):format(os.date("!%Y%m%dT%H%M%SZ", now), uv.hrtime() % 0x10000),
+      at = now,
+      mode = mode,
+      host = state.host(),
+      lazy = lazy_version,
+      sources = used,
+      run = meta.run,
+      plugins = plugins,
+      counts = {
+        checked = #refs,
+        changed = changed,
+        commits = commits,
+        unchanged = #refs - #plugins,
+      },
+      errors = errors,
+      heads = ctx.heads,
+    }
+
+    local info = store_info
+    if opts.persist ~= false then
+      local ok, err, add_info = state.add(report, cfg, opts.store_path)
+      if not ok then report.save_error = err end
+      info = add_info or store_info
+    end
+    on_done(report, info)
+  end
+
+  handle = async.map_limit(jobs, cfg.parallel, work, function(results, _, was_stopped)
+    stopped = was_stopped
+    finish(results)
+  end, {
+    on_progress = opts.on_progress and function(done, total)
+      opts.on_progress(done, total)
+    end or nil,
+  })
+  return handle
+end
+
+return M

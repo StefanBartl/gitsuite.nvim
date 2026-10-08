@@ -19,8 +19,8 @@ What is here, and which question each page answers.
 | --- | --- |
 | [what-you-get.md](what-you-get.md) | The handful of things worth knowing on day one |
 | [BINDINGS.md](BINDINGS.md) | Every `:Git` subcommand and keymap, generated from the route tree |
-| [commands.md](commands.md) | How the `:Git <scope> <action>` tree itself works, and how to rename it |
-| [integrations.md](integrations.md) | The context-menu contributor and the pickers.nvim branch-switch bridge |
+| [commands.md](commands.md) | How the `:Git <scope> <action>` tree itself works, how to rename it, and what `:Git plugins log`/`report` do |
+| [integrations.md](integrations.md) | The context-menu contributor, the pickers.nvim branch-switch bridge and the plugin-report event |
 | [statusline.md](statusline.md) | The merge-conflict statusline component and how to wire it up |
 | [lazygit-config.yml](lazygit-config.yml) | The `customCommands` behind `:Git ui lazygit`'s `O`/`<C-o>` bridge |
 
@@ -28,7 +28,7 @@ What is here, and which question each page answers.
 
 | Page | Answers |
 | --- | --- |
-| [scope.md](scope.md) | What gitsuite.nvim does and does not do |
+| [scope.md](scope.md) | What gitsuite.nvim does and does not do, and the two multi-repository scopes |
 | [around-it.md](around-it.md) | How it relates to gitsigns, diffview, neogit, fugitive/rhubarb, git-conflict.nvim, lazygit.nvim, reposcope.nvim and insights.nvim specifically |
 | [architecture.md](architecture.md) | Why the adapter/native split falls where it does, and the dependency-direction rule behind it |
 | [cross-platform.md](cross-platform.md) | What is and isn't verified across Linux, Windows and macOS |

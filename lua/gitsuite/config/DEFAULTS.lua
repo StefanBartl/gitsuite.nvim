@@ -72,6 +72,27 @@ local DEFAULTS = {
     -- Timeout of each git process in milliseconds: a clone on a network drive
     -- or a stalled antivirus scan must not hang the editor's request forever.
     timeout_ms = 30000,
+    -- `:Git plugins report`: which clones. false = only third-party plugins the
+    -- manager updates; true also takes `dir`-mode ones (usually your own repos).
+    include_local = false,
+    -- What the report compares: "updated" = the previous state with the current
+    -- one (what the last update changed, from each clone's reflog); "pending" =
+    -- the current state with the target lazy.nvim would move to (as of the last
+    -- fetch -- gitsuite never fetches).
+    mode = "updated",
+    -- Commits kept per plugin in a report; more are cut and marked as such.
+    max_commits = 1000,
+    -- git processes at once while a report is built (a Windows machine with a
+    -- virus scanner is happier with few).
+    parallel = 4,
+    -- Plugins whose update times lie at most this many seconds apart belong to
+    -- one update run (one `:Lazy sync`).
+    run_window_s = 300,
+    -- Merge commits in a report: false = left out of the commit lists.
+    merges = false,
+    -- Stored reports (newest first): how many, and for how many days.
+    keep_reports = 20,
+    max_age_days = 365,
   },
   -- Indicator style for `:Git dashboard`/`:Git dashboard update` over many
   -- repositories; "auto" picks fidget.nvim when installed, else `vim.notify`.

@@ -111,7 +111,7 @@ dashboard = {
 
 Unlike every other family, `dashboard` operates across a whole directory
 of repositories rather than the one the current buffer belongs to — see
-[scope.md](scope.md#dashboard-the-one-multi-repo-scope). There is
+[scope.md](scope.md#multi-repository-scopes). There is
 deliberately no `features.dashboard` flag: the scope is always registered.
 
 `base_dir` defaults to `$REPOS_DIR` (via `lib.nvim.system.env`) when unset.
@@ -148,6 +148,15 @@ plugins = {
   roots = {},        -- folders of clones for the "clones" source
   log_limit = 50,    -- commits `:Git plugins log` shows when no count is given
   timeout_ms = 30000, -- timeout of each git process
+  -- `:Git plugins report`
+  include_local = false, -- also take `dir`-mode plugins (usually your own repos)
+  mode = "updated",      -- "updated" (what the last update changed) | "pending" (what the next would bring)
+  max_commits = 1000,    -- commits kept per plugin in a report; more are cut and marked
+  parallel = 4,          -- git processes at once while a report is built
+  run_window_s = 300,    -- plugins updated this close together form one update run
+  merges = false,        -- keep merge commits in the commit lists
+  keep_reports = 20,     -- stored reports, newest first
+  max_age_days = 365,    -- older stored reports are dropped (the newest never is)
 },
 ```
 
@@ -160,6 +169,19 @@ deduplicated by path. `roots` replaces the folders the `clones` source scans
 only a child with its own `.git` directory counts, a worktree (`.git` file) is
 skipped. `timeout_ms` bounds every git process so a clone on a network drive
 cannot hang the request.
+
+The report options: `mode` is the default for `:Git plugins report`
+(`--mode=` overrides it per call). `include_local = false` keeps `dir`-mode
+plugins out — lazy.nvim never updates them, so "what the update changed" does
+not apply; `--all` includes them for one call. `parallel` bounds the git
+processes of one report (a machine with a virus scanner may want 2);
+`max_commits` bounds what is kept per plugin. `keep_reports`/`max_age_days`
+bound the stored reports (`stdpath("state")/gitsuite/plugins_reports.json`;
+the file itself is also capped at 8 MiB, oldest report first) — the newest
+report is always kept. The report store is **per machine** (clones, reflogs and
+the lock file are machine-local); a store written on another host is kept
+aside, not used. An unknown key or a wrong-typed value is dropped with a
+warning, like everywhere else.
 
 ## `progress_style`
 

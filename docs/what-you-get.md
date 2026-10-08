@@ -42,7 +42,18 @@ The handful of things worth knowing before reading anything else.
   changed files. It only reads: one `git log`, never a fetch, and it works in the
   blobless clones lazy.nvim makes. See [commands.md](commands.md#plugins--the-history-of-the-clones-a-plugin-manager-installed).
 
-- **`:Git dashboard` is the one command that isn't about the current
+- **`:Git plugins report` answers "what did that `:Lazy sync` change?"** It
+  names the plugins the last update touched — from each clone's own reflog, so
+  it still works after a restart — and lists the commits each one brought in,
+  with the direction stated honestly: a rollback, a diverged branch or a
+  force-pushed-away old state is called that, never "N new commits".
+  `--mode=pending` shows instead what the next update would bring, measured
+  against the target lazy.nvim itself would check out (a tag range, a pin and a
+  branch all compare differently). Reports are kept under `stdpath("state")`.
+  Nothing is fetched; run `:Lazy check` first for a fresh pending view. See
+  [commands.md](commands.md#plugins--the-history-of-the-clones-a-plugin-manager-installed).
+
+- **`:Git dashboard` is one of two commands that aren't about the current
   repository.** A git-status panel (branch, ahead/behind, dirty,
   last-commit age) across a whole folder of clones, or a configured set
   of named pages (`dashboard.groups`) you flip between with

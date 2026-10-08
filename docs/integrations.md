@@ -39,6 +39,22 @@ the checkout goes through gitsuite's own error handling and fires
 `GitsuiteBranchSwitched` — verified against each engine's actual source,
 not assumed from documentation.
 
+## `User GitsuitePluginsReported` — the report event
+
+`:Git plugins report` fires it after a report is built (and written); gitsuite itself has no consumer. A statusline chip, a notifier or the plugin manager's own UI subscribes with an autocmd, the same way as to the other `Gitsuite*` events:
+
+```lua
+vim.api.nvim_create_autocmd("User", {
+  pattern = "GitsuitePluginsReported",
+  callback = function(event)
+    local r = event.data -- { id, mode, at, plugins, commits, errors, saved }
+    if r.plugins > 0 then
+      vim.notify(("%d plugins changed, %d commits"):format(r.plugins, r.commits))
+    end
+  end,
+})
+```
+
 ## See also
 
 - [Architecture](architecture.md) — the "adapter vs. integration" naming and the dependency-direction rule both are built on.

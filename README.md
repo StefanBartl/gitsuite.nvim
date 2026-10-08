@@ -31,14 +31,16 @@ One `:Git <scope> <action>` command tree for everything git in Neovim — own
 implementation where that pays off (merge-conflict resolution, blame,
 browse), thin adapters where it does not (gitsigns' hunk engine, neogit's
 staging UI, diffview, the real `lazygit` TUI in a float). Plus `:Git
-dashboard`, the one deliberate multi-repo exception: a git-status panel
-across a whole folder of clones, with push/pull/fetch per row, per marked
-set, or for the whole folder — moved here from
+dashboard`, a multi-repo git-status panel across a whole folder of clones,
+with push/pull/fetch per row, per marked set, or for the whole folder —
+moved here from
 [reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim), which
-stays scoped to GitHub/GitLab/Codeberg discovery. And `:Git plugins log`:
-the newest commits of an installed plugin (or of any clone) in a picker with
-a preview — what changed in the plugin you just updated — read-only, offline,
-no fetch.
+stays scoped to GitHub/GitLab/Codeberg discovery. And `:Git plugins`: after a
+`:Lazy sync`, `:Git plugins report` says which plugins the update changed and
+which commits that brought (or, with `--mode=pending`, what the next update
+would bring), and `:Git plugins log` shows the newest commits of one plugin
+or any clone in a picker with a preview — both read local state only: no
+fetch, no install, no change to any clone.
 
 ---
 

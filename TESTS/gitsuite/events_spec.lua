@@ -67,6 +67,35 @@ describe("gitsuite.events", function()
     assert.equals("/repo/root", captured.dir)
   end)
 
+  it("plugins_reported() fires GitsuitePluginsReported with the report's numbers", function()
+    local captured
+    vim.api.nvim_create_autocmd("User", {
+      group = group,
+      pattern = "GitsuitePluginsReported",
+      callback = function(event)
+        captured = event.data
+      end,
+    })
+
+    events.plugins_reported({
+      id = "20261008T120000Z-0001",
+      mode = "updated",
+      at = 1790000000,
+      plugins = 8,
+      commits = 120,
+      errors = 1,
+      saved = true,
+    })
+
+    assert.is_not_nil(captured)
+    assert.equals("20261008T120000Z-0001", captured.id)
+    assert.equals("updated", captured.mode)
+    assert.equals(8, captured.plugins)
+    assert.equals(120, captured.commits)
+    assert.equals(1, captured.errors)
+    assert.is_true(captured.saved)
+  end)
+
   it("events do not cross-fire each other's patterns", function()
     local branch_fired, status_fired = false, false
     vim.api.nvim_create_autocmd("User", {

@@ -170,6 +170,68 @@ describe("gitsuite.config", function()
       assert.equals("auto", config.get().plugins.sources)
     end)
 
+    it("has report defaults: third-party only, last update, generous retention", function()
+      local p = config.get().plugins
+      assert.is_false(p.include_local)
+      assert.equals("updated", p.mode)
+      assert.equals(1000, p.max_commits)
+      assert.equals(4, p.parallel)
+      assert.equals(300, p.run_window_s)
+      assert.is_false(p.merges)
+      assert.equals(20, p.keep_reports)
+      assert.equals(365, p.max_age_days)
+    end)
+
+    it("accepts valid report options", function()
+      config.setup({
+        plugins = {
+          include_local = true,
+          mode = "pending",
+          max_commits = 50,
+          parallel = 2,
+          run_window_s = 60,
+          merges = true,
+          keep_reports = 3,
+          max_age_days = 30,
+        },
+      })
+      local p = config.get().plugins
+      assert.is_true(p.include_local)
+      assert.equals("pending", p.mode)
+      assert.equals(50, p.max_commits)
+      assert.equals(2, p.parallel)
+      assert.equals(60, p.run_window_s)
+      assert.is_true(p.merges)
+      assert.equals(3, p.keep_reports)
+      assert.equals(30, p.max_age_days)
+      assert.same({}, config.issues())
+    end)
+
+    it("drops a wrong report option and keeps the default under it", function()
+      config.setup({
+        plugins = {
+          include_local = "yes",
+          mode = "all",
+          max_commits = 0,
+          parallel = 1.5,
+          run_window_s = "300",
+          merges = 1,
+          keep_reports = -1,
+          max_age_days = false,
+        },
+      })
+      local p = config.get().plugins
+      assert.is_false(p.include_local)
+      assert.equals("updated", p.mode)
+      assert.equals(1000, p.max_commits)
+      assert.equals(4, p.parallel)
+      assert.equals(300, p.run_window_s)
+      assert.is_false(p.merges)
+      assert.equals(20, p.keep_reports)
+      assert.equals(365, p.max_age_days)
+      assert.equals(8, #config.issues())
+    end)
+
     it("reports an unknown key inside plugins", function()
       config.setup({ plugins = { sourcez = "auto" } })
       assert.is_truthy(config.issues()[1]:find("plugins.sourcez", 1, true))

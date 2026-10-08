@@ -46,6 +46,14 @@
 ---@field roots      string[]  Folders of clones the `clones` source scans; empty = `stdpath("data")/lazy` and `stdpath("data")/site/pack/*/{start,opt}`.
 ---@field log_limit  integer   Commits `:Git plugins log` lists when no count is given.
 ---@field timeout_ms integer   Per-`git` timeout of `:Git plugins` (a clone on a network drive can hang).
+---@field include_local boolean  `:Git plugins report` also takes `dir`-mode plugins (default false: only what the manager updates).
+---@field mode "updated"|"pending"  What a report compares (default "updated").
+---@field max_commits integer  Commits kept per plugin in a report.
+---@field parallel integer     git processes at once while a report is built.
+---@field run_window_s integer Plugins updated within this many seconds of each other form one run.
+---@field merges boolean       Keep merge commits in the commit lists.
+---@field keep_reports integer Stored reports (newest first).
+---@field max_age_days integer Stored reports older than this are dropped.
 
 --- The **resolved** configuration, as `config.get()` returns it: DEFAULTS
 --- deep-merged with the user's `setup()` table. Every field below is
@@ -97,6 +105,16 @@
 --- index or the file on disk, so `git status` has not moved.
 ---@class GitSuite.Event.StatusChanged
 ---@field dir string  Repo root the change happened in.
+
+--- `GitsuitePluginsReported` -- after `:Git plugins report` built a report.
+---@class GitSuite.Event.PluginsReported
+---@field id string       The report's id in the store.
+---@field mode "updated"|"pending"
+---@field at integer      Unix time of the report.
+---@field plugins integer Plugins that changed.
+---@field commits integer Commits listed across them.
+---@field errors integer  Sources or plugins that could not be read.
+---@field saved boolean   Whether the report reached the store.
 
 --- How a plugin manager pins a plugin; every field is whatever its spec said.
 ---@class GitSuite.Plugins.Spec

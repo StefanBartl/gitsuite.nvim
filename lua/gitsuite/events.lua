@@ -34,6 +34,16 @@ function M.conflicts_resolved(bufnr)
   )
 end
 
+---Fired after `:Git plugins report` has built a report and written it to the
+---store (also when the write failed -- `data.saved` says). gitsuite itself has
+---no consumer; a statusline chip or a notifier subscribes with its own
+---`autocmd User GitsuitePluginsReported`.
+---@param data GitSuite.Event.PluginsReported
+---@return nil
+function M.plugins_reported(data)
+  vim.api.nvim_exec_autocmds("User", { pattern = "GitsuitePluginsReported", data = data })
+end
+
 ---Fired after a hunk stage/reset (single hunk or whole buffer) completes --
 ---i.e. after gitsigns' own callback confirms the git index/working-tree
 ---write, not merely after the (async) action was requested.

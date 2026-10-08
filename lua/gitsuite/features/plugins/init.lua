@@ -126,4 +126,85 @@ function M.log(target, opts)
   return nil
 end
 
+---@class GitSuite.Plugins.ReportCmdOpts
+---@field mode? "updated"|"pending"           What to compare (default `plugins.mode`).
+---@field all? boolean                        Take `dir`-mode plugins too.
+---@field last? boolean                       Show the newest stored report instead of building one.
+---@field out? "buffer"|"clipboard"|"path"    Where to put the Markdown (default "buffer").
+---@field to? string                          The file for `out = "path"`.
+---@field on_done? fun(report: GitSuite.Plugins.Report|nil, err: string|nil)  Called once (for scripts and tests).
+
+---Show a report as Markdown.
+---@param report GitSuite.Plugins.Report
+---@param opts GitSuite.Plugins.ReportCmdOpts
+local function present(report, opts)
+  local lines = require("gitsuite.features.plugins.markdown").render(report)
+  view.show_markdown(lines, report.id, opts.out, opts.to)
+end
+
+---Build a report of what changed in the installed plugins -- the last update's
+---changes (`mode = "updated"`) or what the next one would bring
+---(`"pending"`) -- store it and show it. Reads local state only: no fetch, no
+---install, no change to any clone.
+---@param opts? GitSuite.Plugins.ReportCmdOpts
+---@return { stop: fun() }|nil handle
+function M.report(opts)
+  opts = opts or {}
+  local state = require("gitsuite.features.plugins.state")
+
+  if opts.last then
+    local store, info = state.load()
+    local newest
+    for _, stored in ipairs(store.reports) do
+      if opts.mode == nil or stored.mode == opts.mode then
+        newest = stored
+        break
+      end
+    end
+    if not newest then
+      local why = info.readonly and (": " .. info.readonly) or ""
+      notify.error("plugins report: no stored report yet" .. text.one_line(why))
+      if opts.on_done then opts.on_done(nil, "no stored report") end
+      return nil
+    end
+    present(newest, opts)
+    if opts.on_done then opts.on_done(newest, nil) end
+    return nil
+  end
+
+  notify.info("plugins report: reading the clones ...")
+  return require("gitsuite.features.plugins.report").build(
+    { mode = opts.mode, all = opts.all },
+    function(report, info)
+      require("gitsuite.events").plugins_reported({
+        id = report.id,
+        mode = report.mode,
+        at = report.at,
+        plugins = report.counts.changed,
+        commits = report.counts.commits,
+        errors = #report.errors,
+        saved = report.save_error == nil,
+      })
+      if info.recovered then
+        notify.warn(
+          "plugins report: the report store could not be read; it was moved to "
+            .. text.one_line(info.recovered)
+        )
+      end
+      if info.foreign then
+        notify.warn(
+          ("plugins report: the report store came from another machine (%s); it was kept aside"):format(
+            text.one_line(info.foreign)
+          )
+        )
+      end
+      if report.save_error then
+        notify.warn("plugins report: not saved: " .. text.one_line(report.save_error))
+      end
+      present(report, opts)
+      if opts.on_done then opts.on_done(report, nil) end
+    end
+  )
+end
+
 return M

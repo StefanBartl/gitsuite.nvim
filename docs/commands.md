@@ -5,7 +5,7 @@ Full sub-command reference: → [BINDINGS.md](BINDINGS.md)
 ## One command tree, one dispatch needle
 
 Every `:Git <scope> <action>` invocation — `conflict`, `hunk`, `blame`,
-`diff`, `browse`, `branch`, `ui`, `status`, `dashboard` — is a leaf in a
+`diff`, `browse`, `branch`, `ui`, `status`, `plugins`, `dashboard` — is a leaf in a
 single route tree registered through `lib.nvim.bindings.usercmd.composer`.
 That one tree drives three things at once, never out of sync with each
 other:
@@ -19,13 +19,14 @@ other:
 A `features.<scope> = false` in `setup()` (see
 [configuration.md](configuration.md)) removes that scope's routes from the
 tree entirely — `<Tab>` no longer offers it, and invoking it fails the same
-way an unrecognized scope would. `dashboard` has no such flag — see
-[below](#dashboard-the-one-multi-repo-scope) for why.
+way an unrecognized scope would. `dashboard` and `plugins` have no such flag — see
+[below](#dashboard-a-multi-repo-scope) for why.
 
-## `dashboard`, the one multi-repo scope
+## `dashboard`, a multi-repo scope
 
-Every other scope operates on the repository the current buffer belongs
-to. `dashboard` is the deliberate exception: a git-status panel across a
+Most scopes operate on the repository the current buffer belongs
+to. `dashboard` is a deliberate exception (`plugins report`, below, is the
+other): a git-status panel across a
 whole directory of clones (or a configured set of named pages), with
 row/marked-set/whole-page push, pull and fetch. Moved here from
 reposcope.nvim, which stays scoped to GitHub/GitLab/Codeberg discovery —
@@ -72,6 +73,52 @@ ever involved). In a blobless clone it
 works offline — it needs commits and file *names*, not file contents. A plugin
 that is not installed (`owner/repo` naming something you never installed) is
 refused with that reason: gitsuite does not clone or look anything up.
+
+```vim
+:Git plugins report [--mode=updated|pending] [--all] [--last] [--out=buffer|clipboard|path] [--to=<path>]
+```
+
+The question behind `:Lazy sync`: *which plugins changed, and what did they
+bring?* It looks at **every** installed plugin and lists the ones that changed,
+each with its commits, as a Markdown report (a read-only buffer by default).
+
+- `--mode=updated` (default, `plugins.mode`): what the **last update** changed.
+  The state before the update comes from each clone's own HEAD reflog, which
+  lazy.nvim fills with a `git checkout` per update — so it survives a restart,
+  which lazy's in-memory "updated" list does not. Plugins updated within
+  `plugins.run_window_s` (300 s) of each other form one run; the newest run is
+  reported. A freshly installed plugin is "newly installed", not an update (a
+  state counts only once it lasted two minutes), and the user's own commits in
+  a clone are not updates either. If a clone has no usable reflog, the state of
+  the previous stored report stands in, marked `snapshot ~` (approximate).
+- `--mode=pending`: what the **next update would bring** — the installed
+  commit against the one lazy.nvim would check out for that plugin: its
+  `commit`, `tag`, the highest tag matching its `version` range
+  (`defaults.version` included) or the tip of its branch. A pinned plugin is
+  listed as pinned; one whose target cannot be told is listed as such, never
+  compared with some other branch. This is the state **as of the last fetch**
+  (`:Lazy check` fetches; gitsuite does not) and the report says how old that
+  is.
+- `--all` also takes `dir`-mode plugins (usually your own repositories;
+  `plugins.include_local`). `--last` shows the newest stored report without
+  scanning. `--out=path` writes the Markdown to `--to` (default a file in
+  `stdpath("cache")/gitsuite/`).
+
+Each plugin is read from files first (HEAD, refs, reflog — about 100 ms for fifty
+clones); only a plugin that **changed** costs a git process (one
+`git log from...to --left-right`, which also tells the direction), at most
+`plugins.parallel` at a time. A range seen in an earlier report is taken from
+the store. The direction is stated, not assumed: **rolled back** (the old state
+had commits the new one lacks), **diverged** (both sides have some, e.g. a
+`master` → `main` switch) and **old state gone** (a force-push removed the
+previous commit) are shown as such, not as "N new commits".
+
+Reports live in `stdpath("state")/gitsuite/plugins_reports.json` — one file per
+machine, written atomically, never silently overwritten (an unreadable one is
+moved to `.corrupt`, one from another host or a newer gitsuite is left alone).
+`plugins.keep_reports`/`max_age_days` bound it, the newest report is never
+rotated out. After each report `User GitsuitePluginsReported` fires (see
+`doc/gitsuite.txt` §7).
 
 ## Rename the command
 

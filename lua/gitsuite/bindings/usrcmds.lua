@@ -441,6 +441,57 @@ local function build_routes()
         })
       end,
     },
+    {
+      path = { "plugins", "report" },
+      flags = {
+        {
+          name = "mode",
+          type = "STRING",
+          enum = { "updated", "pending" },
+          desc = "What to compare (default plugins.mode)",
+          enum_desc = {
+            updated = "What the last update changed: the state before it against now, from each clone's reflog",
+            pending = "What the next update would bring: now against lazy.nvim's target, as of the last fetch",
+          },
+        },
+        {
+          name = "out",
+          type = "STRING",
+          enum = { "buffer", "clipboard", "path" },
+          desc = "Where the Markdown report goes",
+          enum_desc = {
+            buffer = "Read-only Markdown buffer in a split (default)",
+            clipboard = "Copy the report to the clipboard",
+            path = "Write the report to a file (see --to)",
+          },
+        },
+        {
+          name = "to",
+          type = "PATH",
+          desc = "File that --out=path writes; default: a file in the cache dir",
+        },
+        {
+          name = "all",
+          bool = true,
+          desc = "Include dir-mode plugins (usually your own repositories)",
+        },
+        {
+          name = "last",
+          bool = true,
+          desc = "Show the newest stored report instead of building a new one",
+        },
+      },
+      desc = "Report what changed in the installed plugins: the last update (--mode=updated) or what is pending (--mode=pending); reads local state only",
+      run = function(ctx)
+        require("gitsuite.features.plugins").report({
+          mode = ctx.flags.mode,
+          out = ctx.flags.out,
+          to = ctx.flags.to,
+          all = ctx.flags.all == true,
+          last = ctx.flags.last == true,
+        })
+      end,
+    },
   }
 end
 

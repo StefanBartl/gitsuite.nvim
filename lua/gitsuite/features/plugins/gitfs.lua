@@ -206,22 +206,25 @@ local MAX_TAGS = 20000
 ---@param dir string
 ---@param prefix string  Path below `refs/tags/`.
 ---@param out table<string, true>
+---@param count integer  Tags collected so far.
 ---@param depth integer
-local function scan_tags(dir, prefix, out, depth)
-  if depth > 4 then return end
+---@return integer count
+local function scan_tags(dir, prefix, out, count, depth)
+  if depth > 4 then return count end
   local handle = uv.fs_scandir(gitdir(dir) .. "/refs/tags/" .. prefix)
-  if not handle then return end
-  while true do
+  if not handle then return count end
+  while count < MAX_TAGS do
     local name, kind = uv.fs_scandir_next(handle)
     if not name then break end
     local full = prefix .. name
     if kind == "directory" then
-      scan_tags(dir, full .. "/", out, depth + 1)
-    elseif kind == "file" and M.valid_refname("refs/tags/" .. full) then
+      count = scan_tags(dir, full .. "/", out, count, depth + 1)
+    elseif kind == "file" and M.valid_refname("refs/tags/" .. full) and not out[full] then
       out[full] = true
+      count = count + 1
     end
-    if vim.tbl_count(out) >= MAX_TAGS then return end
   end
+  return count
 end
 
 ---All tag names of a clone (loose and packed).
@@ -229,7 +232,7 @@ end
 ---@return string[]
 function M.tag_names(dir)
   local set = {}
-  scan_tags(dir, "", set, 0)
+  scan_tags(dir, "", set, 0, 0)
   for ref in pairs(M.packed_refs(dir)) do
     local name = ref:match("^refs/tags/(.+)$")
     if name then set[name] = true end

@@ -166,6 +166,73 @@ function M.run(args, dir, on_done)
   end)
 end
 
+---A revision this module will put into a range: a hash, or a tag peeled to its
+---commit (`refs/tags/<tag>^{commit}`). Nothing that starts with `-`, no
+---abbreviation, no `..` -- the range is built by gluing two of these together.
+---@param rev any
+---@return boolean
+function M.valid_rev(rev)
+  if type(rev) ~= "string" then return false end
+  if rev:match("^%x+$") and #rev >= 7 and #rev <= 64 then return true end
+  local tag = rev:match("^refs/tags/(.+)%^{commit}$")
+  return tag ~= nil
+    and require("gitsuite.features.plugins.gitfs").valid_refname("refs/tags/" .. tag)
+end
+
+---@param on_done function
+---@param err string
+---@return { stop: fun() }
+local function refuse(on_done, err)
+  vim.schedule(function()
+    on_done(nil, err)
+  end)
+  return { stop = function() end }
+end
+
+---The commits between two states of a clone, **one** process: `from...to` with
+---`--left-right`, so `entry.side` says which side a commit is on -- `>` only in
+---`to`, `<` only in `from` (a rollback, a force-push, a branch switch), which is
+---the direction without a second call. No file lists: names are not needed for
+---the report and cost output.
+---@param dir string
+---@param from string  A hash.
+---@param to string    A hash or `refs/tags/<tag>^{commit}`.
+---@param opts? { max_count?: integer, no_merges?: boolean }
+---@param on_done fun(entries: Lib.Git.LogEntry[]|nil, err: string|nil) `vim.schedule`d.
+---@return { stop: fun() } handle
+function M.range(dir, from, to, opts, on_done)
+  opts = opts or {}
+  if not M.valid_rev(from) or not M.valid_rev(to) then
+    return refuse(on_done, "not a usable revision for a range")
+  end
+  return git.log_async(
+    from .. "..." .. to,
+    M.opts(dir, {
+      left_right = true,
+      max_count = opts.max_count,
+      no_merges = opts.no_merges,
+    }),
+    on_done
+  )
+end
+
+---Whether `rev` names a commit this clone has (`cat-file -e`): tells a
+---force-pushed-away `from` from any other failure.
+---@param dir string
+---@param rev string
+---@param on_done fun(has: boolean) `vim.schedule`d.
+---@return { stop: fun() } handle
+function M.has_commit(dir, rev, on_done)
+  if not M.valid_rev(rev) then
+    return refuse(function()
+      on_done(false)
+    end, "")
+  end
+  return M.run({ "cat-file", "-e", rev .. "^{commit}" }, dir, function(res)
+    on_done(res ~= nil and res.ok == true)
+  end)
+end
+
 ---The newest `n` commits of `dir`'s HEAD with their message and changed files
 ----- **one** process. `--name-status --no-renames` reads trees only, so it
 ---works offline in a blobless clone.

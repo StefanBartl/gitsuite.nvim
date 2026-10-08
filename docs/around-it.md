@@ -34,17 +34,26 @@ wrappers — fugitive in particular defines its own `:Git`, a hard command
 collision rather than mere redundancy, which is the concrete reason it had
 to go rather than stay installed alongside this plugin.
 
-**reposcope.nvim** — different unit of work, with one deliberate exception.
-Every `:Git` scope but `dashboard` operates on *one* repository at a time,
-the one the current buffer sits in; reposcope stays scoped to
-GitHub/GitLab/Codeberg discovery, search and cloning. `:Git dashboard`
-itself — a multi-repo git-status panel with row/marked-set/whole-page
-push, pull and fetch — used to live in reposcope as `:Reposcope dashboard`/
-`update`, built before gitsuite.nvim existed as the dedicated git-tooling
-home; it moved here because a multi-repo *status/action* panel is git
-tooling, not repository *discovery*. See
-[scope.md](scope.md#dashboard-the-one-multi-repo-scope) for the boundary
-this draws.
+**reposcope.nvim** — different unit of work, with two deliberate
+exceptions. Every `:Git` scope but `dashboard` and `plugins report` operates
+on *one* repository at a time, the one the current buffer sits in (or one
+you name); reposcope stays scoped to GitHub/GitLab/Codeberg discovery,
+search and cloning. `:Git dashboard` — a multi-repo git-status panel with
+row/marked-set/whole-page push, pull and fetch — used to live in reposcope
+as `:Reposcope dashboard`/`update`, built before gitsuite.nvim existed as the
+dedicated git-tooling home; it moved here because a multi-repo
+*status/action* panel is git tooling, not repository *discovery*. `:Git
+plugins report` is the second: it reads the clones a plugin manager already
+installed and says what changed in them — it never discovers, clones or
+looks anything up, which is exactly the line reposcope keeps. See
+[scope.md](scope.md#multi-repository-scopes) for the boundary this draws.
+
+**lazy.nvim / `vim.pack`** — read, never driven. `:Git plugins` takes the
+list of installed plugins from lazy.nvim's in-memory table (no call into
+lazy, no `require`) or from `vim.pack`, and falls back to plain plugin
+folders. It installs, updates, pins and cleans nothing; `:Lazy sync` and
+`:Lazy check` stay the ones that change or refresh a clone, and the report
+shows how fresh the last `:Lazy check` was.
 
 **insights.nvim** — no dependency in either direction. `insights.conflicts`
 used to run its own two-process conflict scan; it now calls

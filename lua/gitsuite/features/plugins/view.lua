@@ -154,7 +154,9 @@ end
 
 ---@param lines string[]
 ---@param name string
-local function open_buffer(lines, name)
+---@param filetype? string  Default "gitsuite-plugins-log".
+---@param kind? string      Default "plugins-log": the middle part of the buffer name.
+local function open_buffer(lines, name, filetype, kind)
   vim.cmd("botright new")
   local buf = vim.api.nvim_get_current_buf()
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
@@ -162,9 +164,50 @@ local function open_buffer(lines, name)
   vim.bo[buf].bufhidden = "wipe"
   vim.bo[buf].swapfile = false
   vim.bo[buf].modifiable = false
-  vim.bo[buf].filetype = "gitsuite-plugins-log"
-  pcall(vim.api.nvim_buf_set_name, buf, "gitsuite://plugins-log/" .. name)
+  vim.bo[buf].filetype = filetype or "gitsuite-plugins-log"
+  pcall(vim.api.nvim_buf_set_name, buf, ("gitsuite://%s/%s"):format(kind or "plugins-log", name))
   vim.keymap.set("n", "q", "<cmd>close<cr>", { buffer = buf, nowait = true, desc = "Close" })
+end
+
+---Where `:Git plugins report` writes with `--out=path` when `--to` is not given.
+---@return string
+function M.default_report_path()
+  return vim.fn.stdpath("cache") .. "/gitsuite/plugins-report.md"
+end
+
+---Show report lines the way `out` asks for: a Markdown scratch buffer, the
+---clipboard, or a file (written atomically; `to` or the cache folder).
+---@param lines string[]
+---@param name string       Buffer name / label.
+---@param out? "buffer"|"clipboard"|"path"
+---@param to? string
+---@return string|nil written  The path written, for `out = "path"`.
+---@return string|nil err
+function M.show_markdown(lines, name, out, to)
+  out = out or "buffer"
+  local body = table.concat(lines, "\n") .. "\n"
+  if out == "buffer" then
+    open_buffer(lines, name, "markdown", "plugins-report")
+    return nil, nil
+  elseif out == "clipboard" then
+    vim.fn.setreg("+", body)
+    vim.fn.setreg('"', body)
+    notify.info(("copied the report (%d lines)"):format(#lines))
+    return nil, nil
+  elseif out == "path" then
+    local path = to and vim.fs.normalize(vim.fn.expand(to)) or M.default_report_path()
+    local ok, err = require("lib.nvim.fs.write.atomic")(path, body, { mkdirp = true })
+    if not ok then
+      notify.error("plugins report: " .. text.one_line(err))
+      return nil, err
+    end
+    notify.info("wrote the report to " .. path)
+    return path, nil
+  end
+  notify.error(
+    ("plugins report: unknown output '%s' (buffer, clipboard or path)"):format(text.one_line(out))
+  )
+  return nil, "unknown output"
 end
 
 ---@param target GitSuite.Plugins.Target

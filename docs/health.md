@@ -1,6 +1,6 @@
 # Health check
 
-`:checkhealth gitsuite` runs six sections in order.
+`:checkhealth gitsuite` runs seven sections in order.
 
 ## gitsuite
 
@@ -45,6 +45,20 @@ What `:Git plugins` reads. A source that is not there is `info`, never an error 
 | ✅ `plugins source in use: ...` | the source `plugins.sources` resolved to |
 | ⚠️ `none of the configured plugins.sources is available: ...` | an explicit `plugins.sources` list names only sources that are absent; use `"auto"` or add `clones` |
 | ⚠️ `plugins.roots entry does not exist: ...` | a configured folder is missing |
+
+## gitsuite: plugin reports
+
+What `:Git plugins report` keeps. The check only looks; an unreadable file is moved aside by the next report, not by `:checkhealth`.
+
+| Line | Means |
+| --- | --- |
+| ✅ `N stored reports, newest <date>` | The report store was read |
+| ℹ️ `no report stored yet` | Nothing to read yet — run `:Git plugins report` |
+| ⚠️ `the report store cannot be read: ...` | The file is damaged; the next report moves it to `.corrupt` and starts a new one |
+| ⚠️ `the report store was written on another machine (...)` | The state folder is synced between hosts; the other store is kept aside (`.foreign-<host>.bak`) and this machine starts its own |
+| ⚠️ `the report store was written by a newer gitsuite` | Update gitsuite.nvim, or remove the file |
+| ⚠️ `N stored report(s) are not usable` | Entries of the wrong shape are ignored |
+| ℹ️ `plugins.mode = ..., keep_reports = ..., max_age_days = ...` | The retention settings in effect |
 
 ## gitsuite: plugin state
 

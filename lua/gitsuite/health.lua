@@ -121,6 +121,51 @@ function M.check()
     vim.health.warn("plugins source failed: " .. e)
   end
 
+  -- The reports `:Git plugins report` keeps. Looks only: an unreadable file is
+  -- reported here and moved aside by the next report, not by this check.
+  vim.health.start("gitsuite: plugin reports")
+  local report_state = require("gitsuite.features.plugins.state")
+  local store, store_info = report_state.load(nil, { peek = true })
+  if store_info.readonly then
+    vim.health.warn(
+      store_info.readonly,
+      { "Update gitsuite.nvim, or remove " .. report_state.path() }
+    )
+  elseif store_info.recovered then
+    vim.health.warn(
+      "the report store cannot be read: " .. report_state.path(),
+      { "The next `:Git plugins report` moves it to `.corrupt` and starts a new one" }
+    )
+  elseif store_info.foreign then
+    vim.health.warn(
+      ("the report store was written on another machine (%s)"):format(store_info.foreign),
+      { "The next `:Git plugins report` keeps it aside (`.foreign-<host>.bak`) and starts its own" }
+    )
+  elseif #store.reports == 0 then
+    vim.health.info("no report stored yet (run `:Git plugins report`)")
+  else
+    vim.health.ok(
+      ("%d stored report%s, newest %s"):format(
+        #store.reports,
+        #store.reports == 1 and "" or "s",
+        os.date("%Y-%m-%d %H:%M", store.reports[1].at)
+      )
+    )
+  end
+  if store_info.dropped then
+    vim.health.warn(
+      ("%d stored report(s) are not usable and are ignored"):format(store_info.dropped)
+    )
+  end
+  local reports_cfg = require("gitsuite.config").get().plugins
+  vim.health.info(
+    ("plugins.mode = %s, keep_reports = %d, max_age_days = %d"):format(
+      reports_cfg.mode,
+      reports_cfg.keep_reports,
+      reports_cfg.max_age_days
+    )
+  )
+
   vim.health.start("gitsuite: plugin state")
   if vim.g.loaded_gitsuite then
     vim.health.ok(
