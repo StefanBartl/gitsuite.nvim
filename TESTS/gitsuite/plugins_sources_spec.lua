@@ -400,6 +400,22 @@ describe("gitsuite plugin sources", function()
       assert.equals(0, spawned)
     end)
 
+    it("finds the plugin of a buffer whose path reaches it through a symlink", function()
+      local real_root = clone_root()
+      local link_parent = F.tmpdir("-link-parent")
+      local link = link_parent .. "/plugins"
+      local linked = vim.uv.fs_symlink(real_root, link, { dir = true })
+      if not linked then return end -- no permission to create symlinks here
+      require("gitsuite.config").setup({ plugins = { roots = { link } } })
+      F.write(real_root .. "/alpha.nvim/lua/a.lua", "return 1\n")
+      -- the manager knows the plugin under the link, the buffer under the real path
+      local buf = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_set_name(buf, real_root .. "/alpha.nvim/lua/a.lua")
+      local target = assert(sources.of_buffer(buf))
+      assert.equals("alpha.nvim", target.name)
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end)
+
     it("finds the installed plugin that contains a buffer's file", function()
       F.write(root .. "/alpha.nvim/lua/a.lua", "return 1\n")
       local buf = vim.api.nvim_create_buf(false, true)

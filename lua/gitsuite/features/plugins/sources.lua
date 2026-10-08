@@ -196,11 +196,34 @@ end
 function M.of_buffer(bufnr)
   local file = vim.api.nvim_buf_get_name(bufnr or 0)
   if file == "" then return nil end
-  local key = repos.normalize_path(file)
-  for _, ref in ipairs((M.list())) do
-    local prefix = repos.normalize_path(ref.dir) .. "/"
-    if key:sub(1, #prefix) == prefix then
+  local refs = M.list()
+
+  ---Whether `path` lies inside `ref.dir`, comparing the spellings `resolve`
+  ---gives each (lexical, or both after symlinks are resolved).
+  ---@param ref GitSuite.Plugins.Ref
+  ---@param path string
+  ---@param resolved boolean
+  ---@return boolean
+  local function inside(ref, path, resolved)
+    local dir = ref.dir
+    if resolved then dir = uv.fs_realpath(dir) or dir end
+    local prefix = repos.normalize_path(dir) .. "/"
+    return repos.normalize_path(path):sub(1, #prefix) == prefix
+  end
+
+  for _, ref in ipairs(refs) do
+    if inside(ref, file, false) then
       return { kind = "plugin", name = ref.name, dir = ref.dir, ref = ref }
+    end
+  end
+  -- A symlinked plugin folder (or a symlinked temp dir, as on macOS): the
+  -- buffer's name and the manager's path may spell the same place differently.
+  local real = uv.fs_realpath(file)
+  if real then
+    for _, ref in ipairs(refs) do
+      if inside(ref, real, true) then
+        return { kind = "plugin", name = ref.name, dir = ref.dir, ref = ref }
+      end
     end
   end
   return nil
