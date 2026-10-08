@@ -174,7 +174,13 @@ local function build_routes()
     },
     {
       path = { "diff", "rev" },
-      args = { { name = "rev", type = "STRING" } },
+      args = {
+        {
+          name = "rev",
+          type = "STRING",
+          desc = "Revision to diff against: a commit, branch, tag or HEAD~N",
+        },
+      },
       desc = "Diff the current file against an arbitrary revision",
       run = function(ctx)
         require("gitsuite.features.diff").rev(ctx.args.rev)
@@ -344,7 +350,15 @@ local function build_routes()
     -- tooling belongs here, not in a repository-discovery plugin.
     {
       path = { "dashboard" },
-      args = { { name = "dir", type = "GITSUITE_DASHBOARD_DIR", optional = true } },
+      args = {
+        {
+          name = "dir",
+          type = "GITSUITE_DASHBOARD_DIR",
+          optional = true,
+          -- Own text: the dashboard also takes a single repository, `dashboard update` does not.
+          desc = "A repository, or a directory of them; default: dashboard.base_dir",
+        },
+      },
       flags = {
         {
           name = "out",
@@ -450,6 +464,7 @@ local function register_dashboard_dir_type()
   local expand_path = require("lib.nvim.cross.fs.expand_path")
 
   composer.register_type("GITSUITE_DASHBOARD_DIR", {
+    desc = "Directory holding the repositories; default: dashboard.base_dir",
     validate = function(raw)
       local expanded = expand_path(raw)
       if not is_dir(vim.fn.fnamemodify(expanded, ":p")) then
