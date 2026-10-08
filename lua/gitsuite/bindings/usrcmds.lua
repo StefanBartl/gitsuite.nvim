@@ -554,6 +554,7 @@ end
 ---@return nil
 local function register_plugin_target_type()
   composer.register_type("GITSUITE_PLUGIN_OR_REPO", {
+    desc = "Plugin name, owner/repo or clone path; default: this buffer's plugin",
     validate = function(raw)
       local target, err = require("gitsuite.features.plugins.sources").resolve(raw)
       if not target then return false, nil, err end
