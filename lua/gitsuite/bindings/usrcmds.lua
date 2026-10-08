@@ -414,8 +414,18 @@ local function build_routes()
     {
       path = { "plugins", "log" },
       args = {
-        { name = "target", type = "GITSUITE_PLUGIN_OR_REPO", optional = true },
-        { name = "n", type = "INT", optional = true },
+        {
+          name = "target",
+          type = "GITSUITE_PLUGIN_OR_REPO",
+          optional = true,
+          desc = "Plugin name, owner/repo or clone path; default: this buffer's plugin",
+        },
+        {
+          name = "n",
+          type = "INT",
+          optional = true,
+          desc = "How many commits (after a target; otherwise --count)",
+        },
       },
       flags = {
         {
