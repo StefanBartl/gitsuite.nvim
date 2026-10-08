@@ -71,6 +71,21 @@ describe("gitsuite :Git plugins log", function()
       assert.equals("日本語", text.clean("日本語"))
     end)
 
+    it("removes characters that reorder or hide text", function()
+      for _, bad in ipairs({
+        "\226\128\174", -- U+202E right-to-left override
+        "\226\129\166", -- U+2066 left-to-right isolate
+        "\226\128\139", -- U+200B zero-width space
+        "\226\128\168", -- U+2028 line separator
+        "\239\187\191", -- U+FEFF byte-order mark
+      }) do
+        assert.equals("a?b", text.clean("a" .. bad .. "b"))
+      end
+      -- neighbours in the same blocks stay
+      assert.equals("a…b", text.clean("a…b")) -- U+2026
+      assert.equals("a–b", text.clean("a–b")) -- U+2013
+    end)
+
     it("takes only the first line for a message, a title or a header", function()
       assert.equals("first", text.one_line("first\nsecond"))
       assert.equals("a?b", text.one_line("a\27b\r\nrest"))

@@ -126,6 +126,39 @@ describe("gitsuite.features.plugins.runs", function()
       assert.equals(sha("b"), result.reflog_head)
     end)
 
+    it("calls A -> B -> A within the dwell time no change at all", function()
+      local result = runs.last_update({
+        entry(ZERO, sha("a"), T0, "clone"),
+        entry(sha("a"), sha("b"), T0 + 3 * DAY),
+        entry(sha("b"), sha("a"), T0 + 3 * DAY + 20),
+      }, { head = sha("a") })
+      assert.equals("none", result.state)
+    end)
+
+    it("looks past a bounce for the last state that really differed", function()
+      local result = runs.last_update({
+        entry(ZERO, sha("a"), T0, "clone"),
+        entry(sha("a"), sha("b"), T0 + 2 * DAY),
+        entry(sha("b"), sha("c"), T0 + 4 * DAY),
+        entry(sha("c"), sha("b"), T0 + 4 * DAY + 20),
+        entry(sha("b"), sha("c"), T0 + 4 * DAY + 40),
+      }, { head = sha("c") })
+      assert.equals("updated", result.state)
+      assert.equals(sha("b"), result.from)
+      assert.equals(sha("c"), result.to)
+    end)
+
+    it("clamps an entry from a clock gone wrong so it cannot stay the newest update", function()
+      local now = T0 + 20 * DAY
+      local result = runs.last_update({
+        entry(ZERO, sha("a"), T0, "clone"),
+        entry(sha("a"), sha("b"), T0 + 2 * DAY),
+        entry(sha("b"), sha("c"), 4000000000), -- far in the future
+      }, { head = sha("c"), now = now })
+      assert.equals("updated", result.state)
+      assert.equals(now, result.time)
+    end)
+
     it("has nothing to say for an empty reflog", function()
       assert.equals("none", runs.last_update({}).state)
       assert.equals("none", runs.last_update({ entry(sha("a"), sha("a"), T0) }).state)
@@ -309,6 +342,20 @@ describe("gitsuite.features.plugins.target", function()
     local packed = target.resolve(ref(dir, { tag = "v2.0.0" }))
     assert.is_true(packed.certain)
     assert.equals(c[5], packed.sha)
+  end)
+
+  it("reads an empty version string as lazy does: any version", function()
+    local dir = clone_like()
+    local got = target.resolve(ref(dir, { version = "" }))
+    assert.equals("version", got.tier)
+    assert.equals("v2.0.0", got.tag)
+  end)
+
+  it("lets a dir-mode plugin on a detached HEAD follow its spec's branch", function()
+    local dir, c = clone_like() -- HEAD is detached here
+    local got = target.resolve(ref(dir, { branch = "main" }, { is_local = true }))
+    assert.equals("branch", got.tier)
+    assert.equals(c[6], got.sha)
   end)
 
   it("does not move a pinned plugin", function()

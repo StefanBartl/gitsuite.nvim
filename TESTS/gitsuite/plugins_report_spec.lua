@@ -129,6 +129,114 @@ describe("gitsuite.features.plugins.state (the report store)", function()
     f:close()
   end)
 
+  it("uses nothing of another machine's store", function()
+    vim.fn.mkdir(vim.fs.dirname(path), "p")
+    F.write(
+      path,
+      vim.json.encode({
+        version = state.VERSION,
+        host = "OTHER-PC",
+        reports = { report("theirs", NOW - 10, { heads = { ["/p/x"] = ("a"):rep(40) } }) },
+      })
+    )
+    local store, info = state.load(path)
+    assert.equals("OTHER-PC", info.foreign)
+    assert.same({}, store.reports, "its clones, reflogs and heads are not ours")
+    assert.is_nil(state.snapshot(store, "/p/x"))
+  end)
+
+  it("refuses a store it cannot open instead of calling it broken", function()
+    vim.fn.mkdir(vim.fs.dirname(path), "p")
+    F.write(path, "{}")
+    local original = io.open
+    io.open = function(p, mode)
+      if p == path then return nil, "locked" end
+      return original(p, mode)
+    end
+    local _, info = state.load(path)
+    io.open = original
+    assert.is_truthy(info.readonly)
+    assert.is_nil(info.recovered)
+    assert.is_truthy(vim.uv.fs_stat(path), "a busy file is not moved aside")
+  end)
+
+  it("will not write a report that alone is over the size cap", function()
+    local original = state.MAX_BYTES
+    state.MAX_BYTES = 500
+    local fat = {}
+    for i = 1, 40 do
+      fat[i] = { name = "p" .. i, dir = "/p/" .. i, status = "forward", text = ("x"):rep(50) }
+    end
+    local ok, err = state.add(report("fat", NOW, { plugins = fat }), CFG, path)
+    state.MAX_BYTES = original
+    assert.is_false(ok)
+    assert.is_truthy(err:find("too large", 1, true))
+    assert.is_nil(vim.uv.fs_stat(path), "no file the next run could not read")
+  end)
+
+  it("drops a report from the future, so it cannot stay the newest one", function()
+    vim.fn.mkdir(vim.fs.dirname(path), "p")
+    F.write(
+      path,
+      vim.json.encode({
+        version = state.VERSION,
+        host = state.host(),
+        reports = { report("future", 4000000000), report("real", NOW) },
+      })
+    )
+    local store, info = state.load(path)
+    assert.same(
+      { "real" },
+      vim.tbl_map(function(r)
+        return r.id
+      end, store.reports)
+    )
+    assert.equals(1, info.dropped)
+  end)
+
+  it(
+    "repairs what a hand-edited or foreign report gets wrong, so nothing indexes into junk",
+    function()
+      vim.fn.mkdir(vim.fs.dirname(path), "p")
+      local messy = report("messy", NOW, {
+        plugins = {
+          "not a table",
+          { name = "no-dir", status = "forward" },
+          { name = "bad-commits", dir = "/p/a", status = "forward", commits = "text" },
+          {
+            name = "mixed",
+            dir = "/p/b",
+            status = "forward",
+            commits = { "junk", { subject = "no sha" }, { sha = "abc", subject = "ok" } },
+            time = 1e300,
+          },
+        },
+        run = { first = "x", last = 1, older = 0, plugins = 1 },
+        counts = "nope",
+        errors = "nope",
+        sources = 5,
+        heads = "nope",
+      })
+      F.write(
+        path,
+        vim.json.encode({ version = state.VERSION, host = state.host(), reports = { messy } })
+      )
+      local store = state.load(path)
+      local r = assert(store.reports[1])
+      assert.equals(2, #r.plugins)
+      assert.is_nil(r.plugins[1].commits)
+      assert.equals(1, #r.plugins[2].commits)
+      assert.is_nil(r.plugins[2].time)
+      assert.is_nil(r.run)
+      assert.same({ checked = 0, changed = 0, commits = 0, unchanged = 0 }, r.counts)
+      assert.same({}, r.errors)
+      assert.same({}, r.sources)
+      assert.same({}, r.heads)
+      -- and the Markdown renderer takes it
+      assert.is_true(pcall(require("gitsuite.features.plugins.markdown").render, r))
+    end
+  )
+
   it("leaves out reports it cannot use and says how many", function()
     vim.fn.mkdir(vim.fs.dirname(path), "p")
     F.write(
@@ -172,10 +280,10 @@ describe("gitsuite.features.plugins.state (the report store)", function()
 
     it("drops the oldest reports when the file would get too big, but keeps one", function()
       local original = state.MAX_BYTES
-      state.MAX_BYTES = 2000
+      state.MAX_BYTES = 6000 -- one such report fits, two do not
       local fat = {}
       for i = 1, 40 do
-        fat[i] = { name = "p" .. i, text = ("x"):rep(50) }
+        fat[i] = { name = "p" .. i, dir = "/p/" .. i, status = "forward", text = ("x"):rep(50) }
       end
       for i = 1, 5 do
         assert.is_true((state.add(report("r" .. i, NOW + i, { plugins = fat }), CFG, path)))
@@ -191,7 +299,9 @@ describe("gitsuite.features.plugins.state (the report store)", function()
     local from, to = ("a"):rep(40), ("b"):rep(40)
     state.add(
       report("a", NOW, {
-        plugins = { { dir = "/p/x", from = from, to = to, commits = {}, status = "forward" } },
+        plugins = {
+          { name = "x", dir = "/p/x", from = from, to = to, commits = {}, status = "forward" },
+        },
         heads = { ["/p/x"] = to, ["/p/y"] = from },
       }),
       CFG,
@@ -364,6 +474,33 @@ describe("gitsuite.features.plugins.markdown", function()
     assert.is_nil(out:find("\r", 1, true))
     assert.is_truthy(out:find("evil\\|name?", 1, true))
     assert.is_nil(out:find("second line", 1, true), "only the first line of a subject")
+  end)
+
+  it("turns a link, an image or HTML in a commit subject into plain text", function()
+    local out = joined(markdown.render(
+      base("updated", {
+        {
+          name = "p",
+          status = "forward",
+          source = "reflog",
+          from = ("a"):rep(40),
+          to = ("b"):rep(40),
+          reason = "see [x](http://evil/) <b>",
+          commits = {
+            commit("b", "![t](http://evil/t.png) and <img src=x> and `code`"),
+            commit("c", "[click](http://evil/)"),
+          },
+        },
+      }),
+      NOW
+    ))
+    -- nothing that would render as an image, a link or HTML is left unescaped
+    assert.is_nil(out:find("[^\\]!%[t%]"))
+    assert.is_nil(out:find("[^\\]%[click%]"))
+    assert.is_nil(out:find("[^\\]<img"))
+    assert.is_nil(out:find("[^\\]<b>"))
+    assert.is_truthy(out:find("\\[click\\](http://evil/)", 1, true))
+    assert.is_truthy(out:find("\\<img src=x\\>", 1, true))
   end)
 
   it("lists at most MAX_LISTED commits and says how many more", function()
@@ -722,6 +859,94 @@ describe("gitsuite.features.plugins.report", function()
       assert.same({ "forced" }, asked)
       assert.equals(10, report.counts.commits)
       assert.equals("c5", by_name(report).alpha.commits[1].subject)
+    end)
+
+    it("does not serve a cut-short or differently-asked answer from the store", function()
+      local sroot = scenario()
+      require("gitsuite.config").setup({ plugins = { max_commits = 2 } })
+      local first = by_name(build({ mode = "updated", refs = refs_of({ "alpha" }, sroot) }))
+      assert.is_true(first.alpha.truncated)
+
+      -- the same range, asked without the cut: the cut answer must not be reused
+      require("gitsuite.config").setup({ plugins = { max_commits = 1000 } })
+      local second = by_name(build({ mode = "updated", refs = refs_of({ "alpha" }, sroot) }))
+      assert.is_nil(second.alpha.truncated)
+      assert.equals(3, #second.alpha.commits)
+
+      -- ... and a stored full answer is not reused for a different merges setting
+      local asked = 0
+      local original = gitlog.range
+      gitlog.range = function(...)
+        asked = asked + 1
+        return original(...)
+      end
+      require("gitsuite.config").setup({ plugins = { merges = true } })
+      build({ mode = "updated", refs = refs_of({ "alpha" }, sroot) })
+      gitlog.range = original
+      assert.equals(1, asked)
+    end)
+
+    it("says when the store was unreadable and moved aside, not only when it is foreign", function()
+      local sroot = scenario()
+      vim.fn.mkdir(vim.fs.dirname(store_path), "p")
+      F.write(store_path, "{ broken")
+      local _, info = build({ mode = "updated", refs = refs_of(ALL, sroot) })
+      assert.is_truthy(info.recovered, "the notice must survive the write that follows")
+      assert.is_truthy(vim.uv.fs_stat(info.recovered))
+      assert.is_truthy(vim.uv.fs_stat(store_path), "and a new store was written")
+    end)
+
+    it("ignores another machine's store when working out what changed", function()
+      -- a clone without a reflog, whose "snapshot" would come from the store
+      local dir, s = clone("nolog", 4, 3, nil)
+      vim.fn.mkdir(vim.fs.dirname(store_path), "p")
+      -- the other machine's report says it stood on commit 1; that must not
+      -- become our "from"
+      F.write(
+        store_path,
+        vim.json.encode({
+          version = state.VERSION,
+          host = "OTHER-PC",
+          reports = {
+            {
+              id = "theirs",
+              at = TU - 5,
+              mode = "updated",
+              plugins = {},
+              heads = { [dir] = s[1] },
+            },
+          },
+        })
+      )
+      local report, info = build({ mode = "updated", refs = refs_of({ "nolog" }) })
+      assert.equals("OTHER-PC", info.foreign)
+      assert.same({}, report.plugins, "no snapshot job from a store that is not ours")
+      -- and ours replaced it, the theirs one kept aside
+      assert.equals(1, #state.load(store_path).reports)
+      assert.equals(1, #vim.fn.glob(store_path .. ".foreign-OTHER-PC.bak", false, true))
+    end)
+
+    it("shows a failing worker's reason instead of 'not finished'", function()
+      local sroot = scenario()
+      local original = gitlog.range
+      gitlog.range = function()
+        error("boom from range")
+      end
+      local report =
+        build({ mode = "updated", refs = refs_of({ "alpha" }, sroot), persist = false })
+      gitlog.range = original
+      local alpha = by_name(report).alpha
+      assert.equals("error", alpha.status)
+      assert.is_truthy(alpha.reason:find("boom from range", 1, true))
+    end)
+
+    it("says a cut list may hide the other side", function()
+      local sroot = scenario()
+      require("gitsuite.config").setup({ plugins = { max_commits = 2 } })
+      local alpha = by_name(
+        build({ mode = "updated", refs = refs_of({ "alpha" }, sroot), persist = false })
+      ).alpha
+      assert.is_truthy(alpha.reason:find("lower bounds", 1, true))
     end)
 
     it("falls back to the last report's state when the reflog says nothing", function()

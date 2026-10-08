@@ -24,6 +24,8 @@ M.MAX_PACKED = 16 * 1024 * 1024
 M.MAX_REFLOG = 4 * 1024 * 1024
 ---Longest reflog message kept.
 M.MAX_MESSAGE = 200
+---Latest time (year 2100) a reflog entry may claim; later ones are clamped.
+M.MAX_TIME = 4102444800
 
 ---A hash as git writes it: 40 (SHA-1) or 64 (SHA-256) hex digits.
 ---@param s any
@@ -121,6 +123,10 @@ function M.packed_refs(dir)
       if sha and M.valid_sha(sha) and M.valid_refname(name) then
         last = { sha = sha }
         refs[name] = last
+      elseif sha then
+        -- a ref line we do not accept: its `^peeled` line must not attach to
+        -- the previous (valid) tag
+        last = nil
       else
         local peeled = line:match("^%^(%x+)$")
         if peeled and last and M.valid_sha(peeled) then last.peeled = peeled end
@@ -281,11 +287,16 @@ function M.reflog(dir)
   local entries = {}
   for line in text:gmatch("[^\r\n]+") do
     local old, new, time, message = line:match("^(%x+) (%x+) [^\t]*> (%d+) [+-]%d%d%d%d\t(.*)$")
-    if old and M.valid_sha(old) and M.valid_sha(new) then
+    local seconds = tonumber(time)
+    -- A reflog is a file somebody else may have written (or a clock once went
+    -- wrong): a time that is not a plausible Unix time must not become "the
+    -- latest update" nor a number JSON cannot hold.
+    if seconds and (seconds ~= seconds or seconds > M.MAX_TIME) then seconds = M.MAX_TIME end
+    if old and seconds and M.valid_sha(old) and M.valid_sha(new) then
       entries[#entries + 1] = {
         old = old,
         new = new,
-        time = tonumber(time),
+        time = seconds,
         kind = message:match("^([%a][%w%-]*)") or "?",
         message = message:sub(1, M.MAX_MESSAGE),
       }

@@ -41,6 +41,7 @@ local LOCAL_WORK = {
 ---@class GitSuite.Plugins.RunOpts
 ---@field dwell_s? integer  A state must have lasted this long to count (default 120).
 ---@field head? string      The commit HEAD resolves to now; the reflog must end there.
+---@field now? integer      The current Unix time; entry times beyond a day after it are clamped to it.
 
 ---The last real update recorded in `entries`.
 ---@param entries GitSuite.Plugins.ReflogEntry[]
@@ -53,8 +54,16 @@ function M.last_update(entries, opts)
   -- Every entry that changes HEAD, in file order.
   ---@type GitSuite.Plugins.ReflogEntry[]
   local moves = {}
+  -- A time later than "now + a day" is a clock gone wrong: it is clamped, so one
+  -- such entry cannot become the newest update forever.
+  local latest = opts.now and (opts.now + 86400) or nil
   for _, entry in ipairs(entries) do
-    if entry.old ~= entry.new then moves[#moves + 1] = entry end
+    if entry.old ~= entry.new then
+      if latest and entry.time > latest then
+        entry = vim.tbl_extend("force", entry, { time = opts.now })
+      end
+      moves[#moves + 1] = entry
+    end
   end
   if #moves == 0 then return { state = "none" } end
 
@@ -96,7 +105,17 @@ function M.last_update(entries, opts)
     return { state = "installed", to = final.new, time = final.time, installed_at = installed_at }
   end
 
-  local to, from = stable[#stable], stable[#stable - 1]
+  local to = stable[#stable]
+  -- The state before the update is the last long-lived one that was a
+  -- DIFFERENT commit: A -> B -> A within the dwell time is no change at all.
+  local from
+  for i = #stable - 1, 1, -1 do
+    if stable[i].sha ~= to.sha then
+      from = stable[i]
+      break
+    end
+  end
+  if not from then return { state = "none" } end
   if LOCAL_WORK[to.kind or ""] then
     return { state = "local_work", to = to.sha, time = to.time, kind = to.kind }
   end

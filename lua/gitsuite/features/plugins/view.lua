@@ -195,7 +195,9 @@ function M.show_markdown(lines, name, out, to)
     notify.info(("copied the report (%d lines)"):format(#lines))
     return nil, nil
   elseif out == "path" then
-    local path = to and vim.fs.normalize(vim.fn.expand(to)) or M.default_report_path()
+    -- (`vim.fs.normalize` expands `~` and `$VAR`; `expand()` would also read `*`,
+    -- `[` and a leading `%`/`#` as wildcards.)
+    local path = to and vim.fs.normalize(to) or M.default_report_path()
     local ok, err = require("lib.nvim.fs.write.atomic")(path, body, { mkdirp = true })
     if not ok then
       notify.error("plugins report: " .. text.one_line(err))

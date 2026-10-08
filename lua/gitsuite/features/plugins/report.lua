@@ -65,6 +65,7 @@ M.MAX_BODY = 2048
 ---@field reason? string
 ---@field fetched_at? integer
 ---@field locked? boolean
+---@field merges? boolean     Whether merge commits were kept (part of what a cached entry answers).
 
 ---@class GitSuite.Plugins.Report
 ---@field version integer
@@ -106,6 +107,18 @@ local function base_entry(entry, ref, head)
   return entry
 end
 
+---A subject or author line is stored up to this many bytes: a hostile commit
+---must not be able to make the stored report unreadably large.
+M.MAX_LINE = 500
+
+---@param s string
+---@param max integer
+---@return string
+local function cap(s, max)
+  if #s <= max then return s end
+  return s:sub(1, max) .. "…"
+end
+
 ---@param commit Lib.Git.LogEntry
 ---@return GitSuite.Plugins.ReportCommit
 local function to_commit(commit)
@@ -113,9 +126,9 @@ local function to_commit(commit)
   if #body > M.MAX_BODY then body = body:sub(1, M.MAX_BODY) .. "…" end
   return {
     sha = commit.sha,
-    subject = text.utf8(commit.subject or ""),
+    subject = text.utf8(cap(commit.subject or "", M.MAX_LINE)),
     body = text.utf8(body),
-    author = text.utf8(commit.author or ""),
+    author = text.utf8(cap(commit.author or "", M.MAX_LINE)),
     time = commit.commit_time,
     side = (commit.side == "<" or commit.side == ">") and commit.side or nil,
   }
@@ -137,6 +150,11 @@ local function apply_log(entry, entries, max)
   entry.ahead, entry.behind = ahead, behind
   entry.status = runs.direction(ahead, behind)
   entry.truncated = #entries > max or nil
+  if entry.truncated then
+    -- `max_count` cuts the whole symmetric difference, so a one-sided answer may
+    -- hide the other side and the counts are lower bounds.
+    entry.reason = "the list was cut at plugins.max_commits; counts are lower bounds"
+  end
 
   local kept = {}
   for _, commit in ipairs(entries) do
@@ -150,6 +168,10 @@ local function apply_log(entry, entries, max)
   end
   entry.commits = kept
 end
+
+---The answers a `from...to` log can give; only these are taken from the store.
+---@type table<string, true>
+local DIRECTIONS = { forward = true, rollback = true, diverged = true, same = true }
 
 ---@class GitSuite.Plugins.Job
 ---@field entry GitSuite.Plugins.ReportEntry
@@ -186,7 +208,7 @@ local function plan_updated(refs, ctx)
       }, ref, head)
     else
       local reflog = gitfs.reflog(ref.dir)
-      local analysis = reflog and runs.last_update(reflog, { head = head.sha })
+      local analysis = reflog and runs.last_update(reflog, { head = head.sha, now = ctx.now })
         or { state = "none" }
       local cand = { ref = ref, head = head, analysis = analysis }
       cands[#cands + 1] = cand
@@ -361,7 +383,7 @@ function M.build(opts, on_done)
       sources.list({ include_local = (opts.all or cfg.include_local) and true or false })
   end
 
-  local ctx = { cfg = cfg, store = store, rows = {}, heads = {} }
+  local ctx = { cfg = cfg, store = store, rows = {}, heads = {}, now = now }
   local rows, jobs, meta
   if mode == "pending" then
     rows, jobs, meta = plan_pending(refs, ctx)
@@ -379,13 +401,24 @@ function M.build(opts, on_done)
   local function work(j, _, done)
     local entry = j.entry
     local cached = j.cache_to and cache[state.cache_key(entry.dir, j.from, j.cache_to)]
-    if cached and type(cached.commits) == "table" and cached.status then
+    -- Only an answer computed under the same settings and not cut short stands
+    -- in for the real thing: the range is fixed, what was asked of it is not.
+    if
+      cached
+      and type(cached.commits) == "table"
+      and DIRECTIONS[cached.status]
+      and cached.merges == cfg.merges
+      and not cached.truncated
+      and #cached.commits <= max
+    then
       entry.status = cached.status
-      entry.ahead, entry.behind = cached.ahead, cached.behind
-      entry.truncated = cached.truncated
+      entry.ahead = type(cached.ahead) == "number" and cached.ahead or nil
+      entry.behind = type(cached.behind) == "number" and cached.behind or nil
       entry.commits = cached.commits
+      entry.merges = cfg.merges
       return done(entry)
     end
+    entry.merges = cfg.merges
     return gitlog.range(
       entry.dir,
       j.from,
@@ -411,7 +444,7 @@ function M.build(opts, on_done)
     )
   end
 
-  local function finish(results)
+  local function finish(results, worker_errors)
     if stopped then return end
     local plugins = {}
     for _, row in ipairs(rows) do
@@ -421,11 +454,15 @@ function M.build(opts, on_done)
       plugins[#plugins + 1] = results[i] or jobs[i].entry
       if not results[i] then
         plugins[#plugins].status = "error"
-        plugins[#plugins].reason = "not finished"
+        plugins[#plugins].reason = worker_errors[i] and text.one_line(worker_errors[i])
+          or "not finished"
       end
     end
     table.sort(plugins, function(a, b)
-      return a.name:lower() < b.name:lower()
+      local la, lb = a.name:lower(), b.name:lower()
+      if la ~= lb then return la < lb end
+      if a.name ~= b.name then return a.name < b.name end
+      return a.dir < b.dir
     end)
 
     local changed, commits = 0, 0
@@ -465,14 +502,17 @@ function M.build(opts, on_done)
     if opts.persist ~= false then
       local ok, err, add_info = state.add(report, cfg, opts.store_path)
       if not ok then report.save_error = err end
-      info = add_info or store_info
+      -- `build` read the store first, and that read may have moved a broken file
+      -- aside: the second read inside `add` then finds none. Keep what the
+      -- first one learned.
+      info = vim.tbl_extend("keep", add_info or {}, store_info)
     end
     on_done(report, info)
   end
 
-  handle = async.map_limit(jobs, cfg.parallel, work, function(results, _, was_stopped)
+  handle = async.map_limit(jobs, cfg.parallel, work, function(results, worker_errors, was_stopped)
     stopped = was_stopped
-    finish(results)
+    finish(results, worker_errors)
   end, {
     on_progress = opts.on_progress and function(done, total)
       opts.on_progress(done, total)

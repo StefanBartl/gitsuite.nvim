@@ -65,13 +65,83 @@ local function move_aside(path, suffix)
   return nil
 end
 
----@param r any
+---Latest time a stored report may claim (year 2100); see `gitfs.MAX_TIME`.
+local MAX_TIME = 4102444800
+
+---@param n any
 ---@return boolean
-local function usable_report(r)
-  return type(r) == "table"
-    and type(r.id) == "string"
-    and type(r.at) == "number"
-    and type(r.plugins) == "table"
+local function plausible_time(n)
+  return type(n) == "number" and n == n and n >= 0 and n <= MAX_TIME
+end
+
+---@param list any
+---@return boolean
+local function is_list(list)
+  return type(list) == "table" and (next(list) == nil or vim.islist(list))
+end
+
+---Make a report read from disk safe for the code that renders and reuses it:
+---the file may come from another version, another tool or a hand edit, and
+---every field is checked before anything indexes into it. Entries that do not
+---fit are dropped, not repaired. `nil` = the report as a whole is unusable.
+---@param r any
+---@return table|nil
+local function normalize(r)
+  if type(r) ~= "table" or type(r.id) ~= "string" or r.id:find("[%c]") then return nil end
+  -- a report "from the future" would stay the newest one forever
+  if not plausible_time(r.at) or r.at > os.time() + 86400 then return nil end
+  if r.mode ~= "updated" and r.mode ~= "pending" then return nil end
+  if not is_list(r.plugins) then return nil end
+
+  local plugins = {}
+  for _, entry in ipairs(r.plugins) do
+    if
+      type(entry) == "table"
+      and type(entry.name) == "string"
+      and type(entry.dir) == "string"
+      and type(entry.status) == "string"
+    then
+      if entry.commits ~= nil then
+        if is_list(entry.commits) then
+          local commits = {}
+          for _, c in ipairs(entry.commits) do
+            if type(c) == "table" and type(c.sha) == "string" then commits[#commits + 1] = c end
+          end
+          entry.commits = commits
+        else
+          entry.commits = nil
+        end
+      end
+      for _, key in ipairs({ "time", "fetched_at" }) do
+        if entry[key] ~= nil and not plausible_time(entry[key]) then entry[key] = nil end
+      end
+      plugins[#plugins + 1] = entry
+    end
+  end
+  r.plugins = plugins
+
+  if type(r.counts) ~= "table" then r.counts = {} end
+  for _, key in ipairs({ "checked", "changed", "commits", "unchanged" }) do
+    if type(r.counts[key]) ~= "number" then r.counts[key] = 0 end
+  end
+  if r.run ~= nil then
+    local run = r.run
+    if
+      type(run) ~= "table"
+      or not plausible_time(run.first)
+      or not plausible_time(run.last)
+      or type(run.older) ~= "number"
+      or type(run.plugins) ~= "number"
+    then
+      r.run = nil
+    end
+  end
+  if not is_list(r.errors) then r.errors = {} end
+  if not is_list(r.sources) then r.sources = {} end
+  if type(r.heads) ~= "table" then r.heads = {} end
+  if type(r.host) ~= "string" then r.host = "?" end
+  if r.lazy ~= nil and type(r.lazy) ~= "string" then r.lazy = nil end
+  return r
 end
 
 ---Read the store. Never throws; never writes except to move a broken file
@@ -94,8 +164,13 @@ function M.load(path, opts)
   end
 
   local f = io.open(path, "rb")
-  local text = f and f:read("*a")
-  if f then f:close() end
+  if not f then
+    -- Busy (an antivirus scan, another instance) is not "broken": leave it be.
+    info.readonly = "the report store could not be opened: " .. path
+    return empty(), info
+  end
+  local text = f:read("*a")
+  f:close()
   local ok, data = pcall(vim.json.decode, text or "", { luanil = { object = true, array = true } })
   if
     not (
@@ -109,6 +184,9 @@ function M.load(path, opts)
       info.recovered = path -- unreadable; a real load would move it aside
     else
       info.recovered = move_aside(path, ".corrupt")
+      if not info.recovered then
+        info.readonly = "the report store is unreadable and could not be moved aside: " .. path
+      end
     end
     return empty(), info
   end
@@ -121,9 +199,16 @@ function M.load(path, opts)
 
   local store = empty()
   local dropped = 0
+  if type(data.host) == "string" and data.host ~= M.host() then
+    -- Another machine's store: its clones, reflogs and heads are not ours, so
+    -- nothing of it is used (`add` keeps the file aside before writing).
+    info.foreign = data.host
+    return store, info
+  end
   for _, report in ipairs(data.reports) do
-    if usable_report(report) then
-      store.reports[#store.reports + 1] = report
+    local usable = normalize(report)
+    if usable then
+      store.reports[#store.reports + 1] = usable
     else
       dropped = dropped + 1
     end
@@ -132,7 +217,6 @@ function M.load(path, opts)
     return a.at > b.at
   end)
   if dropped > 0 then info.dropped = dropped end
-  if type(data.host) == "string" and data.host ~= M.host() then info.foreign = data.host end
   return store, info
 end
 
@@ -169,7 +253,9 @@ function M.add(report, cfg, path)
   if info.foreign then
     -- Another machine's store (the state folder is synced): keep it, start ours.
     local host = info.foreign:gsub("[^%w%._%-]", "_")
-    move_aside(path, ".foreign-" .. host .. ".bak")
+    if not move_aside(path, ".foreign-" .. host .. ".bak") then
+      return false, "the report store of another machine could not be moved aside", info
+    end
     store = empty()
   end
 
@@ -185,6 +271,11 @@ function M.add(report, cfg, path)
     ok_enc, json = pcall(vim.json.encode, store)
   end
   if not ok_enc then return false, "could not encode the report: " .. tostring(json), info end
+  if #json > M.MAX_BYTES then
+    -- One report alone is over the cap: writing it would leave a file the next
+    -- run refuses to read.
+    return false, "the report is too large to store (lower plugins.max_commits)", info
+  end
 
   local ok, err = atomic(path, json, { mkdirp = true })
   if not ok then return false, err, info end

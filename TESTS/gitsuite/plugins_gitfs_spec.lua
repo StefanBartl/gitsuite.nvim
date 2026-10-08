@@ -168,6 +168,25 @@ describe("gitsuite.features.plugins.gitfs", function()
       assert.is_nil((gitfs.tag_commit(repo, "../../x")))
     end)
 
+    it("does not hand a rejected ref line's peeled hash to the tag before it", function()
+      local repo, a, b = two_commits("-packed-misparse")
+      F.write(
+        repo .. "/.git/packed-refs",
+        table.concat({
+          "# pack-refs with: peeled fully-peeled sorted ",
+          a .. " refs/tags/v1.0",
+          "^" .. a,
+          -- a name outside the accepted characters, with a peeled line of its own
+          b .. " refs/tags/v1.0=beta",
+          "^" .. b,
+          "",
+        }, "\n")
+      )
+      local sha, certain = gitfs.tag_commit(repo, "v1.0")
+      assert.equals(a, sha, "the rejected line's ^peeled must not overwrite v1.0's")
+      assert.is_true(certain)
+    end)
+
     it("re-reads packed-refs when the file changes", function()
       local repo, a = two_commits("-packed-cache")
       F.git(repo, { "tag", "v1", a })
@@ -209,6 +228,21 @@ describe("gitsuite.features.plugins.gitfs", function()
       assert.equals("clone", entries[1].kind)
       assert.is_true(gitfs.is_zero(entries[1].old))
       assert.equals(b, entries[1].new)
+    end)
+
+    it("clamps a time no clock could have written, so JSON can hold it", function()
+      local repo = two_commits("-clamp-time")
+      local zero, sha = ("0"):rep(40), ("a"):rep(40)
+      F.write(repo .. "/.git/logs/HEAD", table.concat({
+        ("%s %s N <n@x> 9999999999 +0000\tcheckout: a"):format(zero, sha),
+        ("%s %s N <n@x> %s +0000\tcheckout: b"):format(sha, ("b"):rep(40), ("9"):rep(400)),
+      }, "\n") .. "\n")
+      local entries = assert(gitfs.reflog(repo))
+      assert.equals(2, #entries)
+      for _, e in ipairs(entries) do
+        assert.equals(gitfs.MAX_TIME, e.time)
+        assert.is_true(pcall(vim.json.encode, { time = e.time }))
+      end
     end)
 
     it("has no reflog when the file is missing", function()

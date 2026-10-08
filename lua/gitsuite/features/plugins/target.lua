@@ -91,7 +91,9 @@ function M.resolve(ref, opts)
   end
 
   -- A `dir`-mode plugin: lazy never updates it; "what is new" is its branch.
-  if ref.is_local then return branch_target(head and head.branch or default_branch()) end
+  if ref.is_local then
+    return branch_target((head and head.branch) or spec.branch or default_branch())
+  end
 
   if spec.pin then return { tier = "pin", reason = "pinned in the plugin spec" } end
 
@@ -121,7 +123,8 @@ function M.resolve(ref, opts)
 
   local version = spec.version
   if version == nil and spec.branch == nil then version = opts.defaults_version end
-  if type(version) == "string" and version ~= "" then
+  -- (an empty string is a range in lazy too: the same as "*")
+  if type(version) == "string" then
     local range = semver.range(version)
     if not range then return unknown(("version range '%s' not understood"):format(version)) end
     local matching = {}

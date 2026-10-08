@@ -15,10 +15,28 @@ local M = {}
 ---Commits listed per plugin; the stored report keeps all of them.
 M.MAX_LISTED = 200
 
+---Text from another repository as one line of Markdown prose: cleaned, and the
+---characters that would make a link, an image, HTML or a code span escaped --
+---a commit subject like `![x](http://host/t.png)` must stay text when the report
+---is previewed or pasted somewhere that renders Markdown.
+---@param s any
+---@return string
+local function esc(s)
+  return (text.one_line(s):gsub("[\\`<>%[%]]", "\\%0"))
+end
+
+---As `esc`, for a table cell (a `|` would end it).
 ---@param s any
 ---@return string
 local function cell(s)
-  return (text.one_line(s):gsub("|", "\\|"))
+  return (esc(s):gsub("|", "\\|"))
+end
+
+---Text inside a code span: a backtick would end it.
+---@param s any
+---@return string
+local function code(s)
+  return (text.one_line(s):gsub("`", "'"))
 end
 
 ---@param sha any
@@ -74,21 +92,21 @@ local STATUS_LABEL = {
 ---@return string
 local function status_label(entry, mode)
   if entry.status == "forward" and mode == "pending" then return "update available" end
-  return STATUS_LABEL[entry.status] or text.one_line(entry.status)
+  return STATUS_LABEL[entry.status] or esc(entry.status)
 end
 
 ---@param entry table
 ---@return string
 local function source_label(entry)
   if entry.source == "snapshot" then return "snapshot ~" end
-  return text.one_line(entry.source or "?")
+  return esc(entry.source or "?")
 end
 
 ---@param entry table
 ---@return string
 local function range_label(entry)
   if not entry.from and not entry.to_label then return "" end
-  return ("`%s → %s`"):format(short(entry.from), text.one_line(entry.to_label or short(entry.to)))
+  return ("`%s → %s`"):format(short(entry.from), code(entry.to_label or short(entry.to)))
 end
 
 ---@param lines string[]
@@ -97,8 +115,8 @@ local function commit_line(lines, commit)
   lines[#lines + 1] = ("- `%s` %s %s (%s)"):format(
     short(commit.sha),
     day(commit.time),
-    text.one_line(commit.subject),
-    text.one_line(commit.author)
+    esc(commit.subject),
+    esc(commit.author)
   )
 end
 
@@ -144,7 +162,7 @@ function M.render(report, now)
       report.lazy and (" · lazy.nvim " .. cell(report.lazy)) or ""
     )
   )
-  add(("- Report: `%s`"):format(cell(report.id or "?")))
+  add(("- Report: `%s`"):format(code(report.id or "?")))
   if mode == "updated" then
     add(
       "- Compares the state before the last update with the current one, from each clone's own reflog."
@@ -241,7 +259,7 @@ function M.render(report, now)
       add(("%s %s"):format(range_label(entry), table.concat(meta, " · ")))
       add("")
       if entry.reason then
-        add(text.one_line(entry.reason))
+        add(esc(entry.reason))
         add("")
       end
       if has_commits then
@@ -269,7 +287,7 @@ function M.render(report, now)
   end
 
   for _, e in ipairs(report.errors or {}) do
-    add("> " .. text.one_line(e))
+    add("> " .. esc(e))
   end
   return lines
 end

@@ -22,6 +22,14 @@ function M.clean(s)
   -- locales (macOS UTF-8, Latin-1) it also covers 0x80..0x9F, which would break
   -- the continuation bytes of "…", "€" or any CJK character.
   s = s:gsub("\t", " "):gsub("[%z\1-\31\127]", "?"):gsub("\194[\128-\159]", "?")
+  -- Characters that change how text is ORDERED or hide it (UTF-8 byte forms):
+  -- zero-width and bidi marks U+200B-200F, U+202A-202E, U+2066-2069, the line and
+  -- paragraph separators U+2028/2029 and the byte-order mark U+FEFF. A subject
+  -- could otherwise read differently from what it is.
+  s = s:gsub("\226\128[\139-\143]", "?")
+    :gsub("\226\128[\168-\174]", "?")
+    :gsub("\226\129[\166-\169]", "?")
+    :gsub("\239\187\191", "?")
   if vim.fn.strchars(s) > M.MAX_LINE then s = vim.fn.strcharpart(s, 0, M.MAX_LINE) .. "…" end
   return s
 end
