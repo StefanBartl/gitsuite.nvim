@@ -304,9 +304,43 @@ describe("gitsuite.features.plugins.state (the report store)", function()
       })
     )
     assert.is_true((state.add(report("new", NOW + 1), CFG, path)))
-    local backup = assert(io.open(path .. ".dropped.bak", "rb"), "the dropped reports are kept")
+    local found = vim.fn.glob(path .. ".dropped-*.bak", false, true)
+    assert.equals(1, #found, "the dropped reports are kept")
+    local backup = assert(io.open(found[1], "rb"))
     assert.is_truthy(backup:read("*a"):find('"ok"', 1, true))
     backup:close()
+  end)
+
+  it("never overwrites an earlier backup of dropped reports", function()
+    vim.fn.mkdir(vim.fs.dirname(path), "p")
+    for round = 1, 2 do
+      F.write(
+        path,
+        vim.json.encode({
+          version = state.VERSION,
+          host = state.host(),
+          reports = { report("ok" .. round, NOW), { id = round } },
+        })
+      )
+      assert.is_true((state.add(report("new" .. round, NOW + round), CFG, path)))
+    end
+    local all = ""
+    for _, file in ipairs(vim.fn.glob(path .. ".dropped-*.bak", false, true)) do
+      local f = assert(io.open(file, "rb"))
+      all = all .. f:read("*a")
+      f:close()
+    end
+    assert.is_truthy(all:find('"ok1"', 1, true))
+    assert.is_truthy(all:find('"ok2"', 1, true))
+  end)
+
+  it("saves through a symbolic link whose target does not exist yet", function()
+    local target_dir = F.tmpdir("-dangling")
+    vim.fn.mkdir(vim.fs.dirname(path), "p")
+    if not vim.uv.fs_symlink(target_dir .. "/real.json", path) then return end
+    assert.is_true((state.add(report("a", NOW), CFG, path)))
+    assert.is_not_nil(vim.uv.fs_stat(target_dir .. "/real.json"))
+    assert.equals("link", vim.uv.fs_lstat(path).type)
   end)
 
   it("reads and writes a store that is a symbolic link where it points", function()
@@ -547,6 +581,16 @@ describe("gitsuite.features.plugins.markdown", function()
       assert.is_truthy(joined(markdown.render(pending, NOW)):find("No fetch is recorded", 1, true))
     end
   )
+
+  it("says how many plugins could not be checked", function()
+    local r = base("pending", {
+      { name = "x", status = "unknown_target", source = "pending", reason = "no idea" },
+    })
+    r.counts.failed = 1
+    assert.is_truthy(joined(markdown.render(r, NOW)):find("1 plugin could not be checked", 1, true))
+    r.counts.failed = 0
+    assert.is_nil(joined(markdown.render(r, NOW)):find("could not be checked", 1, true))
+  end)
 
   it("renders a report whose sources or hashes are junk without raising", function()
     local junk = base("updated", {
@@ -1389,6 +1433,50 @@ describe("gitsuite.features.plugins.report", function()
       local sroot = scenario()
       local report = build({ mode = "updated", refs = refs_of(ALL, sroot), persist = false })
       assert.equals(1, report.counts.failed) -- forced: its previous state is gone
+    end)
+
+    it("announces failed rows as errors in the event", function()
+      local sroot = scenario()
+      require("gitsuite.config").setup({ plugins = { roots = { sroot }, sources = { "clones" } } })
+      local event
+      local group = vim.api.nvim_create_augroup("gitsuite_failed_event_spec", { clear = true })
+      vim.api.nvim_create_autocmd("User", {
+        group = group,
+        pattern = "GitsuitePluginsReported",
+        callback = function(e)
+          event = e.data
+        end,
+      })
+      local done
+      plugins.report({
+        mode = "updated",
+        out = "clipboard",
+        on_done = function(report)
+          done = report
+        end,
+      })
+      vim.wait(30000, function()
+        return done ~= nil
+      end, 10)
+      pcall(vim.api.nvim_del_augroup_by_id, group)
+      assert.is_not_nil(event)
+      assert.is_true(event.errors >= done.counts.failed and event.errors >= 1)
+    end)
+
+    it("still answers a report when the store throws", function()
+      local sroot = scenario()
+      local original = state.add
+      state.add = function()
+        error("disk on fire")
+      end
+      local ok, report = pcall(build, {
+        mode = "updated",
+        refs = refs_of({ "alpha" }, sroot),
+        store_path = store_path,
+      })
+      state.add = original
+      assert.is_true(ok, tostring(report))
+      assert.is_truthy(report.save_error:find("disk on fire", 1, true))
     end)
   end)
 

@@ -22,16 +22,31 @@ describe("gitsuite.config", function()
     assert.is_true(c.features.hunk)
   end)
 
-  it("rejects counts that are not usable numbers and keeps the default", function()
-    config.setup({})
-    local defaults = vim.deepcopy(config.get().plugins)
-    for _, key in ipairs({ "max_commits", "log_limit", "timeout_ms", "parallel", "keep_reports" }) do
-      for _, bad in ipairs({ math.huge, 1e300, 2 ^ 63, 0, -5, 2.5, 0 / 0 }) do
-        package.loaded["gitsuite.config"] = nil
-        config = require("gitsuite.config")
-        config.setup({ plugins = { [key] = bad } })
-        assert.equals(defaults[key], config.get().plugins[key], key .. " = " .. tostring(bad))
-        assert.is_true(#config.issues() > 0, key .. " = " .. tostring(bad))
+  it("accepts a count up to its maximum and rejects everything outside it", function()
+    local bounds = {
+      { "max_commits", 1000000 },
+      { "log_limit", 1000000 },
+      { "timeout_ms", 2147483647 },
+      { "parallel", 64 },
+      { "run_window_s", 31536000 },
+      { "keep_reports", 10000 },
+      { "max_age_days", 36500 },
+    }
+    local function fresh(plugins)
+      package.loaded["gitsuite.config"] = nil
+      config = require("gitsuite.config")
+      config.setup({ plugins = plugins })
+      return config
+    end
+    local defaults = fresh({}).get().plugins
+    for _, bound in ipairs(bounds) do
+      local key, max = bound[1], bound[2]
+      assert.equals(max, fresh({ [key] = max }).get().plugins[key], key .. " at its maximum")
+      assert.equals(1, fresh({ [key] = 1 }).get().plugins[key], key .. " at 1")
+      for _, bad in ipairs({ max + 1, math.huge, 1e300, 2 ^ 63, 0, -5, 2.5, 0 / 0 }) do
+        local c = fresh({ [key] = bad })
+        assert.equals(defaults[key], c.get().plugins[key], key .. " = " .. tostring(bad))
+        assert.is_true(#c.issues() > 0, key .. " = " .. tostring(bad))
       end
     end
   end)

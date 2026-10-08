@@ -170,6 +170,12 @@ only a child with its own `.git` directory counts, a worktree (`.git` file) is
 skipped. `timeout_ms` bounds every git process so a clone on a network drive
 cannot hang the request.
 
+The numeric options take whole numbers within a range; a value outside it is
+dropped with a `setup()` issue and the default applies: `log_limit` and
+`max_commits` 1–1000000, `timeout_ms` 1–2147483647, `parallel` 1–64,
+`run_window_s` 1–31536000, `keep_reports` 1–10000, `max_age_days` 1–36500
+(`math.huge` is not "no limit").
+
 The report options: `mode` is the default for `:Git plugins report`
 (`--mode=` overrides it per call). `include_local = false` keeps `dir`-mode
 plugins out — lazy.nvim never updates them, so "what the update changed" does

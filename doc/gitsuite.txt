@@ -208,7 +208,8 @@ buffer's in-memory lines, never the index or the file on disk.
 -- after `:Git plugins report` has built a report: `id` names it in the report
 store, `mode` is "updated" or "pending", `at` the Unix time, `plugins` how many
 plugins changed, `commits` how many commits that came to, `errors` how many
-sources or plugins could not be read, `saved` whether the report reached the
+sources could not be listed plus plugins that could not be checked (unreadable
+clone, missing old state, unknown target), `saved` whether the report reached the
 store. gitsuite has no consumer of its own; a notifier or statusline chip
 subscribes.
 

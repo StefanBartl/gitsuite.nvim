@@ -106,6 +106,10 @@ describe("gitsuite :Git plugins log", function()
         "\216\156", -- U+061C Arabic letter mark
         "\239\191\185", -- U+FFF9 interlinear annotation anchor
         "\243\160\128\129", -- U+E0001 language tag
+        "\227\133\164", -- U+3164 Hangul filler
+        "\226\160\128", -- U+2800 braille blank
+        "\194\173", -- U+00AD soft hyphen
+        "\225\160\142", -- U+180E Mongolian vowel separator
       }) do
         assert.equals("a?b", text.clean("a" .. bad .. "b"))
       end
@@ -509,6 +513,17 @@ describe("gitsuite :Git plugins log", function()
       local got, err = links.commit_url(repo, sha)
       assert.is_nil(got)
       assert.is_nil(err:find("\27", 1, true))
+    end)
+
+    it("strips a password that contains an @, and a token in the query", function()
+      local links = require("gitsuite.features.plugins.links")
+      local repo = F.init("-links-at")
+      local sha = F.commit(repo, "one")
+      F.git(repo, { "config", "remote.origin.url", "https://user:p@ss@h/%24x/r?token=abc" })
+      local got, err = links.commit_url(repo, sha)
+      assert.is_nil(got)
+      assert.is_nil(err:find("ss@", 1, true), err)
+      assert.is_nil(err:find("token", 1, true), err)
     end)
 
     it("keeps the credentials of a remote URL out of the messages", function()

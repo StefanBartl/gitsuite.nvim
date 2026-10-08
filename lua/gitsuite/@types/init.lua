@@ -113,7 +113,7 @@
 ---@field at integer      Unix time of the report.
 ---@field plugins integer Plugins that changed.
 ---@field commits integer Commits listed across them.
----@field errors integer  Sources or plugins that could not be read.
+---@field errors integer  Sources that could not be listed plus plugins that could not be checked.
 ---@field saved boolean   Whether the report reached the store.
 
 --- How a plugin manager pins a plugin; every field is whatever its spec said.

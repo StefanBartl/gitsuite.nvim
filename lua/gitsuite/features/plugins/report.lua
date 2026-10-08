@@ -577,8 +577,14 @@ function M.build(opts, on_done)
       -- of the store.
       report.save_error = "no installed plugins found; nothing was stored"
     elseif opts.persist ~= false then
-      local ok, err, add_info = state.add(report, cfg, opts.store_path)
-      if not ok then report.save_error = err end
+      -- (a store that throws must not keep `on_done` from running: the caller
+      -- would never learn the run is over)
+      local called, ok, err, add_info = pcall(state.add, report, cfg, opts.store_path)
+      if not called then
+        report.save_error = text.one_line(ok)
+      elseif not ok then
+        report.save_error = err
+      end
       -- `build` read the store first, and that read may have moved a broken file
       -- aside: the second read inside `add` then finds none. Keep what the
       -- first one learned.

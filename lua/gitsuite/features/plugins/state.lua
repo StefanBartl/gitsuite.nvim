@@ -65,7 +65,18 @@ end
 ---@return string
 local function real_path(path)
   local st = uv.fs_lstat(path)
-  if st and st.type == "link" then return uv.fs_realpath(path) or path end
+  if st and st.type == "link" then
+    local real = uv.fs_realpath(path)
+    if real then return real end
+    -- a dangling link: the target does not exist yet; it is created there
+    local target = uv.fs_readlink(path)
+    if target then
+      if not target:match("^[/\\]") and not target:match("^%a:") then
+        target = vim.fs.dirname(path) .. "/" .. target
+      end
+      return vim.fs.normalize(target)
+    end
+  end
   return path
 end
 
@@ -388,8 +399,16 @@ function M.add(report, cfg, path)
   if info.dropped then
     -- The rewrite below leaves the unusable reports out: keep the file as it was
     -- once, so a report of a newer build or a hand edit is not lost for good.
-    local backup = path .. ".dropped.bak"
-    if not uv.fs_stat(backup) then pcall(uv.fs_copyfile, path, backup) end
+    -- (never over an earlier backup; and no rewrite at all if the copy fails)
+    local backup = ("%s.dropped-%s.bak"):format(path, os.date("%Y%m%d%H%M%S"))
+    local n = 0
+    while uv.fs_stat(backup) do
+      n = n + 1
+      backup = ("%s.dropped-%s-%d.bak"):format(path, os.date("%Y%m%d%H%M%S"), n)
+    end
+    if not uv.fs_copyfile(path, backup) then
+      return false, "could not keep a copy of the reports that cannot be used", info
+    end
   end
 
   if info.foreign then

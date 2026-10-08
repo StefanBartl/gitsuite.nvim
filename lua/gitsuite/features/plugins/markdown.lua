@@ -241,6 +241,13 @@ function M.render(report, now)
       tostring(counts.unchanged or 0)
     )
   )
+  if (counts.failed or 0) > 0 then
+    add(
+      ("%s could not be checked (listed below with the reason)"):format(
+        plural(counts.failed, "plugin")
+      )
+    )
+  end
   add("")
 
   local shown = report.plugins

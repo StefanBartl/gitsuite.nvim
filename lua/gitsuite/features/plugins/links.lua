@@ -40,8 +40,15 @@ end
 ---@param url string
 ---@return string
 local function shown(url)
-  local without = url:gsub("^(%a[%w+.-]*://)[^/@]*@", "%1")
-  return text.one_line(without)
+  -- userinfo ends at the LAST `@` of the authority (a password may hold one);
+  -- a query string or fragment may carry a token
+  local scheme, rest = url:match("^(%a[%w+.-]*://)(.*)$")
+  if scheme then
+    local authority, tail = rest:match("^([^/]*)(.*)$")
+    authority = authority:match("^.*@(.*)$") or authority
+    url = scheme .. authority .. tail
+  end
+  return text.one_line((url:gsub("[?#].*$", "")))
 end
 
 ---The forge the clone at `dir` was cloned from.

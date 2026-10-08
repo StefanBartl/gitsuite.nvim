@@ -388,6 +388,36 @@ describe("gitsuite.features.plugins.gitfs", function()
       assert.is_truthy(err:find("reftable", 1, true))
     end)
 
+    it("refuses a ref component Windows would alias (a trailing dot)", function()
+      assert.is_false(gitfs.valid_refname("refs/tags/x./y"))
+    end)
+
+    it("does not keep a big packed-refs in memory between reads", function()
+      local repo = two_commits("-big-cache")
+      local lines = {}
+      for i = 1, 40000 do
+        lines[i] = ("%s refs/tags/v%d"):format(("a"):rep(40), i)
+      end
+      F.write(repo .. "/.git/packed-refs", table.concat(lines, "\n") .. "\n")
+      local first = gitfs.packed_refs(repo)
+      local second = gitfs.packed_refs(repo)
+      assert.are_not.equal(first, second, "parsed again, not retained")
+    end)
+
+    it("refuses network paths the clone's files name (Windows)", function()
+      if not require("lib.nvim.cross.platform.is_windows")() then return end
+      local function check(rel, content)
+        local repo = two_commits("-unc-" .. rel:gsub("%W", ""))
+        F.write(repo .. "/.git/" .. rel, content)
+        return gitfs.network_path(repo)
+      end
+      assert.is_truthy(check("config", "[mailmap]\n\tfile = //h/s/m\n"))
+      assert.is_truthy(check("config", "[include] path = //h/s/x\n"))
+      assert.is_truthy(check("config", "[core]\n\tx = \\\\\\\\h\\\\s\\\\y\n"))
+      assert.is_truthy(check("objects/info/alternates", '"\\057\\057h/s/o"\n'))
+      assert.is_nil(check("config", "[core]\n\tbare = false\n"))
+    end)
+
     it("refuses ref names with a line break, NUL or a '..' component", function()
       for _, bad in ipairs({ "refs/heads/a\nb", "refs/heads/a\0b", "refs/heads/a/../b" }) do
         assert.is_false(gitfs.valid_refname(bad))
@@ -471,6 +501,12 @@ describe("gitsuite.features.plugins.semver (lazy's version ranges)", function()
     assert.is_nil(pick("3.*", TAGS))
     assert.is_nil(semver.range("not a range"))
     assert.is_nil(semver.range(false))
+  end)
+
+  it("gives no range for a spec with two hyphen separators or a bad side", function()
+    assert.is_nil(semver.range("1.0.0 - 2.0.0 - 3.0.0"))
+    assert.is_nil(semver.range("nope - 2.0.0"))
+    assert.is_nil(semver.range(("1 - "):rep(10000) .. "2"))
   end)
 
   it("reads hyphen ranges", function()

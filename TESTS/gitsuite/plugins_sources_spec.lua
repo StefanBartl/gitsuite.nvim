@@ -457,7 +457,10 @@ describe("gitsuite plugin sources", function()
       local link_parent = F.tmpdir("-link-parent")
       local link = link_parent .. "/plugins"
       local linked = vim.uv.fs_symlink(real_root, link, { dir = true })
-      if not linked then return end -- no permission to create symlinks here
+      if not linked then
+        print("skip  plugins_sources_spec.lua: no permission to create symlinks here")
+        return
+      end
       require("gitsuite.config").setup({ plugins = { roots = { link } } })
       F.write(real_root .. "/alpha.nvim/lua/a.lua", "return 1\n")
       -- the manager knows the plugin under the link, the buffer under the real path
@@ -541,12 +544,18 @@ describe("gitsuite plugin sources", function()
     end)
 
     it("reaches a repository through a UNC path (Windows)", function()
-      if not require("lib.nvim.cross.platform.is_windows")() then return end
+      if not require("lib.nvim.cross.platform.is_windows")() then
+        print("skip  plugins_sources_spec.lua: UNC paths exist on Windows only")
+        return
+      end
       local repo = F.init("-unc-target")
       local drive, rest = repo:match("^(%a):[/\\](.*)$")
       if not drive then return end
       local unc = ("//localhost/%s$/%s"):format(drive, rest:gsub("\\", "/"))
-      if not vim.uv.fs_stat(unc) then return end -- the admin share is not reachable here
+      if not vim.uv.fs_stat(unc) then
+        print("skip  plugins_sources_spec.lua: the admin share is not reachable here")
+        return
+      end
       local target, err = sources.resolve(unc)
       assert.is_not_nil(target, err)
       assert.equals("path", target.kind)

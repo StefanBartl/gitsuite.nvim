@@ -102,7 +102,10 @@ each with its commits, as a Markdown report (a read-only buffer by default).
 - `--all` also takes `dir`-mode plugins (usually your own repositories;
   `plugins.include_local`). `--last` shows the newest stored report without
   scanning. `--out=path` writes the Markdown to `--to` (default a file in
-  `stdpath("cache")/gitsuite/`).
+  `stdpath("cache")/gitsuite/`); `--to=<file>` alone implies `--out=path`, and
+  with another `--out` it is ignored with a warning. Only one report runs at a
+  time. The picker of `plugins log` shows at most the newest 1000 commits (use
+  `--out=buffer` for all).
 
 Each plugin is read from files first (HEAD, refs, reflog — about 100 ms for fifty
 clones); only a plugin that **changed** costs a git process (one

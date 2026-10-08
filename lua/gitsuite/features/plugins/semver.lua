@@ -109,6 +109,8 @@ function M.range(spec, nested)
     local b = spec:sub(hyphen + 3)
     local parts = vim.split(b, ".", { plain = true })
     local ra, rb = M.range(a, true), M.range(b, true)
+    -- (a side that is not a plain version -- "1 - 2 - 3" -- is no range at all)
+    if not ra or not rb then return nil end
     return { from = ra and ra.from, to = rb and (#parts == 3 and rb.from or rb.to) }
   end
 

@@ -252,7 +252,7 @@ function M.report(opts)
       end
       if info.dropped then
         notify.warn(
-          ("plugins report: %d stored report%s could not be used and %s left out (the old file is kept as .dropped.bak)"):format(
+          ("plugins report: %d stored report%s could not be used and %s left out (the old file is kept as .dropped-<time>.bak)"):format(
             info.dropped,
             info.dropped == 1 and "" or "s",
             info.dropped == 1 and "was" or "were"

@@ -122,6 +122,10 @@ local DIFF_VERBS = { ["log"] = true }
 local PINNED_CONFIG = {
   { "core.fsmonitor", "false" },
   { "log.showSignature", "false" },
+  -- a mailmap file named in the clone's config is read by every `git log`
+  { "log.mailmap", "false" },
+  { "mailmap.file", "" },
+  { "mailmap.blob", "" },
   { "gpg.program", "false" },
   { "gpg.openpgp.program", "false" },
   { "gpg.x509.program", "false" },

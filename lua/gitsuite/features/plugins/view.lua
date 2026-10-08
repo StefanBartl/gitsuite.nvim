@@ -324,15 +324,15 @@ function M.show(target, entries, out)
     open_buffer(M.rows(target, entries), text.one_line(target.name))
   elseif out == "clipboard" then
     local lines = M.rows(target, entries)
-    vim.fn.setreg("+", table.concat(lines, "\n") .. "\n")
-    vim.fn.setreg('"', table.concat(lines, "\n") .. "\n")
-    notify.info(
-      ("copied %d commit%s of %s"):format(
-        #entries,
-        #entries == 1 and "" or "s",
-        text.one_line(target.name)
+    if copy(table.concat(lines, "\n") .. "\n") then
+      notify.info(
+        ("copied %d commit%s of %s"):format(
+          #entries,
+          #entries == 1 and "" or "s",
+          text.one_line(target.name)
+        )
       )
-    )
+    end
   else
     return open_picker(target, entries)
   end

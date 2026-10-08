@@ -61,7 +61,12 @@ function M.valid_refname(ref)
   end
   if ref:sub(-1) == "/" or ref:sub(-1) == "." then return false end
   for component in ref:gmatch("[^/]+") do
-    if component:sub(1, 1) == "." or component:sub(-5) == ".lock" or component == "@" then
+    if
+      component:sub(1, 1) == "."
+      or component:sub(-1) == "."
+      or component:sub(-5) == ".lock"
+      or component == "@"
+    then
       return false
     end
   end
@@ -204,6 +209,9 @@ function M.packed_refs(dir)
   end
   -- bounded: one entry per clone ever looked at would grow with every plugin
   -- that is installed and removed in a long session
+  -- (a big map is rebuilt on the next read rather than held: the cache is
+  -- bounded by entries, so its memory must be bounded per entry as well)
+  if text and #text > 1024 * 1024 then return refs, incomplete end
   if not packed_cache[path] then
     packed_cache_n = packed_cache_n + 1
     if packed_cache_n > 256 then
@@ -444,32 +452,91 @@ local function starts_unc(text)
   return s:match("^[/\\][/\\]") ~= nil
 end
 
+---`text` with C-style quoting undone (git writes odd paths as "\057\057host/..."
+---in alternates) and a trailing-backslash line continuation joined.
+---@param text string
+---@return string
+local function unquote(text)
+  text = text:gsub("\\\r?\n", "")
+  return (
+    text
+      :gsub("\\(%d%d%d)", function(octal)
+        return string.char(tonumber(octal, 8) % 256)
+      end)
+      :gsub('\\([\\"nt])', { ["\\"] = "\\", ['"'] = '"', n = "\n", t = "\t" })
+  )
+end
+
+---Whether a config file (and what it includes, a few levels deep) names a
+---network path in any value.
+---@param text string
+---@param base string  Folder relative include paths are taken from.
+---@param depth integer
+---@return boolean
+local function config_has_unc(text, base, depth)
+  for line in unquote(text):gmatch("[^\r\n]+") do
+    -- (an entry may follow a `[section]` header on the same line)
+    local entry = line:gsub("^%s*%[[^%]]*%]", "")
+    local key, value = entry:match("^%s*([%w%-]+)%s*=%s*(.-)%s*$")
+    if value and starts_unc(value) then return true end
+    if key and key:lower() == "path" and value and value ~= "" and depth > 0 then
+      local included = value:gsub('^"', ""):gsub('"$', "")
+      if
+        not included:match("^~")
+        and not included:match("^%a:")
+        and not included:match("^[/\\]")
+      then
+        local inner = read_regular(base .. "/" .. included, 256 * 1024)
+        if inner and config_has_unc(inner, base, depth - 1) then return true end
+      end
+    end
+  end
+  return false
+end
+
 ---On Windows: a reason when the clone's own files point git at a NETWORK path
------ an object alternate, a `commondir`, an `include.path` in `.git/config`.
----Every git process of this feature would touch that path first, and an SMB
----connection to somebody else's server leaks the user's NTLM hash and stalls
----until the timeout. `nil` elsewhere (a leading `//` is a plain local path on
----POSIX) and when nothing points off the machine.
+----- an object alternate, a `commondir`, a value in `.git/config` (an
+---`include.path`, `mailmap.file`, ...) or in a file it includes. Every git
+---process of this feature would touch that path first, and an SMB connection to
+---somebody else's server leaks the user's NTLM hash and stalls until the
+---timeout. A file that cannot be read in full (too large, unreadable) is
+---refused too. `nil` elsewhere (a leading `//` is a plain local path on POSIX)
+---and when nothing points off the machine.
 ---@param dir string
 ---@return string|nil reason
 function M.network_path(dir)
   if not IS_WIN then return nil end
-  local alternates = file_text(dir, "objects/info/alternates", M.MAX_SMALL)
+  ---@param rel string
+  ---@param max integer
+  ---@return string|nil text
+  ---@return string|nil refusal
+  local function read(rel, max)
+    local text, err = file_text(dir, rel, max)
+    if text then return text, nil end
+    if err == "too large" or err == "unreadable" then
+      return nil, ("%s cannot be read completely"):format(rel)
+    end
+    return nil, nil
+  end
+
+  local alternates, refusal = read("objects/info/alternates", M.MAX_SMALL)
+  if refusal then return refusal end
   if alternates then
-    for line in alternates:gmatch("[^\r\n]+") do
+    for line in unquote(alternates):gmatch("[^\r\n]+") do
       if starts_unc(line) then return "its object alternates point at a network path" end
     end
   end
-  local commondir = file_text(dir, "commondir", M.MAX_SMALL)
-  if commondir and starts_unc(commondir) then return "its commondir points at a network path" end
-  local config = file_text(dir, "config", 256 * 1024)
-  if config then
-    for line in config:gmatch("[^\r\n]+") do
-      local value = line:match("^%s*[Pp][Aa][Tt][Hh]%s*=%s*(.+)$")
-      if value and starts_unc(value) then
-        return "its config includes a file from a network path"
-      end
-    end
+  local commondir
+  commondir, refusal = read("commondir", M.MAX_SMALL)
+  if refusal then return refusal end
+  if commondir and starts_unc(unquote(commondir)) then
+    return "its commondir points at a network path"
+  end
+  local config
+  config, refusal = read("config", 256 * 1024)
+  if refusal then return refusal end
+  if config and config_has_unc(config, gitdir(dir), 3) then
+    return "its config names a file on a network path"
   end
   return nil
 end

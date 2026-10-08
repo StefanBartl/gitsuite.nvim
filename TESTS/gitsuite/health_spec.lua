@@ -73,22 +73,26 @@ describe("gitsuite.health", function()
   end)
 
   it("keeps going when a plugin source throws", function()
-    local saved = package.loaded["lazy.core.config"]
-    package.loaded["lazy.core.config"] = {
-      plugins = {
-        bad = setmetatable({}, {
-          __index = function()
-            error("boom")
+    local adapter = require("gitsuite.adapter")
+    local original = adapter.resolve
+    adapter.resolve = function(name)
+      if name == "lazy" then
+        return {
+          name = "lazy",
+          list = function()
+            error("boom from the source")
           end,
-        }),
-      },
-    }
+        }
+      end
+      return original(name)
+    end
     require("gitsuite.config").setup({ plugins = { roots = {}, sources = { "clones" } } })
     local ok, err = pcall(require("gitsuite.health").check)
-    package.loaded["lazy.core.config"] = saved
+    adapter.resolve = original
     assert.is_true(ok, tostring(err))
-    assert.is_truthy(messages("warn"):find("lazy: available but unreadable", 1, true))
-    assert.is_truthy(messages():find("gitsuite: plugin reports", 1, true) or #records > 0)
+    local warned = messages("warn")
+    assert.is_truthy(warned:find("lazy: available but unreadable", 1, true))
+    assert.is_truthy(warned:find("boom from the source", 1, true))
   end)
 
   it("gives advice that fits why the report store is read-only", function()

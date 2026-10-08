@@ -100,6 +100,14 @@ function M.clean(s)
       :gsub("\239\187\191", "?") -- U+FEFF
       :gsub("\239\191[\185-\187]", "?") -- U+FFF9-FFFB
       :gsub("\243[\160-\163][\128-\191][\128-\191]", "?") -- U+E0000-E0FFF
+      :gsub("\227\133\164", "?") -- U+3164 Hangul filler
+      :gsub("\239\190\160", "?") -- U+FFA0 halfwidth Hangul filler
+      :gsub("\225\133[\159\160]", "?") -- U+115F, U+1160
+      :gsub("\225\160\142", "?") -- U+180E Mongolian vowel separator
+      :gsub("\226\160\128", "?") -- U+2800 braille blank
+      :gsub("\194\173", "?") -- U+00AD soft hyphen
+      :gsub("\205\143", "?") -- U+034F combining grapheme joiner
+      :gsub("\240\157\133[\179-\186]", "?") -- U+1D173-1D17A musical formatting
   end
   if vim.fn.strchars(s) > M.MAX_LINE then s = vim.fn.strcharpart(s, 0, M.MAX_LINE) .. "…" end
   return s
