@@ -134,6 +134,10 @@ end
 ---@param dir string
 ---@return string|nil
 function M.origin_url(dir)
+  -- `.git` itself must be a plain folder: a symlink or junction there would lead
+  -- the read out of the clone (the config file's own lstat cannot see that)
+  local root = uv.fs_lstat(dir .. "/.git")
+  if not root or root.type ~= "directory" then return nil end
   local text =
     require("lib.nvim.fs.read_bounded")(dir .. "/.git/config", 262144, { follow_symlinks = false })
   if not text then return nil end

@@ -63,6 +63,19 @@ describe("gitsuite util.repos.origin_url", function()
     assert.equals("https://h/o/r.git", repos.origin_url(dir))
   end)
 
+  it("does not follow a .git that is a symlink", function()
+    local real = with_config('[remote "origin"]\n\turl = https://h/o/r.git\n')
+    local outer = vim.fn.tempname()
+    vim.fn.mkdir(outer, "p")
+    local made = (vim.uv or vim.loop).fs_symlink(real .. "/.git", outer .. "/.git", { dir = true })
+    if made then
+      assert.is_nil(repos.origin_url(outer))
+    else
+      assert.is_true(true, "symlinks cannot be created here")
+    end
+    vim.fn.delete(outer, "rf")
+  end)
+
   it("is nil without a config, and for a config that is too large", function()
     local dir = F.init("-origin-url-none")
     os.remove(dir .. "/.git/config")
