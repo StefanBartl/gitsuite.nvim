@@ -464,27 +464,52 @@ function M.index_locked(dir)
 end
 
 ---Whether the first path of a text is a UNC/device path (`\\host\share`,
----`//host/share`), after the leading blanks and quotes git allows.
+---`//host/share`, and the NT forms `\??\UNC\host\share` git also reads), after
+---the leading blanks and quotes git allows.
 ---@param text string
 ---@return boolean
 local function starts_unc(text)
   local s = text:gsub('^[%s"]+', "")
-  return s:match("^[/\\][/\\]") ~= nil
+  return s:match("^[/\\][/\\]") ~= nil or s:match("^[/\\]%?%?[/\\]") ~= nil
 end
 
----`text` with C-style quoting undone (git writes odd paths as "\057\057host/..."
----in alternates) and a trailing-backslash line continuation joined.
----@param text string
----@return string
-local function unquote(text)
-  text = text:gsub("\\\r?\n", "")
-  return (
-    text
-      :gsub("\\(%d%d%d)", function(octal)
-        return string.char(tonumber(octal, 8) % 256)
-      end)
-      :gsub('\\([\\"nt])', { ["\\"] = "\\", ['"'] = '"', n = "\n", t = "\t" })
-  )
+local C_ESC = {
+  a = "\a",
+  b = "\b",
+  f = "\f",
+  n = "\n",
+  r = "\r",
+  t = "\t",
+  v = "\v",
+  ["\\"] = "\\",
+  ['"'] = '"',
+}
+
+---A line that starts with `"`, the way git's `unquote_c_style` reads it: one
+---pass (an octal `\134` is a backslash and stays one), up to the closing quote;
+---whatever follows the closing quote is ignored. `nil` when git would not take
+---it as a quoted string (it then uses the line as it is).
+---@param line string
+---@return string|nil
+local function unquote_c_style(line)
+  local out, i = {}, 2
+  while i <= #line do
+    local c = line:sub(i, i)
+    if c == '"' then return table.concat(out) end
+    if c ~= "\\" then
+      out[#out + 1], i = c, i + 1
+    else
+      local octal = line:match("^[0-3][0-7][0-7]", i + 1)
+      if octal then
+        out[#out + 1], i = string.char(tonumber(octal, 8)), i + 4
+      else
+        local esc = C_ESC[line:sub(i + 1, i + 1)]
+        if not esc then return nil end
+        out[#out + 1], i = esc, i + 2
+      end
+    end
+  end
+  return nil
 end
 
 ---Longest include chain followed. Git itself allows ten; a longer one is refused.
@@ -494,20 +519,25 @@ local MAX_INCLUDE_DEPTH = 8
 ---check cost more than that, however many `path =` lines it holds.
 local MAX_INCLUDE_FILES = 16
 
+---Most bytes of config text looked at in one check (all files together): the
+---check runs on the main thread before every git call.
+local MAX_CONFIG_BYTES = 512 * 1024
+
 ---Config keys whose value a `git log` never touches: the address of a remote is
 ---only used when talking to it.
 local INERT_KEYS = { url = true, pushurl = true }
 
 ---Every `key = value` of a git config, read the way git's own parser does
----(config.c `git_parse_source`): any number of `[headers]` on a line (a quoted
----subsection may hold `]` and `\"`), a `;`/`#` comment ends at the line end (a
----trailing backslash does NOT continue it), values are unquoted (`"..."`, the
----escapes `\" \ \n \t \b`, backslash-newline joins) and cut at a comment.
----`nil` for text git itself would reject: the caller treats it as "cannot judge".
+---(config.c `git_parse_source`): a BOM at the start is skipped, any number of
+---`[headers]` on a line (a quoted subsection may hold `]` and `\"`), a `;`/`#`
+---comment ends at the line end (a trailing backslash does NOT continue it),
+---values are unquoted (`"..."`, the escapes `\" \ \n \t \b`, backslash-newline
+---joins) and cut at a comment. `nil` for text git itself would reject.
 ---@param text string
----@return { [1]: string, [2]: string }[]|nil entries  `{ key, value }` pairs, key as written.
+---@return { [1]: string, [2]: string|nil }[]|nil entries  `{ key, value }` pairs, key as written.
 local function config_entries(text)
   local out, i, n = {}, 1, #text
+  if text:sub(1, 3) == "\239\187\191" then i = 4 end
   local function skip_line()
     local nl = text:find("\n", i, true)
     i = nl and nl + 1 or n + 1
@@ -552,6 +582,7 @@ local function config_entries(text)
           elseif c == "\\" then
             local e = text:sub(i, i)
             i = i + 1
+            if e == "" then break end -- a backslash at the very end
             if e == "\r" and text:sub(i, i) == "\n" then
               e, i = "\n", i + 1
             end
@@ -584,36 +615,61 @@ local function config_entries(text)
   return out
 end
 
-local function config_has_unc(text, base, depth, seen)
+---Where an `include.path` value leads, as git resolves it: `~/` is the home
+---folder, a relative path is taken from the including file's folder, an
+---absolute path is itself. `nil` for what cannot be resolved here (`~user`,
+---`%(prefix)/...`).
+---@param base string
+---@param path string
+---@return string|nil
+local function include_file(base, path)
+  if path:match("^~[/\\]") then
+    local home = uv.os_homedir()
+    return home and (home:gsub("\\", "/") .. path:sub(2)) or nil
+  end
+  if path:match("^[~%%]") then return nil end
+  if path:match("^%a:") or path:match("^[/\\]") then return path end
+  return base .. "/" .. path
+end
+
+local NET_REASON = "its config names a file on a network path"
+
+---Whether a config file (and what it includes, a few levels deep) names a
+---network path in any value. A file that cannot be followed with certainty (too
+---deep, too many, too much text, a link, unreadable, unparsable) is a reason too.
+---@param text string
+---@param base string  Folder relative include paths are taken from (the including file's own).
+---@param depth integer
+---@param seen { n: integer, bytes: integer, files: table<string, true> }  What was followed so far.
+---@return string|nil reason
+local function config_reason(text, base, depth, seen)
+  seen.bytes = seen.bytes + #text
+  if seen.bytes > MAX_CONFIG_BYTES then return "its config files are too large to check" end
   local entries = config_entries(text)
-  if not entries then return true end -- git would reject it, or it cannot be judged
+  if not entries then return "its config could not be parsed" end
   for _, entry in ipairs(entries) do
     local key, value = entry[1]:lower(), entry[2]
-    if value and not INERT_KEYS[key] and starts_unc(value) then return true end
+    if value and not INERT_KEYS[key] and starts_unc(value) then return NET_REASON end
     if key == "path" and value and value ~= "" then
-      if depth == 0 then return true end
-      local included = value
-      if
-        not included:match("^~")
-        and not included:match("^%a:")
-        and not included:match("^[/\\]")
-      then
-        local file = base .. "/" .. included
-        if not seen.files[file] then
-          seen.files[file] = true
-          seen.n = seen.n + 1
-          if seen.n > MAX_INCLUDE_FILES then return true end
-          local inner, err = read_regular(file, 256 * 1024)
-          if inner then
-            if config_has_unc(inner, vim.fs.dirname(file), depth - 1, seen) then return true end
-          elseif err ~= "missing" then
-            return true
-          end
+      if depth == 0 then return "its config includes are nested too deep to check" end
+      local file = include_file(base, value)
+      if not file then return "an include of its config cannot be resolved" end
+      if not seen.files[file] then
+        seen.files[file] = true
+        seen.n = seen.n + 1
+        if seen.n > MAX_INCLUDE_FILES then return "its config includes too many files" end
+        local inner, err = read_regular(file, 256 * 1024)
+        if inner then
+          local reason = config_reason(inner, vim.fs.dirname(file), depth - 1, seen)
+          if reason then return reason end
+        elseif err ~= "missing" then
+          -- (git skips a missing include too; anything else cannot be judged)
+          return ("an included config cannot be read safely (%s)"):format(err or "unreadable")
         end
       end
     end
   end
-  return false
+  return nil
 end
 
 ---Git follows a chain of `objects/info/alternates` files this deep.
@@ -664,11 +720,12 @@ local function alternates_refusal(objdir, depth)
   if refusal then return refusal end
   if not text then return nil end
   for line in text:gmatch("[^\r\n]+") do
-    -- (git unquotes an entry only when it starts with a quote; a plain one is raw,
-    -- and on Windows full of backslashes that are not escapes)
+    -- (git unquotes an entry only when it starts with a quote, in one pass, and
+    -- ignores what follows the closing quote; a plain entry is raw, and on
+    -- Windows full of backslashes that are not escapes. Both forms are looked at.)
     local trimmed = vim.trim(line)
-    local quoted = trimmed:match('^"(.*)"$')
-    local entry = quoted and unquote(quoted) or trimmed
+    local entry = trimmed
+    if trimmed:sub(1, 1) == '"' then entry = unquote_c_style(trimmed) or trimmed end
     if starts_unc(trimmed) or starts_unc(entry) then
       return "its object alternates point at a network path"
     end
@@ -687,6 +744,19 @@ end
 ---@param is_common boolean  `gd` was named by a `commondir` file (whose own `commondir` git ignores).
 ---@return string|nil refusal
 local function gitdir_refusal(gd, is_common)
+  local st = uv.fs_lstat(gd)
+  if not st then return nil end
+  -- (first of all: a link here would let every read below go through it)
+  if st.type ~= "directory" then return "its git directory is not a plain folder" end
+  -- Git reads `config.worktree` of the folder it was started in, and `config` of
+  -- the common folder; looking at both of each is the cautious reading.
+  local seen = { n = 0, bytes = 0, files = {} }
+  for _, name in ipairs({ "config", "config.worktree" }) do
+    local config, refusal = read_under(gd, name, 256 * 1024)
+    if refusal then return refusal end
+    local reason = config and config_reason(config, gd, MAX_INCLUDE_DEPTH, seen)
+    if reason then return reason end
+  end
   local refusal = alternates_refusal(gd .. "/objects", MAX_ALT_DEPTH)
   if refusal then return refusal end
   if not is_common then
@@ -694,26 +764,22 @@ local function gitdir_refusal(gd, is_common)
     commondir, refusal = read_under(gd, "commondir", M.MAX_SMALL)
     if refusal then return refusal end
     if commondir then
-      -- (read raw, as git does; the unquoted form is checked too, to be safe)
+      -- (read raw, as git does)
       local c = vim.trim(commondir)
-      if starts_unc(c) or starts_unc(unquote(c)) then
-        return "its commondir points at a network path"
-      end
+      if starts_unc(c) then return "its commondir points at a network path" end
       local resolved = (c:match("^%a:") or c:match("^[/\\]")) and c or (gd .. "/" .. c)
       return gitdir_refusal(resolved, true)
     end
   end
-  for _, name in ipairs({ "config", "config.worktree" }) do
-    local config
-    config, refusal = read_under(gd, name, 256 * 1024)
-    if refusal then return refusal end
-    local seen = { n = 0, files = {} }
-    if config and config_has_unc(config, gd, MAX_INCLUDE_DEPTH, seen) then
-      return "its config names a file on a network path"
-    end
-  end
   return nil
 end
+
+---Verdicts of `network_path` by clone: the git calls of one action come in a
+---burst, and the check is several file reads on the main thread.
+---@type table<string, { at: number, reason: string|nil }>
+local verdicts = {}
+local verdicts_n = 0
+local VERDICT_TTL_MS = 2000
 
 ---On Windows: a reason when the clone's own files point git at a NETWORK path
 ----- an object alternate (and the alternates of the local folders it chains
@@ -724,12 +790,31 @@ end
 ---stalls until the timeout. What cannot be judged -- a file too large or
 ---unreadable, a link or junction, a config git would reject, a chain too deep --
 ---is refused too. `nil` elsewhere (a leading `//` is a plain local path on POSIX)
----and when nothing points off the machine.
+---and when nothing points off the machine. The verdict is kept for two seconds.
 ---@param dir string
 ---@return string|nil reason
 function M.network_path(dir)
   if not IS_WIN then return nil end
-  return gitdir_refusal(gitdir(dir), false)
+  local now = uv.hrtime() / 1e6
+  local hit = verdicts[dir]
+  if hit and now - hit.at < VERDICT_TTL_MS then return hit.reason end
+  local reason = gitdir_refusal(gitdir(dir), false)
+  if not hit then
+    verdicts_n = verdicts_n + 1
+    if verdicts_n > 256 then
+      verdicts, verdicts_n = {}, 1
+    end
+  end
+  verdicts[dir] = { at = now, reason = reason }
+  return reason
 end
+
+---Forget the kept verdicts (for specs, which rewrite a clone's files).
+function M.forget_network_verdicts()
+  verdicts, verdicts_n = {}, 0
+end
+
+---The config parser, for specs: it is the same on every platform.
+M._config_entries = config_entries
 
 return M

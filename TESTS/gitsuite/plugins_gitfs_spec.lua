@@ -516,11 +516,11 @@ describe("gitsuite.features.plugins.gitfs", function()
         for _ = 1, 200 do
           lines[#lines + 1] = "\tpath = a"
         end
-        local started = vim.uv.hrtime()
         local wide = repo_with({
           config = table.concat(lines, "\n") .. "\n",
           a = table.concat(lines, "\n") .. "\n",
         })
+        local started = vim.uv.hrtime() -- (after the fixture: only the check is timed)
         assert.is_nil(gitfs.network_path(wide))
         assert.is_true((vim.uv.hrtime() - started) / 1e6 < 2000, "no blow-up")
       end
@@ -606,6 +606,134 @@ describe("gitsuite.features.plugins.gitfs", function()
       F.write(calm_common .. "/config", "[core]\n\tbare = false\n")
       F.write(calm .. "/.git/commondir", calm_common .. "\n")
       assert.is_nil(gitfs.network_path(calm))
+    end)
+
+    it("is not fooled by how git reads an alternates line or an include path (Windows)", function()
+      if not require("lib.nvim.cross.platform.is_windows")() then
+        local repo = two_commits("-bypass-posix")
+        F.write(repo .. "/.git/objects/info/alternates", '"\\134\\134h\\134s"\n')
+        assert.is_nil(gitfs.network_path(repo))
+        return
+      end
+      gitfs.forget_network_verdicts()
+      local function reason_of(rel, content)
+        local repo = two_commits("-bypass")
+        F.write(repo .. "/.git/" .. rel, content)
+        return gitfs.network_path(repo)
+      end
+      -- an octal backslash is a backslash, once: git reads \\host\share
+      assert.is_truthy(reason_of("objects/info/alternates", '"\\134\\134h\\134s\\134o"\n'))
+      assert.is_truthy(reason_of("objects/info/alternates", '"\\134\\134h/s/o"\n'))
+      -- what follows the closing quote is ignored by git
+      assert.is_truthy(reason_of("objects/info/alternates", '"\\057\\057h/s/o"x\n'))
+      assert.is_truthy(reason_of("objects/info/alternates", '"\\057\\057h/s/o" # c\n'))
+      -- the NT forms of a share
+      assert.is_truthy(reason_of("objects/info/alternates", "\\??\\UNC\\h\\s\\o\n"))
+      assert.is_truthy(reason_of("objects/info/alternates", "/??/UNC/h/s/o\n"))
+      assert.is_truthy(reason_of("commondir", "\\??\\UNC\\h\\s\n"))
+      -- an ordinary local alternate is fine
+      assert.is_nil(reason_of("objects/info/alternates", "C:/some/where/objects\n"))
+
+      -- an include that leads through the home folder or an absolute path to a
+      -- file that includes a share
+      local payload = F.tmpdir("-bypass-payload")
+      F.write(payload .. "/x.cfg", "[include]\n\tpath = //h/s/x\n")
+      assert.is_truthy(reason_of("config", ("[include]\n\tpath = %s/x.cfg\n"):format(payload)))
+      local home = vim.uv.os_homedir():gsub("\\", "/")
+      local under_home = payload:gsub("^" .. vim.pesc(home), "")
+      if under_home ~= payload then
+        assert.is_truthy(
+          reason_of("config", ("[include]\n\tpath = ~%s/x.cfg\n"):format(under_home))
+        )
+      end
+      -- what cannot be resolved here is not guessed at
+      assert.is_truthy(reason_of("config", "[include]\n\tpath = ~someone/x.cfg\n"))
+      assert.is_truthy(reason_of("config", "[include]\n\tpath = %(prefix)/x.cfg\n"))
+
+      -- config.worktree of the folder git is started in, also with a commondir
+      local wt = two_commits("-bypass-wt")
+      local common = F.tmpdir("-bypass-wt-common")
+      F.write(common .. "/config", "[core]\n\tbare = false\n")
+      F.write(wt .. "/.git/commondir", common .. "\n")
+      F.write(wt .. "/.git/config.worktree", "[mailmap]\n\tfile = //h/s/m\n")
+      assert.is_truthy(gitfs.network_path(wt))
+    end)
+
+    it("does not refuse a config git reads fine (Windows)", function()
+      if not require("lib.nvim.cross.platform.is_windows")() then
+        local repo = two_commits("-fine-posix")
+        assert.is_nil(gitfs.network_path(repo))
+        return
+      end
+      gitfs.forget_network_verdicts()
+      for _, config in ipairs({
+        "\239\187\191[core]\n\tbare = false\n", -- a BOM
+        "[core]\r\n\tbare = false\r\n", -- CRLF
+        "[core]bare = false\n", -- an entry right after the header
+        "[core]\n\tbare\n", -- a boolean without `=`
+        '[branch "a b"]\n\tremote = origin\n',
+        "[core]\n\tx = a\\", -- a backslash at the very end
+        "",
+      }) do
+        local repo = two_commits("-fine")
+        F.write(repo .. "/.git/config", config)
+        assert.is_nil(gitfs.network_path(repo), vim.inspect(config))
+      end
+    end)
+
+    it("tells a config it cannot parse from one that names a share (Windows)", function()
+      if not require("lib.nvim.cross.platform.is_windows")() then
+        assert.is_nil(gitfs.network_path(two_commits("-parse-posix")))
+        return
+      end
+      gitfs.forget_network_verdicts()
+      local bad = two_commits("-parse-bad")
+      F.write(bad .. "/.git/config", "[core\n\tx = 1\n")
+      assert.is_truthy(gitfs.network_path(bad):find("could not be parsed", 1, true))
+      local net = two_commits("-parse-net")
+      F.write(net .. "/.git/config", "[mailmap]\n\tfile = //h/s/m\n")
+      assert.is_truthy(gitfs.network_path(net):find("network path", 1, true))
+    end)
+
+    describe("the config parser", function()
+      local parse = gitfs._config_entries
+
+      it("reads what git reads", function()
+        local entries =
+          assert(parse('\239\187\191[core]\r\n\tBare = false ; c\n[a][b] k = "v  w"\n'))
+        assert.same({ "Bare", "false" }, entries[1])
+        assert.same({ "k", "v  w" }, entries[2])
+        assert.same({ "x" }, assert(parse("[core]\n\tx\n"))[1])
+        assert.same({ "x", 'a"b\\' }, assert(parse('[core]\n\tx = "a\\"b\\\\"\n'))[1])
+        assert.same({ "x", "ab" }, assert(parse("[core]\n\tx = a\\\nb\n"))[1])
+        assert.same({}, assert(parse("")))
+        assert.same({}, assert(parse("; only a comment \\\n# another\n")))
+      end)
+
+      it("rejects what git rejects", function()
+        assert.is_nil(parse("[core\n"))
+        assert.is_nil(parse('[core]\n\tx = "open\n'))
+        assert.is_nil(parse("[core]\n\tx = a\\q\n")) -- not an escape
+        assert.is_nil(parse("[core]\n\t1x = 1\n"))
+        assert.is_nil(parse("[core]\n\tx y\n"))
+      end)
+
+      it("accepts every config a real git writes (the parser is not stricter than git)", function()
+        local repo = two_commits("-parity")
+        F.git(repo, { "config", "user.name", "A B" })
+        F.git(repo, { "config", "--add", "remote.origin.url", "https://h/r.git" })
+        F.git(repo, { "config", "includeIf.gitdir:C:/x/.path", "C:/y.cfg" })
+        F.git(repo, { "config", "branch.main.remote", "origin" })
+        F.git(repo, { "config", "core.autocrlf", "true" })
+        F.git(repo, { "config", "alias.l", '!git log --format="%h \\"x\\""' })
+        local text = assert(io.open(repo .. "/.git/config", "rb")):read("*a")
+        local entries = parse(text)
+        assert.is_not_nil(entries)
+        local _, _, listed = F.git(repo, { "config", "--list", "--local" })
+        local _, code = F.git(repo, { "config", "--list", "--local" })
+        assert.equals(0, code)
+        assert.is_true(#entries >= 6, listed)
+      end)
     end)
 
     it("refuses ref names with a line break, NUL or a '..' component", function()

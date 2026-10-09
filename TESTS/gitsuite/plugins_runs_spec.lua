@@ -295,6 +295,23 @@ describe("gitsuite.features.plugins.target", function()
     end
   )
 
+  it(
+    "says unknown, not the branch tip, when the tag list is incomplete and nothing matches",
+    function()
+      local dir = clone_like()
+      local gitfs = require("gitsuite.features.plugins.gitfs")
+      local f = assert(io.open(dir .. "/.git/packed-refs", "wb"))
+      f:write(("%s refs/tags/v9.0.0\n"):format(("a"):rep(40)):rep(5))
+      f:close()
+      local original = gitfs.MAX_PACKED
+      gitfs.MAX_PACKED = 64
+      local got = target.resolve(ref(dir, { version = "7.*" }))
+      gitfs.MAX_PACKED = original
+      assert.equals("unknown", got.tier)
+      assert.is_truthy(got.reason:find("tag list", 1, true))
+    end
+  )
+
   it("does not pick a pre-release for a version range", function()
     local dir = clone_like()
     local got = target.resolve(ref(dir, { version = "*" }))
