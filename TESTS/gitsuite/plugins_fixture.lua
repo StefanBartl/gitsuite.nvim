@@ -151,6 +151,25 @@ return function()
     return shas
   end
 
+  ---Run `fn` with `tbl[key]` set to `value` (a lowered cap, say). The old value comes back even
+  ---when `fn` throws -- a leaked cap would fail every later spec in the process -- and the error
+  ---is then raised again.
+  ---@param tbl table
+  ---@param key string
+  ---@param value any
+  ---@param fn fun(): ...
+  ---@return ... what `fn` returned
+  function F.with_field(tbl, key, value, fn)
+    local original = tbl[key]
+    tbl[key] = value
+    local function restore(ok, ...)
+      tbl[key] = original
+      if not ok then error((...), 0) end
+      return ...
+    end
+    return restore(pcall(fn))
+  end
+
   function F.cleanup()
     for _, dir in ipairs(created) do
       vim.fn.delete(dir, "rf")

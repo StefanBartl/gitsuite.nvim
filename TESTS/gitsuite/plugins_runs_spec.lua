@@ -304,12 +304,9 @@ describe("gitsuite.features.plugins.target", function()
       f:write(("%s refs/tags/v9.0.0\n"):format(("a"):rep(40)):rep(5))
       f:close()
       local wanted = ref(dir, { version = "7.*" })
-      local original = gitfs.MAX_PACKED
-      gitfs.MAX_PACKED = 64
-      -- restored even when resolve throws: a leaked cap would fail every later spec
-      local called, got = pcall(target.resolve, wanted)
-      gitfs.MAX_PACKED = original
-      assert.is_true(called, tostring(got))
+      local got = F.with_field(gitfs, "MAX_PACKED", 64, function()
+        return target.resolve(wanted)
+      end)
       assert.equals("unknown", got.tier)
       assert.is_truthy(got.reason:find("tag list", 1, true))
     end

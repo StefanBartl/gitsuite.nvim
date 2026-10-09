@@ -149,26 +149,25 @@ describe("gitsuite.features.plugins.state (the report store)", function()
     vim.fn.mkdir(vim.fs.dirname(path), "p")
     F.write(path, "{}")
     local original = io.open
-    io.open = function(p, mode)
+    local _, info = F.with_field(io, "open", function(p, mode)
       if p == path then return nil, "locked" end
       return original(p, mode)
-    end
-    local _, info = state.load(path)
-    io.open = original
+    end, function()
+      return state.load(path)
+    end)
     assert.is_truthy(info.readonly)
     assert.is_nil(info.recovered)
     assert.is_truthy(vim.uv.fs_stat(path), "a busy file is not moved aside")
   end)
 
   it("will not write a report that alone is over the size cap", function()
-    local original = state.MAX_BYTES
-    state.MAX_BYTES = 500
     local fat = {}
     for i = 1, 40 do
       fat[i] = { name = "p" .. i, dir = "/p/" .. i, status = "forward", text = ("x"):rep(50) }
     end
-    local ok, err = state.add(report("fat", NOW, { plugins = fat }), CFG, path)
-    state.MAX_BYTES = original
+    local ok, err = F.with_field(state, "MAX_BYTES", 500, function()
+      return state.add(report("fat", NOW, { plugins = fat }), CFG, path)
+    end)
     assert.is_false(ok)
     assert.is_truthy(err:find("too large", 1, true))
     assert.is_nil(vim.uv.fs_stat(path), "no file the next run could not read")
@@ -420,16 +419,19 @@ describe("gitsuite.features.plugins.state (the report store)", function()
     end)
 
     it("drops the oldest reports when the file would get too big, but keeps one", function()
-      local original = state.MAX_BYTES
-      state.MAX_BYTES = 6000 -- one such report fits, two do not
       local fat = {}
       for i = 1, 40 do
         fat[i] = { name = "p" .. i, dir = "/p/" .. i, status = "forward", text = ("x"):rep(50) }
       end
-      for i = 1, 5 do
-        assert.is_true((state.add(report("r" .. i, NOW + i, { plugins = fat }), CFG, path)))
-      end
-      state.MAX_BYTES = original
+      -- 6000: one such report fits, two do not
+      local added = F.with_field(state, "MAX_BYTES", 6000, function()
+        local all = true
+        for i = 1, 5 do
+          all = all and (state.add(report("r" .. i, NOW + i, { plugins = fat }), CFG, path))
+        end
+        return all
+      end)
+      assert.is_true(added)
       local store = state.load(path)
       assert.equals(1, #store.reports)
       assert.equals("r5", store.reports[1].id)

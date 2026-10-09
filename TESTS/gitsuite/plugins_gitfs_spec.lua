@@ -271,10 +271,9 @@ describe("gitsuite.features.plugins.gitfs", function()
       end
       lines[#lines + 1] = "garbage that is not a reflog line"
       F.write(repo .. "/.git/logs/HEAD", table.concat(lines, "\n") .. "\n")
-      local original = gitfs.MAX_REFLOG
-      gitfs.MAX_REFLOG = 500
-      local entries = assert(gitfs.reflog(repo))
-      gitfs.MAX_REFLOG = original
+      local entries = assert(F.with_field(gitfs, "MAX_REFLOG", 500, function()
+        return gitfs.reflog(repo)
+      end))
       assert.is_true(#entries < 40 and #entries > 0)
       -- the newest end survived, and no half line was parsed
       assert.equals(1700000040, entries[#entries].time)
@@ -358,16 +357,16 @@ describe("gitsuite.features.plugins.gitfs", function()
     it("says so when packed-refs is too big to read, instead of reading it as empty", function()
       local repo = two_commits("-big-packed")
       F.write(repo .. "/.git/packed-refs", ("%s refs/tags/v1\n"):format(("a"):rep(40)):rep(10))
-      local original = gitfs.MAX_PACKED
-      gitfs.MAX_PACKED = 64
-      -- restored even when a call throws: a leaked cap would fail every later spec
-      local called, refs, incomplete, names, tags_incomplete, reason = pcall(function()
-        local r, inc = gitfs.packed_refs(repo)
-        local n, tinc = gitfs.tag_names(repo)
-        return r, inc, n, tinc, gitfs.refs_incomplete(repo)
-      end)
-      gitfs.MAX_PACKED = original
-      assert.is_true(called, tostring(refs))
+      local refs, incomplete, names, tags_incomplete, reason = F.with_field(
+        gitfs,
+        "MAX_PACKED",
+        64,
+        function()
+          local r, inc = gitfs.packed_refs(repo)
+          local n, tinc = gitfs.tag_names(repo)
+          return r, inc, n, tinc, gitfs.refs_incomplete(repo)
+        end
+      )
       assert.same({}, refs)
       assert.is_truthy(incomplete)
       assert.is_truthy(tags_incomplete)
@@ -380,10 +379,9 @@ describe("gitsuite.features.plugins.gitfs", function()
       for i = 1, 5 do
         F.write(repo .. "/.git/refs/tags/t" .. i, a .. "\n")
       end
-      local original = gitfs.MAX_TAGS
-      gitfs.MAX_TAGS = 3
-      local names, incomplete = gitfs.tag_names(repo)
-      gitfs.MAX_TAGS = original
+      local names, incomplete = F.with_field(gitfs, "MAX_TAGS", 3, function()
+        return gitfs.tag_names(repo)
+      end)
       assert.is_true(#names <= 3)
       assert.is_truthy(incomplete)
     end)
