@@ -424,14 +424,15 @@ describe("gitsuite.features.plugins.state (the report store)", function()
         fat[i] = { name = "p" .. i, dir = "/p/" .. i, status = "forward", text = ("x"):rep(50) }
       end
       -- 6000: one such report fits, two do not
-      local added = F.with_field(state, "MAX_BYTES", 6000, function()
-        local all = true
+      local refused = F.with_field(state, "MAX_BYTES", 6000, function()
         for i = 1, 5 do
-          all = all and (state.add(report("r" .. i, NOW + i, { plugins = fat }), CFG, path))
+          if not (state.add(report("r" .. i, NOW + i, { plugins = fat }), CFG, path)) then
+            return i
+          end
         end
-        return all
+        return nil
       end)
-      assert.is_true(added)
+      assert.is_nil(refused, ("state.add refused report r%s"):format(tostring(refused)))
       local store = state.load(path)
       assert.equals(1, #store.reports)
       assert.equals("r5", store.reports[1].id)
