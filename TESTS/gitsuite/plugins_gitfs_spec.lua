@@ -360,10 +360,14 @@ describe("gitsuite.features.plugins.gitfs", function()
       F.write(repo .. "/.git/packed-refs", ("%s refs/tags/v1\n"):format(("a"):rep(40)):rep(10))
       local original = gitfs.MAX_PACKED
       gitfs.MAX_PACKED = 64
-      local refs, incomplete = gitfs.packed_refs(repo)
-      local names, tags_incomplete = gitfs.tag_names(repo)
-      local reason = gitfs.refs_incomplete(repo)
+      -- restored even when a call throws: a leaked cap would fail every later spec
+      local called, refs, incomplete, names, tags_incomplete, reason = pcall(function()
+        local r, inc = gitfs.packed_refs(repo)
+        local n, tinc = gitfs.tag_names(repo)
+        return r, inc, n, tinc, gitfs.refs_incomplete(repo)
+      end)
       gitfs.MAX_PACKED = original
+      assert.is_true(called, tostring(refs))
       assert.same({}, refs)
       assert.is_truthy(incomplete)
       assert.is_truthy(tags_incomplete)
