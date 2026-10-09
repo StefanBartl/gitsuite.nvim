@@ -305,8 +305,10 @@ describe("gitsuite.features.plugins.target", function()
       f:close()
       local original = gitfs.MAX_PACKED
       gitfs.MAX_PACKED = 64
-      local got = target.resolve(ref(dir, { version = "7.*" }))
+      -- restored even when resolve throws: a leaked cap would fail every later spec
+      local called, got = pcall(target.resolve, ref(dir, { version = "7.*" }))
       gitfs.MAX_PACKED = original
+      assert.is_true(called, tostring(got))
       assert.equals("unknown", got.tier)
       assert.is_truthy(got.reason:find("tag list", 1, true))
     end
