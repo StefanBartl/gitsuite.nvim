@@ -50,6 +50,7 @@ describe("spec_guard", function()
 
   it("does not write the old table's value into the reloaded module", function()
     assert.equals("fresh code", fresh.field)
-    package.loaded["gitsuite_spec_guard_module"] = module
+    -- the last test: the stand-in module goes out of the process with it
+    package.loaded["gitsuite_spec_guard_module"] = nil
   end)
 end)
