@@ -71,7 +71,8 @@ describe("gitsuite util.repos.origin_url", function()
     if made then
       assert.is_nil(repos.origin_url(outer))
     else
-      assert.is_true(true, "symlinks cannot be created here")
+      -- no symlinks here (a skip must still assert)
+      assert.equals("https://h/o/r.git", repos.origin_url(real))
     end
     vim.fn.delete(outer, "rf")
   end)

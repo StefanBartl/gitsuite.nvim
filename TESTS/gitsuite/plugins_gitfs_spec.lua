@@ -532,6 +532,10 @@ describe("gitsuite.features.plugins.gitfs", function()
         assert.is_nil(gitfs.network_path(plain))
         return
       end
+      -- (a gitfile needs no symlink)
+      local filed = F.tmpdir("-lnk-file")
+      F.write(filed .. "/.git", "gitdir: //evil/share/x\n")
+      assert.is_truthy(gitfs.network_path(filed))
       local real = two_commits("-lnk-real")
       local outer = F.tmpdir("-lnk-outer")
       if not vim.uv.fs_symlink(real .. "/.git", outer .. "/.git", { dir = true }) then
@@ -540,9 +544,68 @@ describe("gitsuite.features.plugins.gitfs", function()
         return
       end
       assert.is_truthy(gitfs.network_path(outer))
-      local filed = F.tmpdir("-lnk-file")
-      F.write(filed .. "/.git", "gitdir: //evil/share/x\n")
-      assert.is_truthy(gitfs.network_path(filed))
+    end)
+
+    it("reads a config the way git does, and refuses one it cannot judge (Windows)", function()
+      if not require("lib.nvim.cross.platform.is_windows")() then
+        local repo = two_commits("-cfg-posix")
+        F.write(repo .. "/.git/config", "[a][b][include]\n\tpath = //evil/s/x\n")
+        assert.is_nil(gitfs.network_path(repo))
+        return
+      end
+      local function refused(config)
+        local repo = two_commits("-cfg")
+        F.write(repo .. "/.git/config", config)
+        return gitfs.network_path(repo) ~= nil
+      end
+      -- several headers on one line
+      assert.is_true(refused("[a][b][include] path = //evil/s/x\n"))
+      assert.is_true(refused("[a][include] path = //evil/s/x\n"))
+      -- an escaped quote inside the quoted subsection
+      assert.is_true(refused('[includeIf "gitdir:**/[.\\"]git"] path = //evil/s/x\n'))
+      -- a comment ends at the line end: a trailing backslash does not continue it
+      assert.is_true(refused("[core]\n\t; comment \\\n\thooksPath = //evil/share/hooks\n"))
+      -- quotes glued to an unquoted value are part of the same value: git reads
+      -- `../inccfg`, which here is a file with a share in it
+      local glued = two_commits("-cfg-glued")
+      F.write(glued .. "/inccfg", "[mailmap]\n\tfile = //evil/s/m\n")
+      F.write(glued .. "/.git/config", '[include]\n\tpath = "../inc"cfg\n')
+      assert.is_truthy(gitfs.network_path(glued))
+      -- text git itself would reject is not judged: refused
+      assert.is_true(refused("[core\n\tx = 1\n"))
+      assert.is_true(refused('[core]\n\tx = "unclosed\n'))
+      -- an ordinary config passes
+      assert.is_false(
+        refused('[core]\n\tbare = false\n[remote "origin"]\n\turl = https://h/r.git\n')
+      )
+      assert.is_false(refused("[core]\n\t; just a comment\n\tbare = false # trailing\n"))
+    end)
+
+    it("follows local alternates and a commondir to the files they lead to (Windows)", function()
+      if not require("lib.nvim.cross.platform.is_windows")() then
+        local repo = two_commits("-alt-posix")
+        F.write(repo .. "/.git/objects/info/alternates", "../../a/objects\n")
+        assert.is_nil(gitfs.network_path(repo))
+        return
+      end
+      -- an alternates file that names a local folder, whose own alternates name a share
+      local repo = two_commits("-alt")
+      local middle = F.tmpdir("-alt-middle")
+      F.write(middle .. "/objects/info/alternates", "//evil/share/objects\n")
+      F.write(repo .. "/.git/objects/info/alternates", middle .. "/objects\n")
+      assert.is_truthy(gitfs.network_path(repo))
+      -- a commondir to a local folder whose config names a share
+      local wt = two_commits("-cd")
+      local common = F.tmpdir("-cd-common")
+      F.write(common .. "/config", "[mailmap]\n\tfile = //evil/s/m\n")
+      F.write(wt .. "/.git/commondir", common .. "\n")
+      assert.is_truthy(gitfs.network_path(wt))
+      -- ... and a harmless local one is fine
+      local calm = two_commits("-cd-calm")
+      local calm_common = F.tmpdir("-cd-calm-common")
+      F.write(calm_common .. "/config", "[core]\n\tbare = false\n")
+      F.write(calm .. "/.git/commondir", calm_common .. "\n")
+      assert.is_nil(gitfs.network_path(calm))
     end)
 
     it("refuses ref names with a line break, NUL or a '..' component", function()

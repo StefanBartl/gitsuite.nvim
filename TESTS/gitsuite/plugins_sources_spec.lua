@@ -459,7 +459,7 @@ describe("gitsuite plugin sources", function()
       local linked = vim.uv.fs_symlink(real_root, link, { dir = true })
       if not linked then
         -- no permission to create symlinks here (a skip must still assert)
-        assert.is_false(linked)
+        assert.is_nil(linked)
         return
       end
       require("gitsuite.config").setup({ plugins = { roots = { link } } })

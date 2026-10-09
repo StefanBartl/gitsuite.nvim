@@ -498,33 +498,106 @@ local MAX_INCLUDE_FILES = 16
 ---only used when talking to it.
 local INERT_KEYS = { url = true, pushurl = true }
 
----Whether a config file (and what it includes, a few levels deep) names a
----network path in any value. A file that cannot be followed with certainty (too
----deep, too many, a link, unreadable) counts as naming one.
+---Every `key = value` of a git config, read the way git's own parser does
+---(config.c `git_parse_source`): any number of `[headers]` on a line (a quoted
+---subsection may hold `]` and `\"`), a `;`/`#` comment ends at the line end (a
+---trailing backslash does NOT continue it), values are unquoted (`"..."`, the
+---escapes `\" \ \n \t \b`, backslash-newline joins) and cut at a comment.
+---`nil` for text git itself would reject: the caller treats it as "cannot judge".
 ---@param text string
----@param base string  Folder relative include paths are taken from.
----@param depth integer
----@param seen { n: integer, files: table<string, true> }  The files followed so far.
----@return boolean
+---@return { [1]: string, [2]: string }[]|nil entries  `{ key, value }` pairs, key as written.
+local function config_entries(text)
+  local out, i, n = {}, 1, #text
+  local function skip_line()
+    local nl = text:find("\n", i, true)
+    i = nl and nl + 1 or n + 1
+  end
+  local ESC = { n = "\n", t = "\t", b = "\b", ['"'] = '"', ["\\"] = "\\" }
+  while i <= n do
+    local c = text:sub(i, i)
+    if c == ";" or c == "#" then
+      skip_line()
+    elseif c:find("%s") then
+      i = i + 1
+    elseif c == "[" then
+      i = i + 1
+      local quoted = false
+      while true do
+        c = text:sub(i, i)
+        if c == "" or c == "\n" then return nil end
+        i = i + 1
+        if quoted and c == "\\" then
+          i = i + 1
+        elseif c == '"' then
+          quoted = not quoted
+        elseif c == "]" and not quoted then
+          break
+        end
+      end
+    else
+      local key = text:match("^%a[%w%-]*", i)
+      if not key then return nil end
+      i = i + #key
+      i = i + #text:match("^[ \t\r]*", i)
+      local c2 = text:sub(i, i)
+      if c2 == "=" then
+        i = i + 1
+        local buf, quoted, pending = {}, false, 0
+        while i <= n do
+          c = text:sub(i, i)
+          i = i + 1
+          if c == "\n" then
+            if quoted then return nil end
+            break
+          elseif c == "\\" then
+            local e = text:sub(i, i)
+            i = i + 1
+            if e == "\r" and text:sub(i, i) == "\n" then
+              e, i = "\n", i + 1
+            end
+            if e ~= "\n" then
+              if not ESC[e] then return nil end
+              buf[#buf + 1] = (" "):rep(pending) .. ESC[e]
+              pending = 0
+            end
+          elseif c == '"' then
+            quoted = not quoted
+          elseif not quoted and c:find("%s") then
+            if #buf > 0 then pending = pending + 1 end
+          elseif not quoted and (c == ";" or c == "#") then
+            skip_line()
+            break
+          else
+            buf[#buf + 1] = (" "):rep(pending) .. c
+            pending = 0
+          end
+        end
+        if quoted then return nil end
+        out[#out + 1] = { key, table.concat(buf) }
+      elseif c2 == "" or c2 == "\n" or c2 == ";" or c2 == "#" then
+        out[#out + 1] = { key }
+      else
+        return nil
+      end
+    end
+  end
+  return out
+end
+
 local function config_has_unc(text, base, depth, seen)
-  for line in unquote(text):gmatch("[^\r\n]+") do
-    -- (an entry may follow a `[section]` header on the same line; the quoted
-    -- subsection of `[includeIf "gitdir:**/[.]git/"]` may hold a `]`)
-    local entry = line:gsub('^%s*%[[^"%]]*"[^"]*"%s*%]', ""):gsub("^%s*%[[^%]]*%]", "")
-    local key, value = entry:match("^%s*([%w%-]+)%s*=%s*(.-)%s*$")
-    key = key and key:lower()
+  local entries = config_entries(text)
+  if not entries then return true end -- git would reject it, or it cannot be judged
+  for _, entry in ipairs(entries) do
+    local key, value = entry[1]:lower(), entry[2]
     if value and not INERT_KEYS[key] and starts_unc(value) then return true end
     if key == "path" and value and value ~= "" then
-      -- a chain git would still follow, but this check does not: refused
       if depth == 0 then return true end
-      -- (a quoted value ends at its closing quote, an unquoted one at a comment)
-      local included = value:match('^"([^"]*)"') or (value:gsub("%s*[;#].*$", ""))
+      local included = value
       if
         not included:match("^~")
         and not included:match("^%a:")
         and not included:match("^[/\\]")
       then
-        -- (relative to the file that includes it, as git resolves it)
         local file = base .. "/" .. included
         if not seen.files[file] then
           seen.files[file] = true
@@ -534,7 +607,6 @@ local function config_has_unc(text, base, depth, seen)
           if inner then
             if config_has_unc(inner, vim.fs.dirname(file), depth - 1, seen) then return true end
           elseif err ~= "missing" then
-            -- (git skips a missing include too; anything else cannot be judged)
             return true
           end
         end
@@ -544,54 +616,120 @@ local function config_has_unc(text, base, depth, seen)
   return false
 end
 
+---Git follows a chain of `objects/info/alternates` files this deep.
+local MAX_ALT_DEPTH = 5
+
+---@param root string  A git directory (or any folder) whose plain-folder path `rel` is taken below.
+---@param rel string
+---@return string|nil path
+---@return string|nil err
+local function under_root(root, rel)
+  local st0 = uv.fs_lstat(root)
+  if not st0 then return nil, "missing" end
+  if st0.type ~= "directory" then return nil, "not a plain folder" end
+  local path = root
+  local parts = vim.split(rel, "/", { plain = true })
+  for i = 1, #parts - 1 do
+    path = path .. "/" .. parts[i]
+    local st = uv.fs_lstat(path)
+    if not st then return nil, "missing" end
+    if st.type ~= "directory" then return nil, "not a plain folder" end
+  end
+  return path .. "/" .. parts[#parts], nil
+end
+
+---@param root string
+---@param rel string
+---@param max integer
+---@return string|nil text
+---@return string|nil refusal
+local function read_under(root, rel, max)
+  local path, err = under_root(root, rel)
+  local text
+  if path then
+    text, err = read_regular(path, max)
+  end
+  if text then return text, nil end
+  if err == "missing" then return nil, nil end
+  return nil, ("%s cannot be read safely (%s)"):format(rel, err or "unreadable")
+end
+
+---The alternates of one `objects` folder, and (git follows them) of every local
+---folder they name.
+---@param objdir string
+---@param depth integer
+---@return string|nil refusal
+local function alternates_refusal(objdir, depth)
+  local text, refusal = read_under(objdir, "info/alternates", M.MAX_SMALL)
+  if refusal then return refusal end
+  if not text then return nil end
+  for line in text:gmatch("[^\r\n]+") do
+    -- (git unquotes an entry only when it starts with a quote; a plain one is raw,
+    -- and on Windows full of backslashes that are not escapes)
+    local trimmed = vim.trim(line)
+    local quoted = trimmed:match('^"(.*)"$')
+    local entry = quoted and unquote(quoted) or trimmed
+    if starts_unc(trimmed) or starts_unc(entry) then
+      return "its object alternates point at a network path"
+    end
+    if entry ~= "" and entry:sub(1, 1) ~= "#" then
+      if depth == 0 then return "its object alternates are chained too deep to judge" end
+      local nested = (entry:match("^%a:") or entry:match("^[/\\]")) and entry
+        or (objdir .. "/" .. entry)
+      refusal = alternates_refusal(nested, depth - 1)
+      if refusal then return refusal end
+    end
+  end
+  return nil
+end
+
+---@param gd string  A git directory.
+---@param is_common boolean  `gd` was named by a `commondir` file (whose own `commondir` git ignores).
+---@return string|nil refusal
+local function gitdir_refusal(gd, is_common)
+  local refusal = alternates_refusal(gd .. "/objects", MAX_ALT_DEPTH)
+  if refusal then return refusal end
+  if not is_common then
+    local commondir
+    commondir, refusal = read_under(gd, "commondir", M.MAX_SMALL)
+    if refusal then return refusal end
+    if commondir then
+      -- (read raw, as git does; the unquoted form is checked too, to be safe)
+      local c = vim.trim(commondir)
+      if starts_unc(c) or starts_unc(unquote(c)) then
+        return "its commondir points at a network path"
+      end
+      local resolved = (c:match("^%a:") or c:match("^[/\\]")) and c or (gd .. "/" .. c)
+      return gitdir_refusal(resolved, true)
+    end
+  end
+  for _, name in ipairs({ "config", "config.worktree" }) do
+    local config
+    config, refusal = read_under(gd, name, 256 * 1024)
+    if refusal then return refusal end
+    local seen = { n = 0, files = {} }
+    if config and config_has_unc(config, gd, MAX_INCLUDE_DEPTH, seen) then
+      return "its config names a file on a network path"
+    end
+  end
+  return nil
+end
+
 ---On Windows: a reason when the clone's own files point git at a NETWORK path
------ an object alternate, a `commondir`, a value in `.git/config` (an
----`include.path`, `mailmap.file`, ...) or in a file it includes. Every git
----process of this feature would touch that path first, and an SMB connection to
----somebody else's server leaks the user's NTLM hash and stalls until the
----timeout. A file that cannot be read in full (too large, unreadable) is
----refused too. `nil` elsewhere (a leading `//` is a plain local path on POSIX)
+----- an object alternate (and the alternates of the local folders it chains
+---through), a `commondir` (and the config behind it), a value in `.git/config`
+---or `config.worktree` (an `include.path`, `mailmap.file`, ...) or in a file
+---they include. Every git process of this feature would touch that path first,
+---and an SMB connection to somebody else's server leaks the user's NTLM hash and
+---stalls until the timeout. What cannot be judged -- a file too large or
+---unreadable, a link or junction, a config git would reject, a chain too deep --
+---is refused too. `nil` elsewhere (a leading `//` is a plain local path on POSIX)
 ---and when nothing points off the machine.
 ---@param dir string
 ---@return string|nil reason
 function M.network_path(dir)
   if not IS_WIN then return nil end
-  ---@param rel string
-  ---@param max integer
-  ---@return string|nil text
-  ---@return string|nil refusal
-  local function read(rel, max)
-    local text, err = file_text(dir, rel, max)
-    if text then return text, nil end
-    if err == "missing" then return nil, nil end
-    -- too large, unreadable, a link or junction (git follows those): not judged
-    return nil, ("%s cannot be read safely (%s)"):format(rel, err or "unreadable")
-  end
-
-  local alternates, refusal = read("objects/info/alternates", M.MAX_SMALL)
-  if refusal then return refusal end
-  if alternates then
-    for line in unquote(alternates):gmatch("[^\r\n]+") do
-      if starts_unc(line) then return "its object alternates point at a network path" end
-    end
-  end
-  local commondir
-  commondir, refusal = read("commondir", M.MAX_SMALL)
-  if refusal then return refusal end
-  if commondir and starts_unc(unquote(commondir)) then
-    return "its commondir points at a network path"
-  end
-  -- (`config.worktree` is read by git when `extensions.worktreeConfig` is on)
-  for _, name in ipairs({ "config", "config.worktree" }) do
-    local config
-    config, refusal = read(name, 256 * 1024)
-    if refusal then return refusal end
-    local seen = { n = 0, files = {} }
-    if config and config_has_unc(config, gitdir(dir), MAX_INCLUDE_DEPTH, seen) then
-      return "its config names a file on a network path"
-    end
-  end
-  return nil
+  return gitdir_refusal(gitdir(dir), false)
 end
 
 return M

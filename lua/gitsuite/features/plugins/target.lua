@@ -145,9 +145,9 @@ function M.resolve(ref, opts)
       end
     end
     local best = semver.last(matching)
-    if best and incomplete then
-      return unknown("the clone's tag list could not be read completely")
-    end
+    -- (also without a match: the tag that would match may be in the unread part,
+    -- and falling back to the branch would then be a wrong answer given as certain)
+    if incomplete then return unknown("the clone's tag list could not be read completely") end
     if best then return tag_target(dir, best.tag, "version") end
     -- no tag matches yet: lazy falls through to the branch
   elseif version ~= nil and version ~= false then
