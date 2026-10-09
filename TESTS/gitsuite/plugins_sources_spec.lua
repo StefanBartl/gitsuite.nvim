@@ -4,6 +4,15 @@
 local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
 
 describe("gitsuite plugin sources", function()
+  local G = dofile(dir_of_spec .. "spec_guard.lua")()
+  G.install({
+    { vim.fn, "stdpath", "getcompletion" },
+    { vim, "system" },
+    { io, "open" },
+    { package.loaded, "lazy.core.config" },
+    { package.preload, "lazy" },
+  })
+
   local F = dofile(dir_of_spec .. "plugins_fixture.lua")()
   local sources, adapter
 

@@ -1,6 +1,7 @@
 -- TESTS/gitsuite/blame_spec.lua -- gitsuite.features.blame against this
 -- repo's own tracked README.md (real git history, no fixture needed).
 ---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
+local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
 describe("gitsuite.features.blame", function()
   local blame
   local bufnr
@@ -106,6 +107,11 @@ end)
 -- is known exactly (two commits by two authors, one uncommitted edit), a path
 -- with a space, and -- unlike the block above -- no buffer anywhere.
 describe("gitsuite.features.blame.for_location", function()
+  local G = dofile(dir_of_spec .. "spec_guard.lua")()
+  G.install({
+    { vim, "notify" },
+  })
+
   local blame
   local repo
   local original_notify = vim.notify

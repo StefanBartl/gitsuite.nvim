@@ -2,7 +2,13 @@
 -- diff.nvim's real public API. Exercised against this repo's own tracked
 -- README.md (real git history: several commits touch it by now).
 ---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
+local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
 describe("gitsuite.features.diff", function()
+  local G = dofile(dir_of_spec .. "spec_guard.lua")()
+  G.install({
+    { vim.ui, "select" },
+  })
+
   local diff
   local bufnr
   local origin_win

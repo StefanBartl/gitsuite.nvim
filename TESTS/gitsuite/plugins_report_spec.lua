@@ -746,6 +746,12 @@ describe("gitsuite.features.plugins.markdown", function()
 end)
 
 describe("gitsuite.features.plugins.report", function()
+  local G = dofile(dir_of_spec .. "spec_guard.lua")()
+  G.install({
+    { vim, "notify" },
+    { "gitsuite.util.notify", "warn", "error" },
+  })
+
   local F = dofile(dir_of_spec .. "plugins_fixture.lua")()
   local report_mod, state, gitlog, plugins
   local root, store_path, original_state_path

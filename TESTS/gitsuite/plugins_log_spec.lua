@@ -5,6 +5,14 @@
 local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
 
 describe("gitsuite :Git plugins log", function()
+  local G = dofile(dir_of_spec .. "spec_guard.lua")()
+  G.install({
+    { vim, "notify" },
+    { package.loaded, "ui.kit" },
+    { "gitsuite.util.notify", "warn", "error" },
+    { "gitsuite.features.plugins.gitlog", "log" },
+  })
+
   local F = dofile(dir_of_spec .. "plugins_fixture.lua")()
   local text, view, plugins
 

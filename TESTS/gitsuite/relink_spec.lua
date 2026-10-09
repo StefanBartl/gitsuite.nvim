@@ -5,7 +5,14 @@
 -- suite is about what relink() computes and calls, not filetree.nvim's own
 -- reference engine (that belongs to filetree.nvim's own test suite).
 ---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
+local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
 describe("gitsuite.features.status.relink", function()
+  local G = dofile(dir_of_spec .. "spec_guard.lua")()
+  G.install({
+    { vim, "notify" },
+    { package.preload, "filetree.refs" },
+  })
+
   local relink
   local git = require("lib.nvim.git")
 

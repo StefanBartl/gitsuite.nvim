@@ -2,7 +2,13 @@
 -- and the actions wrapper, moved here from reposcope.nvim's own
 -- utils/{repos,repo_dashboard,repo_actions}.lua.
 ---@diagnostic disable: undefined-field -- luassert extends `assert` beyond stock Lua's.
+local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
 describe("gitsuite.features.dashboard", function()
+  local G = dofile(dir_of_spec .. "spec_guard.lua")()
+  G.install({
+    { vim.fn, "stdpath" },
+  })
+
   local repos, status, actions
 
   local function tmpdir(suffix)
