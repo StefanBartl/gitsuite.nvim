@@ -160,10 +160,14 @@ end
 function M.open_commit(target, entry)
   local url, err = links.commit_url(target.dir, entry.sha)
   if not url then
-    copy(entry.sha)
-    notify.warn(
-      ("plugins log: %s -- copied %s instead"):format(text.one_line(err), entry.sha:sub(1, 8))
-    )
+    if copy(entry.sha) then
+      notify.warn(
+        ("plugins log: %s -- copied %s instead"):format(text.one_line(err), entry.sha:sub(1, 8))
+      )
+    else
+      -- (`copy` has said that nothing could be copied)
+      notify.warn(("plugins log: %s"):format(text.one_line(err)))
+    end
     return
   end
   local ok, open_err = links.open(url)

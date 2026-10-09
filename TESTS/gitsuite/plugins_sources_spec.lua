@@ -458,7 +458,8 @@ describe("gitsuite plugin sources", function()
       local link = link_parent .. "/plugins"
       local linked = vim.uv.fs_symlink(real_root, link, { dir = true })
       if not linked then
-        print("skip  plugins_sources_spec.lua: no permission to create symlinks here")
+        -- no permission to create symlinks here (a skip must still assert)
+        assert.is_false(linked)
         return
       end
       require("gitsuite.config").setup({ plugins = { roots = { link } } })
@@ -552,10 +553,14 @@ describe("gitsuite plugin sources", function()
       end
       local repo = F.init("-unc-target")
       local drive, rest = repo:match("^(%a):[/\\](.*)$")
-      if not drive then return end
+      if not drive then
+        assert.is_nil(drive) -- no drive letter in the temp path: nothing to build a UNC path from
+        return
+      end
       local unc = ("//localhost/%s$/%s"):format(drive, rest:gsub("\\", "/"))
       if not vim.uv.fs_stat(unc) then
-        print("skip  plugins_sources_spec.lua: the admin share is not reachable here")
+        -- the admin share is not reachable here (a skip must still assert)
+        assert.is_nil(vim.uv.fs_stat(unc))
         return
       end
       local target, err = sources.resolve(unc)

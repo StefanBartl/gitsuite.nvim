@@ -172,6 +172,9 @@ end
 ---@type table<string, { stamp: string, refs: table<string, GitSuite.Plugins.PackedRef>, incomplete: string|nil }>
 local packed_cache = {}
 local packed_cache_n = 0
+---The one big (over 1 MiB of text) map held, see `packed_refs`.
+---@type { path: string, stamp: string, refs: table, incomplete: string|nil }|nil
+local big_packed
 
 ---@param dir string
 ---@return table<string, GitSuite.Plugins.PackedRef> refs
@@ -180,17 +183,27 @@ function M.packed_refs(dir)
   local path, perr = under_git(dir, "packed-refs")
   if not path then return {}, perr end
   local st = uv.fs_lstat(path)
-  if not st or st.type ~= "file" then return {}, nil end
+  if not st then return {}, nil end -- no packed-refs: every ref is loose
+  if st.type ~= "file" then
+    -- a link or folder where git has a file: its refs cannot be listed from here
+    return {}, "packed-refs is not a regular file"
+  end
   local stamp = ("%d:%d:%d"):format(st.mtime.sec, st.mtime.nsec or 0, st.size)
   local cached = packed_cache[path]
   if cached and cached.stamp == stamp then return cached.refs, cached.incomplete end
+  local big = big_packed
+  if big and big.path == path and big.stamp == stamp then return big.refs, big.incomplete end
 
   local text, err = read_regular(path, M.MAX_PACKED)
   local refs = {}
   local incomplete
   if err == "too large" then
     incomplete = ("packed-refs is larger than %d MiB"):format(M.MAX_PACKED / 1024 / 1024)
-  elseif text then
+  elseif not text then
+    -- a read error (antivirus, a sharing violation) is not an empty file, and not
+    -- worth remembering: the next read may succeed
+    return {}, ("packed-refs could not be read (%s)"):format(err or "unreadable")
+  else
     local last
     for line in text:gmatch("[^\r\n]+") do
       local sha, name = line:match("^(%x+) (refs/%S+)$")
@@ -209,9 +222,13 @@ function M.packed_refs(dir)
   end
   -- bounded: one entry per clone ever looked at would grow with every plugin
   -- that is installed and removed in a long session
-  -- (a big map is rebuilt on the next read rather than held: the cache is
-  -- bounded by entries, so its memory must be bounded per entry as well)
-  if text and #text > 1024 * 1024 then return refs, incomplete end
+  -- (a big map goes into its own single slot: the cache is bounded by entries,
+  -- so its memory must be bounded per entry as well. A plugin's target needs the
+  -- map several times in a row; only the last big one is ever held.)
+  if text and #text > 1024 * 1024 then
+    big_packed = { path = path, stamp = stamp, refs = refs, incomplete = incomplete }
+    return refs, incomplete
+  end
   if not packed_cache[path] then
     packed_cache_n = packed_cache_n + 1
     if packed_cache_n > 256 then
@@ -430,7 +447,9 @@ end
 ---@param dir string
 ---@return integer|nil epoch
 function M.fetch_time(dir)
-  local st = uv.fs_lstat(gitdir(dir) .. "/FETCH_HEAD")
+  -- (through `under_git`: a `.git` that is a symlink or junction is not followed)
+  local path = under_git(dir, "FETCH_HEAD")
+  local st = path and uv.fs_lstat(path)
   if not st or st.type ~= "file" or st.size == 0 then return nil end
   return st.mtime.sec
 end
@@ -440,7 +459,8 @@ end
 ---@param dir string
 ---@return boolean
 function M.index_locked(dir)
-  return uv.fs_lstat(gitdir(dir) .. "/index.lock") ~= nil
+  local path = under_git(dir, "index.lock")
+  return path ~= nil and uv.fs_lstat(path) ~= nil
 end
 
 ---Whether the first path of a text is a UNC/device path (`\\host\share`,
@@ -467,27 +487,57 @@ local function unquote(text)
   )
 end
 
+---Longest include chain followed. Git itself allows ten; a longer one is refused.
+local MAX_INCLUDE_DEPTH = 8
+
+---Most distinct files read while following includes: a config cannot make this
+---check cost more than that, however many `path =` lines it holds.
+local MAX_INCLUDE_FILES = 16
+
+---Config keys whose value a `git log` never touches: the address of a remote is
+---only used when talking to it.
+local INERT_KEYS = { url = true, pushurl = true }
+
 ---Whether a config file (and what it includes, a few levels deep) names a
----network path in any value.
+---network path in any value. A file that cannot be followed with certainty (too
+---deep, too many, a link, unreadable) counts as naming one.
 ---@param text string
 ---@param base string  Folder relative include paths are taken from.
 ---@param depth integer
+---@param seen { n: integer, files: table<string, true> }  The files followed so far.
 ---@return boolean
-local function config_has_unc(text, base, depth)
+local function config_has_unc(text, base, depth, seen)
   for line in unquote(text):gmatch("[^\r\n]+") do
-    -- (an entry may follow a `[section]` header on the same line)
-    local entry = line:gsub("^%s*%[[^%]]*%]", "")
+    -- (an entry may follow a `[section]` header on the same line; the quoted
+    -- subsection of `[includeIf "gitdir:**/[.]git/"]` may hold a `]`)
+    local entry = line:gsub('^%s*%[[^"%]]*"[^"]*"%s*%]', ""):gsub("^%s*%[[^%]]*%]", "")
     local key, value = entry:match("^%s*([%w%-]+)%s*=%s*(.-)%s*$")
-    if value and starts_unc(value) then return true end
-    if key and key:lower() == "path" and value and value ~= "" and depth > 0 then
-      local included = value:gsub('^"', ""):gsub('"$', "")
+    key = key and key:lower()
+    if value and not INERT_KEYS[key] and starts_unc(value) then return true end
+    if key == "path" and value and value ~= "" then
+      -- a chain git would still follow, but this check does not: refused
+      if depth == 0 then return true end
+      -- (a quoted value ends at its closing quote, an unquoted one at a comment)
+      local included = value:match('^"([^"]*)"') or (value:gsub("%s*[;#].*$", ""))
       if
         not included:match("^~")
         and not included:match("^%a:")
         and not included:match("^[/\\]")
       then
-        local inner = read_regular(base .. "/" .. included, 256 * 1024)
-        if inner and config_has_unc(inner, base, depth - 1) then return true end
+        -- (relative to the file that includes it, as git resolves it)
+        local file = base .. "/" .. included
+        if not seen.files[file] then
+          seen.files[file] = true
+          seen.n = seen.n + 1
+          if seen.n > MAX_INCLUDE_FILES then return true end
+          local inner, err = read_regular(file, 256 * 1024)
+          if inner then
+            if config_has_unc(inner, vim.fs.dirname(file), depth - 1, seen) then return true end
+          elseif err ~= "missing" then
+            -- (git skips a missing include too; anything else cannot be judged)
+            return true
+          end
+        end
       end
     end
   end
@@ -513,10 +563,9 @@ function M.network_path(dir)
   local function read(rel, max)
     local text, err = file_text(dir, rel, max)
     if text then return text, nil end
-    if err == "too large" or err == "unreadable" then
-      return nil, ("%s cannot be read completely"):format(rel)
-    end
-    return nil, nil
+    if err == "missing" then return nil, nil end
+    -- too large, unreadable, a link or junction (git follows those): not judged
+    return nil, ("%s cannot be read safely (%s)"):format(rel, err or "unreadable")
   end
 
   local alternates, refusal = read("objects/info/alternates", M.MAX_SMALL)
@@ -532,11 +581,15 @@ function M.network_path(dir)
   if commondir and starts_unc(unquote(commondir)) then
     return "its commondir points at a network path"
   end
-  local config
-  config, refusal = read("config", 256 * 1024)
-  if refusal then return refusal end
-  if config and config_has_unc(config, gitdir(dir), 3) then
-    return "its config names a file on a network path"
+  -- (`config.worktree` is read by git when `extensions.worktreeConfig` is on)
+  for _, name in ipairs({ "config", "config.worktree" }) do
+    local config
+    config, refusal = read(name, 256 * 1024)
+    if refusal then return refusal end
+    local seen = { n = 0, files = {} }
+    if config and config_has_unc(config, gitdir(dir), MAX_INCLUDE_DEPTH, seen) then
+      return "its config names a file on a network path"
+    end
   end
   return nil
 end

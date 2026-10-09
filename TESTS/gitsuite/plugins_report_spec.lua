@@ -337,7 +337,11 @@ describe("gitsuite.features.plugins.state (the report store)", function()
   it("saves through a symbolic link whose target does not exist yet", function()
     local target_dir = F.tmpdir("-dangling")
     vim.fn.mkdir(vim.fs.dirname(path), "p")
-    if not vim.uv.fs_symlink(target_dir .. "/real.json", path) then return end
+    if not vim.uv.fs_symlink(target_dir .. "/real.json", path) then
+      -- no symlinks here: still writes through a plain path
+      assert.is_true((state.add(report("a", NOW), CFG, path)))
+      return
+    end
     assert.is_true((state.add(report("a", NOW), CFG, path)))
     assert.is_not_nil(vim.uv.fs_stat(target_dir .. "/real.json"))
     assert.equals("link", vim.uv.fs_lstat(path).type)
@@ -348,7 +352,11 @@ describe("gitsuite.features.plugins.state (the report store)", function()
     local real = real_dir .. "/real.json"
     vim.fn.mkdir(vim.fs.dirname(path), "p")
     assert.is_true((state.add(report("a", NOW), CFG, real)))
-    if not vim.uv.fs_symlink(real, path) then return end -- no symlinks here
+    if not vim.uv.fs_symlink(real, path) then
+      -- no symlinks here: the plain store was written above
+      assert.is_not_nil(vim.uv.fs_stat(real))
+      return
+    end
     assert.is_true((state.add(report("b", NOW + 1), CFG, path)))
     assert.equals("link", vim.uv.fs_lstat(path).type, "the link is still a link")
     local store = state.load(real)

@@ -174,7 +174,11 @@ describe("gitsuite.features.plugins.gitlog", function()
       F.git(repo, { "log", "-p", "-n1" }, { allow_fail = true })
       local armed = vim.uv.fs_stat(marker) ~= nil
       vim.fn.delete(marker)
-      if not armed then return end -- no `touch`/`sh` here: nothing to prove
+      if not armed then
+        -- no `touch`/`sh` here: nothing to prove (a skip must still assert)
+        assert.is_false(armed)
+        return
+      end
 
       -- ... and with the lock `argv` adds, it does not -- even for the one
       -- option the allowlist would otherwise have to catch.
@@ -288,7 +292,11 @@ describe("gitsuite.features.plugins.gitlog", function()
       F.git(repo, { "status", "--porcelain" }, { allow_fail = true })
       local armed = vim.uv.fs_stat(marker) ~= nil
       vim.fn.delete(marker)
-      if not armed then return end -- this git/platform does not run it: nothing to prove
+      if not armed then
+        -- this git/platform does not run it: nothing to prove (a skip must still assert)
+        assert.is_false(armed)
+        return
+      end
 
       local ran = ran_through("core.fsmonitor", "touch MARKER")
       assert.is_false(ran, "core.fsmonitor ran")

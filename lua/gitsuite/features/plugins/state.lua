@@ -396,11 +396,25 @@ function M.add(report, cfg, path)
   local store, info = M.load(path)
   if info.readonly then return false, info.readonly, info end
 
+  ---The copy made for `info.dropped`, removed again when the rewrite does not happen.
+  ---@type string|nil
+  local backup
+  ---@param msg string
+  ---@return boolean ok
+  ---@return string err
+  ---@return GitSuite.Plugins.StoreInfo info
+  local function give_up(msg)
+    -- (the file is unchanged: a copy left behind would be made again, and again,
+    -- by every later run until the store can be written)
+    if backup then uv.fs_unlink(backup) end
+    return false, msg, info
+  end
+
   if info.dropped then
     -- The rewrite below leaves the unusable reports out: keep the file as it was
     -- once, so a report of a newer build or a hand edit is not lost for good.
     -- (never over an earlier backup; and no rewrite at all if the copy fails)
-    local backup = ("%s.dropped-%s.bak"):format(path, os.date("%Y%m%d%H%M%S"))
+    backup = ("%s.dropped-%s.bak"):format(path, os.date("%Y%m%d%H%M%S"))
     local n = 0
     while uv.fs_stat(backup) do
       n = n + 1
@@ -415,7 +429,7 @@ function M.add(report, cfg, path)
     -- Another machine's store (the state folder is synced): keep it, start ours.
     local host = info.foreign:gsub("[^%w%._%-]", "_")
     if not move_aside(path, ".foreign-" .. host .. ".bak") then
-      return false, "the report store of another machine could not be moved aside", info
+      return give_up("the report store of another machine could not be moved aside")
     end
     store = empty()
   end
@@ -430,7 +444,7 @@ function M.add(report, cfg, path)
   local sizes, total = {}, 64
   for i, stored in ipairs(store.reports) do
     local ok_one, one = pcall(vim.json.encode, stored)
-    if not ok_one then return false, "could not encode the report: " .. tostring(one), info end
+    if not ok_one then return give_up("could not encode the report: " .. tostring(one)) end
     sizes[i] = #one + 1
     total = total + sizes[i]
   end
@@ -442,13 +456,13 @@ function M.add(report, cfg, path)
   if total > M.MAX_BYTES then
     -- One report alone is over the cap: writing it would leave a file the next
     -- run refuses to read.
-    return false, "the report is too large to store (lower plugins.max_commits)", info
+    return give_up("the report is too large to store (lower plugins.max_commits)")
   end
   local ok_enc, json = pcall(vim.json.encode, store)
-  if not ok_enc then return false, "could not encode the report: " .. tostring(json), info end
+  if not ok_enc then return give_up("could not encode the report: " .. tostring(json)) end
 
   local ok, err = atomic(path, json, { mkdirp = true })
-  if not ok then return false, err, info end
+  if not ok then return give_up(err) end
   return true, nil, info
 end
 

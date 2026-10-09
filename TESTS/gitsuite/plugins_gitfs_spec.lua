@@ -224,7 +224,11 @@ describe("gitsuite.features.plugins.gitfs", function()
       local parent = F.tmpdir("-clone-parent")
       F.git(parent, { "clone", "-q", vim.uri_from_fname(origin), "c" }, { allow_fail = true })
       local clone = parent .. "/c"
-      if not gitfs.is_clone(clone) then return end
+      if not gitfs.is_clone(clone) then
+        -- this git cannot clone from a file URL here (a skip must still assert)
+        assert.is_false(gitfs.is_clone(clone))
+        return
+      end
       local entries = assert(gitfs.reflog(clone))
       assert.equals("clone", entries[1].kind)
       assert.is_true(gitfs.is_zero(entries[1].old))
@@ -325,7 +329,11 @@ describe("gitsuite.features.plugins.gitfs", function()
       local repo, _, b = two_commits("-sym")
       local secret = F.tmpdir("-sym-target") .. "/secret"
       F.write(secret, b .. "\n")
-      if not link(secret, repo .. "/.git/refs/heads/main") then return end
+      if not link(secret, repo .. "/.git/refs/heads/main") then
+        -- no symlinks here (a skip must still assert)
+        assert.equals(b, gitfs.ref(repo, "refs/heads/main"))
+        return
+      end
       assert.is_nil(gitfs.ref(repo, "refs/heads/main"))
       assert.is_true(link(secret, repo .. "/.git/HEAD"))
       local head, err = gitfs.head(repo)
@@ -337,7 +345,11 @@ describe("gitsuite.features.plugins.gitfs", function()
       local real = F.init("-link-real")
       F.commit(real, "one")
       local outer = F.tmpdir("-link-outer")
-      if not vim.uv.fs_symlink(real .. "/.git", outer .. "/.git", { dir = true }) then return end
+      if not vim.uv.fs_symlink(real .. "/.git", outer .. "/.git", { dir = true }) then
+        -- no symlinks here (a skip must still assert)
+        assert.is_true(gitfs.is_clone(real))
+        return
+      end
       assert.equals("link", gitfs.clone_state(outer))
       assert.is_false(gitfs.is_clone(outer))
       assert.is_nil(gitfs.head(outer))
@@ -400,8 +412,39 @@ describe("gitsuite.features.plugins.gitfs", function()
       end
       F.write(repo .. "/.git/packed-refs", table.concat(lines, "\n") .. "\n")
       local first = gitfs.packed_refs(repo)
-      local second = gitfs.packed_refs(repo)
-      assert.are_not.equal(first, second, "parsed again, not retained")
+      -- one slot: the map is held for the reads that follow (a plugin's target
+      -- needs it several times) ...
+      assert.equals(first, (gitfs.packed_refs(repo)))
+      -- ... but only the last big one
+      local other = two_commits("-big-cache-2")
+      F.write(other .. "/.git/packed-refs", table.concat(lines, "\n") .. "\n")
+      local other_refs = gitfs.packed_refs(other)
+      assert.are_not.equal(first, other_refs)
+      assert.are_not.equal(first, (gitfs.packed_refs(repo)), "the first one was dropped")
+    end)
+
+    it("does not take a packed-refs that is a folder for an empty one", function()
+      local repo = two_commits("-packed-dir")
+      vim.fn.mkdir(repo .. "/.git/packed-refs", "p")
+      local refs, incomplete = gitfs.packed_refs(repo)
+      assert.same({}, refs)
+      assert.is_truthy(incomplete)
+    end)
+
+    it("does not look through a .git that is a symlink for FETCH_HEAD or the index lock", function()
+      local real = two_commits("-fetch-real")
+      F.write(real .. "/.git/FETCH_HEAD", "x\n")
+      F.write(real .. "/.git/index.lock", "")
+      local outer = F.tmpdir("-fetch-outer")
+      if not vim.uv.fs_symlink(real .. "/.git", outer .. "/.git", { dir = true }) then
+        -- no symlinks here (a skip must still assert)
+        assert.is_not_nil(gitfs.fetch_time(real))
+        return
+      end
+      assert.is_nil(gitfs.fetch_time(outer))
+      assert.is_false(gitfs.index_locked(outer))
+      assert.is_not_nil(gitfs.fetch_time(real))
+      assert.is_true(gitfs.index_locked(real))
     end)
 
     it("refuses network paths the clone's files name (Windows)", function()
@@ -420,6 +463,86 @@ describe("gitsuite.features.plugins.gitfs", function()
       assert.is_truthy(check("config", "[core]\n\tx = \\\\\\\\h\\\\s\\\\y\n"))
       assert.is_truthy(check("objects/info/alternates", '"\\057\\057h/s/o"\n'))
       assert.is_nil(check("config", "[core]\n\tbare = false\n"))
+      assert.is_truthy(check("config.worktree", "[mailmap]\n\tfile = //h/s/m\n"))
+      -- an entry after a header whose quoted subsection holds a `]`
+      assert.is_truthy(check("config", '[includeIf "gitdir:**/[.]git/"] path = //h/s/x\n'))
+      -- the address of a remote is never touched by a log
+      assert.is_nil(check("config", '[remote "origin"]\n\turl = //nas/share/repo.git\n'))
+    end)
+
+    it(
+      "follows includes the way git does, and gives up on what it cannot judge (Windows)",
+      function()
+        if not require("lib.nvim.cross.platform.is_windows")() then
+          -- elsewhere nothing is refused, includes or not
+          local repo = two_commits("-inc-posix")
+          F.write(repo .. "/.git/config", "[include]\n\tpath = a\n")
+          assert.is_nil(gitfs.network_path(repo))
+          return
+        end
+        local function repo_with(files)
+          local repo = two_commits("-inc")
+          for rel, content in pairs(files) do
+            F.write(repo .. "/.git/" .. rel, content)
+          end
+          return repo
+        end
+        -- relative to the including file, not to .git
+        local nested = repo_with({
+          config = "[include]\n\tpath = sub/a\n",
+          ["sub/a"] = "[include]\n\tpath = b\n",
+          ["sub/b"] = "[mailmap]\n\tfile = //evil/s/m\n",
+        })
+        assert.is_truthy(gitfs.network_path(nested))
+        -- a comment after the value is not part of the file name
+        local commented = repo_with({
+          config = "[include]\n\tpath = a ; note\n",
+          a = "[mailmap]\n\tfile = //evil/s/m\n",
+        })
+        assert.is_truthy(gitfs.network_path(commented))
+        -- a chain longer than the check follows is refused, not waved through
+        local files = { config = "[include]\n\tpath = c0\n" }
+        for i = 0, 11 do
+          files["c" .. i] = ("[include]\n\tpath = c%d\n"):format(i + 1)
+        end
+        assert.is_truthy(gitfs.network_path(repo_with(files)))
+        -- a harmless chain is fine
+        assert.is_nil(gitfs.network_path(repo_with({
+          config = "[include]\n\tpath = a\n",
+          a = "[core]\n\tbare = false\n",
+        })))
+        -- many includes of the same file cost one read, not a tree of them
+        local lines = { "[include]" }
+        for _ = 1, 200 do
+          lines[#lines + 1] = "\tpath = a"
+        end
+        local started = vim.uv.hrtime()
+        local wide = repo_with({
+          config = table.concat(lines, "\n") .. "\n",
+          a = table.concat(lines, "\n") .. "\n",
+        })
+        assert.is_nil(gitfs.network_path(wide))
+        assert.is_true((vim.uv.hrtime() - started) / 1e6 < 2000, "no blow-up")
+      end
+    )
+
+    it("refuses a clone whose .git is a symlink or a file (Windows)", function()
+      if not require("lib.nvim.cross.platform.is_windows")() then
+        local plain = two_commits("-lnk-posix")
+        assert.is_nil(gitfs.network_path(plain))
+        return
+      end
+      local real = two_commits("-lnk-real")
+      local outer = F.tmpdir("-lnk-outer")
+      if not vim.uv.fs_symlink(real .. "/.git", outer .. "/.git", { dir = true }) then
+        -- no symlinks here (a skip must still assert)
+        assert.is_nil(gitfs.network_path(real))
+        return
+      end
+      assert.is_truthy(gitfs.network_path(outer))
+      local filed = F.tmpdir("-lnk-file")
+      F.write(filed .. "/.git", "gitdir: //evil/share/x\n")
+      assert.is_truthy(gitfs.network_path(filed))
     end)
 
     it("refuses ref names with a line break, NUL or a '..' component", function()
