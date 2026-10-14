@@ -1,6 +1,6 @@
 # Health check
 
-`:checkhealth gitsuite` runs seven sections of its own, then the composer's route list.
+`:checkhealth gitsuite` runs eight sections of its own, then the composer's route list.
 
 ## gitsuite
 
@@ -30,6 +30,15 @@ One line per adapter (`gitsigns`, `diffview`, `neogit`, `lazygit`,
 
 `native` is always ✅ inside a git repository — it needs nothing beyond
 `git` itself, already confirmed above.
+
+## gitsuite: optional dependencies
+
+One line per optional plugin (`color_my_ascii`, `insights`, `pickers`). Absent is `info`, never a warning or an error — the feature it enables is simply unavailable.
+
+| Line | Means |
+| --- | --- |
+| ✅ `<name> found: <feature>` | The plugin resolved; the feature is on |
+| ℹ️ `<name> not installed: <effect>` | The plugin is absent; see the effect named in the line |
 
 ## gitsuite: plugin sources
 

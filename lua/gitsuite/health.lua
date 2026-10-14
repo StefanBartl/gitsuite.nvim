@@ -7,6 +7,43 @@
 
 local M = {}
 
+---Optional dependencies: each one only enables a feature, so a missing one is
+---`info`, never `warn`/`error` (UI-59).
+---@return nil
+local function check_soft_dependencies()
+  vim.health.start("gitsuite: optional dependencies")
+  local soft = {
+    {
+      "color_my_ascii",
+      "color_my_ascii.api.fences",
+      "color_my_ascii.nvim",
+      "conflict scan ignores marker examples inside fenced code blocks",
+      "a fenced block showing conflict markers is reported as a conflict",
+    },
+    {
+      "insights",
+      "insights.conflicts",
+      "insights.nvim",
+      ":Git conflict list (repo-wide quickfix scan)",
+      ":Git conflict list is unavailable",
+    },
+    {
+      "pickers",
+      "pickers.engines",
+      "pickers.nvim",
+      "branch picker through the configured picker engine",
+      "the branch picker falls back to vim.ui.select",
+    },
+  }
+  for _, dep in ipairs(soft) do
+    if pcall(require, dep[2]) then
+      vim.health.ok(("%s found: %s"):format(dep[1], dep[4]))
+    else
+      vim.health.info(("%s not installed: %s"):format(dep[1], dep[5]))
+    end
+  end
+end
+
 ---@return nil
 function M.check()
   vim.health.start("gitsuite")
@@ -65,6 +102,8 @@ function M.check()
       vim.health.info(("%s: not available"):format(name))
     end
   end
+
+  check_soft_dependencies()
 
   -- `:Git plugins` reads these. A source that is not there is `info` (UI-59):
   -- `clones` needs nothing and is always available.
