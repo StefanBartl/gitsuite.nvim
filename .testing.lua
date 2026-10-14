@@ -39,5 +39,30 @@ return {
     spawn = { "git" },
   },
   -- gated: a failed conformance check makes `scripts/test.sh conformance` exit 1 (docs/CONFORMANCE.md of testing.nvim)
-  conformance = { gate = true },
+  conformance = {
+    gate = true,
+    waivers = {
+      {
+        check = "K1",
+        level = "warn",
+        file = "lua/gitsuite/features/dashboard/view.lua",
+        reason = "loaded lazily (only when the dashboard opens); the ColorScheme autocmd belongs to the highlights it defines at load, moving either would change when they exist",
+        expires = "2027-04-14",
+      },
+      {
+        check = "K1",
+        level = "warn",
+        file = "lua/gitsuite/statusline.lua",
+        reason = "only loaded because the user put the component in their statusline; the BufDelete cache cleanup must start with it (no setup() exists)",
+        expires = "2027-04-14",
+      },
+      {
+        check = "K13",
+        level = "warn",
+        text = ":Git is a prefix of",
+        reason = ":Git is this plugin's own compound command (name configurable); the GitsuiteLazygit* bridge commands are only called via nvr by lazygit, never typed",
+        expires = "2027-04-14",
+      },
+    },
+  },
 }

@@ -153,6 +153,7 @@ function M.setup()
     require("gitsuite.features.ui.lazygit.badd").run(opts.args)
   end, {
     nargs = 1,
+    complete = "file",
     desc = "[gitsuite] Add file to buffer list (called via nvr from lazygit)",
   })
 
@@ -160,6 +161,7 @@ function M.setup()
     require("gitsuite.features.ui.lazygit.replace").run(opts.args)
   end, {
     nargs = 1,
+    complete = "file",
     desc = "[gitsuite] Replace visible editor buffer with file (called via nvr from lazygit)",
   })
 end
