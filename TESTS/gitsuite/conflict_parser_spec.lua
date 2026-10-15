@@ -395,40 +395,33 @@ describe("gitsuite.features.conflict.parser", function()
   end)
 
   -- The parser runs from BufReadPost for every file buffer, so a slowdown hits every opened file.
-  -- Measured 2026-10-04: 0.6 ms for 200 000 lines without a marker. The budgets are far above
-  -- that (a shared Windows runner may be ten times slower than a desktop) and only catch a real
-  -- regression, such as a per-line pattern match or a quadratic scan; best of five runs.
+  -- Absolute millisecond budgets cannot do this job: the parser needs ~1.5 ms for 200 000 lines,
+  -- a per-line marker() call (the regression to catch) ~10 ms, so any budget that does not flake
+  -- on a slow shared runner lets that regression pass. The checks are therefore RELATIVE and
+  -- measured in the same process (best of several runs), so the machine speed cancels out:
+  --   * plain lines: parse() against a bare loop doing the same first-byte test per line;
+  --   * conflict regions: 4x the regions must cost about 4x (linear), not 16x (quadratic).
   describe("time budget", function()
     local uv = vim.uv or vim.loop
 
-    ---@param lines string[]
-    ---@return number ms  best of five
-    local function best_ms(lines)
+    ---@param fn fun()
+    ---@param runs integer
+    ---@return number ms  best of `runs`
+    local function best_ms(fn, runs)
       local best = math.huge
-      for _ = 1, 5 do
+      for _ = 1, runs do
         local t0 = uv.hrtime()
-        parser.parse(lines)
+        fn()
         best = math.min(best, (uv.hrtime() - t0) / 1e6)
       end
       return best
     end
 
-    it("scans 200 000 lines without a marker well within the budget", function()
+    ---@param count integer
+    ---@return string[]
+    local function regions_lines(count)
       local lines = {}
-      for i = 1, 200000 do
-        lines[i] = "local value_" .. i .. " = compute(" .. i .. ") -- an ordinary line of code"
-      end
-      assert.equals(0, #parser.parse(lines))
-      local ms = best_ms(lines)
-      assert.is_true(
-        ms < 100,
-        ("parse of 200 000 plain lines took %.1f ms (budget 100)"):format(ms)
-      )
-    end)
-
-    it("parses 1 000 conflict regions within the budget", function()
-      local lines = {}
-      for i = 1, 1000 do
+      for i = 1, count do
         vim.list_extend(lines, {
           "context before " .. i,
           "<<<<<<< HEAD",
@@ -438,11 +431,52 @@ describe("gitsuite.features.conflict.parser", function()
           ">>>>>>> feature",
         })
       end
-      local regions = parser.parse(lines)
-      assert.equals(1000, #regions)
-      assert.equals("theirs 1000", lines[regions[1000].theirs_first + 1])
-      local ms = best_ms(lines)
-      assert.is_true(ms < 250, ("parse of 1 000 regions took %.1f ms (budget 250)"):format(ms))
+      return lines
+    end
+
+    it("scans 200 000 plain lines at the cost of a bare first-byte loop", function()
+      local lines = {}
+      for i = 1, 200000 do
+        lines[i] = "local value_" .. i .. " = compute(" .. i .. ") -- an ordinary line of code"
+      end
+      assert.equals(0, #parser.parse(lines))
+
+      local hits = 0
+      local floor = best_ms(function()
+        for i = 1, #lines do
+          if lines[i]:byte(1) == 60 then hits = hits + 1 end
+        end
+      end, 7)
+      assert.equals(0, hits)
+      local ms = best_ms(function()
+        parser.parse(lines)
+      end, 7)
+      -- parse() is ~1.2x the floor; a marker() call on every line is 3x or more (7x under JIT).
+      assert.is_true(
+        ms < 2 * math.max(floor, 0.05),
+        ("parse of 200 000 plain lines took %.2f ms, bare loop %.2f ms (limit 2x)"):format(
+          ms,
+          floor
+        )
+      )
+    end)
+
+    it("parses conflict regions in linear time", function()
+      local small, large = regions_lines(2000), regions_lines(8000)
+      local regions = parser.parse(large)
+      assert.equals(8000, #regions)
+      assert.equals("theirs 8000", large[regions[8000].theirs_first + 1])
+      local t_small = best_ms(function()
+        parser.parse(small)
+      end, 5)
+      local t_large = best_ms(function()
+        parser.parse(large)
+      end, 5)
+      -- Linear: 4x. Quadratic: 16x.
+      assert.is_true(
+        t_large < 9 * math.max(t_small, 0.05),
+        ("8 000 regions took %.2f ms, 2 000 took %.2f ms (limit 9x)"):format(t_large, t_small)
+      )
     end)
   end)
 end)
