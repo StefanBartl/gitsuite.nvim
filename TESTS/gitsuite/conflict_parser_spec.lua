@@ -393,4 +393,56 @@ describe("gitsuite.features.conflict.parser", function()
     assert.equals("HEAD", regions[1].ours_label)
     assert.equals("feature", regions[1].theirs_label)
   end)
+
+  -- The parser runs from BufReadPost for every file buffer, so a slowdown hits every opened file.
+  -- Measured 2026-10-04: 0.6 ms for 200 000 lines without a marker. The budgets are far above
+  -- that (a shared Windows runner may be ten times slower than a desktop) and only catch a real
+  -- regression, such as a per-line pattern match or a quadratic scan; best of five runs.
+  describe("time budget", function()
+    local uv = vim.uv or vim.loop
+
+    ---@param lines string[]
+    ---@return number ms  best of five
+    local function best_ms(lines)
+      local best = math.huge
+      for _ = 1, 5 do
+        local t0 = uv.hrtime()
+        parser.parse(lines)
+        best = math.min(best, (uv.hrtime() - t0) / 1e6)
+      end
+      return best
+    end
+
+    it("scans 200 000 lines without a marker well within the budget", function()
+      local lines = {}
+      for i = 1, 200000 do
+        lines[i] = "local value_" .. i .. " = compute(" .. i .. ") -- an ordinary line of code"
+      end
+      assert.equals(0, #parser.parse(lines))
+      local ms = best_ms(lines)
+      assert.is_true(
+        ms < 100,
+        ("parse of 200 000 plain lines took %.1f ms (budget 100)"):format(ms)
+      )
+    end)
+
+    it("parses 1 000 conflict regions within the budget", function()
+      local lines = {}
+      for i = 1, 1000 do
+        vim.list_extend(lines, {
+          "context before " .. i,
+          "<<<<<<< HEAD",
+          "ours " .. i,
+          "=======",
+          "theirs " .. i,
+          ">>>>>>> feature",
+        })
+      end
+      local regions = parser.parse(lines)
+      assert.equals(1000, #regions)
+      assert.equals("theirs 1000", lines[regions[1000].theirs_first + 1])
+      local ms = best_ms(lines)
+      assert.is_true(ms < 250, ("parse of 1 000 regions took %.1f ms (budget 250)"):format(ms))
+    end)
+  end)
 end)
