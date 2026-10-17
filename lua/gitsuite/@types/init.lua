@@ -51,6 +51,9 @@
 ---@field mode "updated"|"pending"  What a report compares (default "updated").
 ---@field max_commits integer  Commits kept per plugin in a report.
 ---@field parallel integer     git processes at once while a report is built.
+---@field fetch_jobs integer   `report --fetch`: fetches at once.
+---@field fetch_timeout_ms integer  `report --fetch`: timeout of each clone's fetch.
+---@field fetch_confirm integer  `report --fetch` asks first from this many clones on (`--yes` skips it).
 ---@field run_window_s integer Plugins updated within this many seconds of each other form one run.
 ---@field merges boolean       Keep merge commits in the commit lists.
 ---@field keep_reports integer Stored reports (newest first).

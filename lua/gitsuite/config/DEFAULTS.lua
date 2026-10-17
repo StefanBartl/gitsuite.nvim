@@ -82,13 +82,19 @@ local DEFAULTS = {
     -- What the report compares: "updated" = the previous state with the current
     -- one (what the last update changed, from each clone's reflog); "pending" =
     -- the current state with the target lazy.nvim would move to (as of the last
-    -- fetch -- gitsuite never fetches).
+    -- fetch -- gitsuite fetches only on `report --fetch`).
     mode = "updated",
     -- Commits kept per plugin in a report; more are cut and marked as such.
     max_commits = 1000,
     -- git processes at once while a report is built (a Windows machine with a
     -- virus scanner is happier with few).
     parallel = 4,
+    -- `:Git plugins report --mode=pending --fetch` (never without the flag):
+    -- fetches at once, the timeout of each in milliseconds, and from how many
+    -- clones on it asks first (`--yes` skips the question).
+    fetch_jobs = 2,
+    fetch_timeout_ms = 60000,
+    fetch_confirm = 5,
     -- Plugins whose update times lie at most this many seconds apart belong to
     -- one update run (one `:Lazy sync`).
     run_window_s = 300,

@@ -13,7 +13,7 @@
 ---     Independently of that the environment pins the config vectors that start a
 ---     program from `git log` (`core.fsmonitor`, the `gpg.*` programs), and the
 ---     diff-making verbs get `--no-textconv --no-ext-diff`.
----   * **No network.** Every call sets `no_lazy_fetch` (git then fails on a
+---   * **No network** (the one exception is `fetch`, see there). Every other call sets `no_lazy_fetch` (git then fails on a
 ---     missing object of a blobless clone instead of quietly fetching it into
 ---     the clone), `GIT_TERMINAL_PROMPT=0` and `GCM_INTERACTIVE=never` (no
 ---     credential prompt can hang or pop up), and on Windows a clone whose own
@@ -337,6 +337,31 @@ function M.has_commit(dir, rev, on_done)
     if reason == "" then reason = ("git failed (exit code %d)"):format(res.code) end
     on_done(nil, reason)
   end)
+end
+
+---The one exception to "no network": `git fetch --all --prune` in one clone,
+---for `:Git plugins report --fetch` only (asked for explicitly, confirmed
+---first). It moves remote-tracking refs and writes `FETCH_HEAD` -- no checkout,
+---HEAD and the work tree stay as they are. The environment is the one of every
+---other call here (no prompt: `GIT_TERMINAL_PROMPT=0`, `GCM_INTERACTIVE=never`;
+---the pinned config), minus `no_lazy_fetch`, which would block the transport.
+---It runs under `timeout_ms`; the kill at the deadline or on `stop()` takes the
+---whole process tree (lib.nvim: the process group on POSIX, `taskkill /T` on
+---Windows), so a hung `git-remote-https` does not outlive it. A clone whose own
+---files point git at a network path is refused as for every read.
+---@param dir string
+---@param timeout_ms integer
+---@param on_done fun(ok: boolean, err: string|nil, changed: boolean|nil) `vim.schedule`d.
+---@return { stop: fun() } handle
+function M.fetch(dir, timeout_ms, on_done)
+  local blocked = preflight(dir)
+  if blocked then return refuse(on_done, false, blocked) end
+  return git.fetch_async(
+    M.opts(dir, { no_lazy_fetch = false, timeout_ms = timeout_ms }),
+    function(ok, err, changed)
+      on_done(ok, err, changed)
+    end
+  )
 end
 
 ---The newest `n` commits of `dir`'s HEAD with their message and (by default)

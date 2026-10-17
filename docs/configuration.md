@@ -163,6 +163,9 @@ plugins = {
   mode = "updated",      -- "updated" (what the last update changed) | "pending" (what the next would bring)
   max_commits = 1000,    -- commits kept per plugin in a report; more are cut and marked
   parallel = 4,          -- git processes at once while a report is built
+  fetch_jobs = 2,        -- `report --fetch`: fetches at once
+  fetch_timeout_ms = 60000, -- `report --fetch`: timeout of each clone's fetch
+  fetch_confirm = 5,     -- `report --fetch` asks first from this many clones on (`--yes` skips it)
   run_window_s = 300,    -- plugins updated this close together form one update run
   merges = false,        -- keep merge commits in the commit lists
   keep_reports = 20,     -- stored reports, newest first
@@ -189,8 +192,23 @@ cannot hang the request.
 The numeric options take whole numbers within a range; a value outside it is
 dropped with a `setup()` issue and the default applies: `log_limit` and
 `max_commits` 1–1000000, `timeout_ms` 1–2147483647, `parallel` 1–64,
-`run_window_s` 1–31536000, `keep_reports` 1–10000, `max_age_days` 1–36500
+`run_window_s` 1–31536000, `keep_reports` 1–10000, `max_age_days` 1–36500,
+`fetch_jobs` 1–16, `fetch_timeout_ms` 1–3600000, `fetch_confirm` 1–100000
 (`math.huge` is not "no limit").
+
+The `fetch_*` options only matter for `:Git plugins report --mode=pending
+--fetch` — gitsuite never fetches without that flag. It runs one `git fetch
+--all --prune` per clone (only remote-tracking refs and `FETCH_HEAD` move; HEAD
+and the work tree stay), `fetch_jobs` at a time (a machine with a virus scanner
+is happier with few), each killed after `fetch_timeout_ms` together with its
+child processes (`git-remote-https`; the process group on POSIX, `taskkill /T`
+on Windows). No credential prompt can appear (`GIT_TERMINAL_PROMPT=0`,
+`GCM_INTERACTIVE=never`): a private repository fails like a timeout, the other
+plugins go on, and the report lists every failed and skipped clone. From
+`fetch_confirm` clones on it asks first (`fetch_confirm = 1`: always); `--yes`
+skips the question. Nothing is fetched while lazy.nvim is working on plugins,
+and a clone whose `index.lock` is held is skipped. A clone whose fetch failed
+never counts as fetched, so the report does not call its remote state current.
 
 The report options: `mode` is the default for `:Git plugins report`
 (`--mode=` overrides it per call). `include_local = false` keeps `dir`-mode

@@ -223,6 +223,7 @@ local function normalize_entry(entry)
     reason = str(entry.reason, 2048),
     time = plausible_time(entry.time) and entry.time or nil,
     fetched_at = plausible_time(entry.fetched_at) and entry.fetched_at or nil,
+    fetch_error = str(entry.fetch_error, 1024),
     ahead = count(entry.ahead),
     behind = count(entry.behind),
     truncated = bool(entry.truncated),
@@ -259,6 +260,43 @@ local function string_list(list)
     end
   end
   return out
+end
+
+---Stored fetch problems (`{ name, dir, reason }`), at most `max`.
+---@param list any
+---@param max integer
+---@return GitSuite.Plugins.FetchProblem[]
+local function problem_list(list, max)
+  local out = {}
+  if not is_list(list) then return out end
+  for _, p in ipairs(list) do
+    if #out >= max then break end
+    if type(p) == "table" then
+      local name, dir, reason = str(p.name, 1024), str(p.dir, 4096), str(p.reason, 1024)
+      if name and dir and reason then
+        out[#out + 1] = { name = name, dir = dir, reason = reason }
+      end
+    end
+  end
+  return out
+end
+
+---A stored `--fetch` run, or `nil`.
+---@param f any
+---@return GitSuite.Plugins.FetchRun|nil
+local function normalize_fetched(f)
+  if type(f) ~= "table" or not plausible_time(f.at) then return nil end
+  local clones, fetched, changed = count(f.clones), count(f.fetched), count(f.changed)
+  if not (clones and fetched and changed) then return nil end
+  return {
+    at = f.at,
+    clones = clones,
+    fetched = fetched,
+    changed = changed,
+    failed = problem_list(f.failed, 1000),
+    skipped = problem_list(f.skipped, 1000),
+    stopped = bool(f.stopped),
+  }
 end
 
 ---Make a report read from disk safe for the code that renders and reuses it:
@@ -327,6 +365,7 @@ local function normalize(r)
     errors = string_list(r.errors),
     run = run,
     fetch = fetch,
+    fetched = normalize_fetched(r.fetched),
     plugins = plugins,
     heads = heads,
     counts = counts,

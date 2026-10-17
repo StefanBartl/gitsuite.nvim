@@ -43,7 +43,8 @@ commits that are marked breaking, each with its place in the update ("17/86")
 and whether it concerns your setup (a heuristic, and the report says so) — and
 `:Git plugins log` shows the newest commits of one plugin
 or any clone in a picker with a preview — both read local state only: no
-fetch, no install, no change to any clone.
+fetch (unless you ask for one with `report --mode=pending --fetch`), no
+install, no change to any clone.
 
 ---
 

@@ -409,7 +409,7 @@ local function build_routes()
     },
 
     -- plugins: the history of the clones a plugin manager installed. Reads
-    -- only (never fetches, never changes a clone). `log` is a
+    -- only (never changes a clone; fetches only on `report --fetch`). `log` is a
     -- single-repository action like `ui lazygit [dir]`; `report` covers every
     -- installed plugin.
     {
@@ -496,8 +496,18 @@ local function build_routes()
           bool = true,
           desc = "Open no buffer: build and store the report and print a one-line summary (--out=clipboard/path still copy or write it; with --last: only the summary)",
         },
+        {
+          name = "fetch",
+          bool = true,
+          desc = "With --mode=pending: git fetch every clone first (network; asks from plugins.fetch_confirm clones on; plugins.fetch_jobs at a time, plugins.fetch_timeout_ms each)",
+        },
+        {
+          name = "yes",
+          bool = true,
+          desc = "With --fetch: do not ask before fetching",
+        },
       },
-      desc = "Report what changed in the installed plugins: the last update (--mode=updated) or what is pending (--mode=pending); reads local state only",
+      desc = "Report what changed in the installed plugins: the last update (--mode=updated) or what is pending (--mode=pending); reads local state only, unless --fetch",
       run = function(ctx)
         -- `--to=<file>` names a file, so it means `--out=path`; with another output
         -- it would be silently ignored.
@@ -524,6 +534,8 @@ local function build_routes()
           all = ctx.flags.all == true,
           last = ctx.flags.last == true,
           open = ctx.flags["no-open"] ~= true,
+          fetch = ctx.flags.fetch == true,
+          yes = ctx.flags.yes == true,
         })
       end,
     },

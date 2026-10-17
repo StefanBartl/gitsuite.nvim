@@ -49,6 +49,27 @@ function M.defaults_version()
   return type(defaults) == "table" and defaults.version or nil
 end
 
+---The plugins lazy.nvim is working on right now (an install, update, check or
+---clean in progress: its runner sets `plugin._.working` while a task of the
+---plugin runs), by name. Empty when lazy is idle, not loaded, or its data is not
+---what this adapter knows. Reads the flag only.
+---@return string[]
+function M.working()
+  local config = package.loaded["lazy.core.config"]
+  if type(config) ~= "table" or type(config.plugins) ~= "table" then return {} end
+  local names = {}
+  pcall(function()
+    for key, plugin in pairs(config.plugins) do
+      local state = type(plugin) == "table" and plugin._ or nil
+      if type(state) == "table" and state.working == true then
+        names[#names + 1] = str(plugin.name) or str(key) or "?"
+      end
+    end
+  end)
+  table.sort(names)
+  return names
+end
+
 ---Every plugin lazy.nvim has installed (including the `dir`-mode ones, flagged
 ---`is_local`), sorted by name.
 ---@param _opts? table

@@ -235,6 +235,12 @@ local KNOWN = {
     mode = { ok = is_report_mode, expect = '"updated" or "pending"' },
     max_commits = { ok = int_in(1000000), expect = "a whole number from 1 to 1000000" },
     parallel = { ok = int_in(64), expect = "a whole number from 1 to 64" },
+    fetch_jobs = { ok = int_in(16), expect = "a whole number from 1 to 16" },
+    fetch_timeout_ms = {
+      ok = int_in(3600000),
+      expect = "a whole number of milliseconds (1 to 3600000)",
+    },
+    fetch_confirm = { ok = int_in(100000), expect = "a whole number from 1 to 100000" },
     run_window_s = { ok = int_in(31536000), expect = "a whole number of seconds (1 to 31536000)" },
     merges = { ok = is_boolean, expect = "a boolean" },
     keep_reports = { ok = int_in(10000), expect = "a whole number from 1 to 10000" },

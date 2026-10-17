@@ -67,6 +67,7 @@ M.MAX_BODY = 2048
 ---@field commits? GitSuite.Plugins.ReportCommit[]
 ---@field reason? string
 ---@field fetched_at? integer
+---@field fetch_error? string  Why the `--fetch` of this report failed for this clone.
 ---@field locked? boolean
 ---@field merges? boolean     Whether merge commits were kept (part of what a cached entry answers).
 ---@field order? "topo"        The commits are in topological order (then "commit i of n" can be counted).
@@ -91,6 +92,7 @@ M.MAX_BODY = 2048
 ---@field heads table<string, string>  Where every plugin looked at stood (clone path -> commit), changed or not: the fallback for "from" when a reflog says nothing.
 ---@field counts { checked: integer, changed: integer, commits: integer, unchanged: integer, failed?: integer }
 ---@field fetch? { checked: integer, known: integer, oldest?: integer, newest?: integer }  `pending` only: how many clones have a recorded fetch and when (unchanged clones are not listed, but they are what "up to date" is judged against).
+---@field fetched? GitSuite.Plugins.FetchRun  `pending --fetch` only: what the fetch before the report did.
 ---@field errors string[]
 ---@field save_error? string
 
@@ -103,6 +105,7 @@ M.MAX_BODY = 2048
 ---@field persist? boolean                     Write the report to the store (default true).
 ---@field accept? fun(report: GitSuite.Plugins.Report): boolean  Asked before storing: false = do not store it (`info.discarded` is then set).
 ---@field on_progress? fun(done: integer, total: integer)
+---@field fetched? GitSuite.Plugins.FetchRun   `pending` only: the `--fetch` that ran just before (kept in the report; a clone whose fetch failed counts as "no recorded fetch").
 
 ---Fill the fields every entry has, from the plugin and what its clone says.
 ---@param entry table  The fields specific to this entry.
@@ -513,6 +516,10 @@ local function plan_pending(refs, ctx)
       end
 
       local fetched = gitfs.fetch_time(ref.dir)
+      -- A fetch of this report that failed says the remote state is NOT known to
+      -- be current, whatever `FETCH_HEAD` still holds (with several remotes, one
+      -- that worked leaves it non-empty).
+      if ctx.fetch_failed[ref.dir] then fetched = nil end
       local f = ctx.fetch
       f.checked = f.checked + 1
       if fetched then
@@ -618,6 +625,14 @@ function M.build(opts, on_done)
       sources.list({ include_local = (opts.all or cfg.include_local) and true or false })
   end
 
+  ---@type table<string, string>  clone dir -> why its fetch failed
+  local fetch_failed = {}
+  if mode == "pending" and type(opts.fetched) == "table" then
+    for _, p in ipairs(opts.fetched.failed or {}) do
+      fetch_failed[p.dir] = p.reason
+    end
+  end
+
   local ctx = {
     cfg = cfg,
     store = store,
@@ -625,6 +640,7 @@ function M.build(opts, on_done)
     heads = {},
     now = now,
     fetch = { checked = 0, known = 0 },
+    fetch_failed = fetch_failed,
   }
   local rows, jobs, meta
   if mode == "pending" then
@@ -712,6 +728,13 @@ function M.build(opts, on_done)
           or "not finished"
       end
     end
+    for _, entry in ipairs(plugins) do
+      local why = fetch_failed[entry.dir]
+      if why then
+        entry.fetched_at = nil
+        entry.fetch_error = why
+      end
+    end
     table.sort(plugins, function(a, b)
       local la, lb = a.name:lower(), b.name:lower()
       if la ~= lb then return la < lb end
@@ -757,6 +780,7 @@ function M.build(opts, on_done)
         failed = failed,
       },
       fetch = mode == "pending" and ctx.fetch or nil,
+      fetched = mode == "pending" and opts.fetched or nil,
       errors = errors,
       heads = ctx.heads,
     }

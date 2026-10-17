@@ -166,6 +166,39 @@ local function breaking_cell(s)
   return #parts > 0 and table.concat(parts, " ") or "-"
 end
 
+---Problems of a `--fetch` listed by name; more are counted.
+M.MAX_FETCH_PROBLEMS = 10
+
+---What the `--fetch` before a pending report did: one line, plus one line per
+---failed or skipped clone (up to `MAX_FETCH_PROBLEMS` each).
+---@param add fun(s: string)
+---@param run GitSuite.Plugins.FetchRun|nil
+local function fetch_lines(add, run)
+  if type(run) ~= "table" then return end
+  local failed, skipped = run.failed or {}, run.skipped or {}
+  add(
+    ("- Fetched for this report (%s): %d of %s, %d with new remote commits%s%s%s."):format(
+      moment(run.at),
+      run.fetched or 0,
+      plural(run.clones or 0, "clone"),
+      run.changed or 0,
+      #failed > 0 and (", " .. #failed .. " failed") or "",
+      #skipped > 0 and (", " .. #skipped .. " skipped") or "",
+      run.stopped and " (stopped before it finished)" or ""
+    )
+  )
+  for _, group in ipairs({ { "failed", failed }, { "skipped", skipped } }) do
+    local label, list = group[1], group[2]
+    for i, p in ipairs(list) do
+      if i > M.MAX_FETCH_PROBLEMS then
+        add(("  - … %d more %s"):format(#list - M.MAX_FETCH_PROBLEMS, label))
+        break
+      end
+      add(("  - %s %s: %s"):format(label, esc(p.name), esc(p.reason)))
+    end
+  end
+end
+
 ---@param report table
 ---@param now? integer
 ---@param ctx? GitSuite.Plugins.ClassifyContext  What the breaking digest is judged against (`report.context()`); without it, no relevance is shown.
@@ -219,7 +252,7 @@ function M.render(report, now, ctx)
     end
   else
     add(
-      "- Compares the current state with the target lazy.nvim would move to — as of each clone's last fetch. gitsuite does not fetch; `:Lazy check` does."
+      "- Compares the current state with the target lazy.nvim would move to — as of each clone's last fetch. gitsuite fetches only with `--fetch`; `:Lazy check` fetches too."
     )
     -- The age of the remote state is judged over EVERY clone looked at (the
     -- report carries it: up-to-date plugins are not listed); a report stored
@@ -249,6 +282,7 @@ function M.render(report, now, ctx)
     else
       add("- No fetch is recorded in these clones: the remote state may be old.")
     end
+    fetch_lines(add, report.fetched)
   end
   add(
     "- Source: `reflog` exact · `snapshot ~` approximate (state of the last report) · `pending` as of the last fetch."

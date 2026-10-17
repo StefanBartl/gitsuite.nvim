@@ -235,6 +235,37 @@ function M.check()
       reports_cfg.max_age_days
     )
   )
+  vim.health.info(
+    ("fetch: only on `report --mode=pending --fetch` (fetch_jobs = %d, fetch_timeout_ms = %d, asks from %d clones on)"):format(
+      reports_cfg.fetch_jobs,
+      reports_cfg.fetch_timeout_ms,
+      reports_cfg.fetch_confirm
+    )
+  )
+  local last_fetch
+  for _, stored in ipairs(store.reports) do
+    if stored.fetched then
+      last_fetch = stored.fetched
+      break
+    end
+  end
+  if last_fetch and #last_fetch.failed > 0 then
+    vim.health.warn(
+      ("the last --fetch (%s) failed for %d of %d clones (the report lists them)"):format(
+        os.date("%Y-%m-%d %H:%M", last_fetch.at),
+        #last_fetch.failed,
+        last_fetch.clones
+      )
+    )
+  elseif last_fetch then
+    vim.health.ok(
+      ("the last --fetch (%s) fetched %d of %d clones"):format(
+        os.date("%Y-%m-%d %H:%M", last_fetch.at),
+        last_fetch.fetched,
+        last_fetch.clones
+      )
+    )
+  end
   if reports_cfg.after_sync == "off" then
     vim.health.info("lazy integration: off (plugins.after_sync)")
   else

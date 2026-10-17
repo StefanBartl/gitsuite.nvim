@@ -132,10 +132,16 @@ process. It only reads -- one `git log`, never a fetch -- and works offline in a
 blobless clone. See docs/commands.md and docs/configuration.md (`plugins.*`).
 
 `:Git plugins report [--mode=updated|pending] [--all] [--last] [--out=buffer|clipboard|path]
-[--to=path] [--no-open]` says what changed across ALL installed plugins: `updated` (default) is what
+[--to=path] [--no-open] [--fetch [--yes]]` says what changed across ALL installed plugins: `updated` (default) is what
 the last update changed -- each clone's own HEAD reflog, so it survives a restart --
 and `pending` what the next update would bring, against the target lazy.nvim itself
-would check out, as of the last fetch (gitsuite never fetches; `:Lazy check` does).
+would check out, as of the last fetch (`:Lazy check` fetches; gitsuite only with
+`--fetch`). `--mode=pending --fetch` first runs `git fetch --all --prune` in every
+clone -- the one network access of gitsuite, never a default: it asks from
+`plugins.fetch_confirm` clones on (`--yes` skips that), runs `plugins.fetch_jobs`
+at a time without any credential prompt, kills each fetch and its child
+processes after `plugins.fetch_timeout_ms`, and names every failed or skipped
+clone in the report (a failed one never counts as fetched).
 The output is Markdown (a buffer, the clipboard or a file); a rollback, a diverged
 branch and a force-pushed-away old state are named as such. Reports are kept in
 `stdpath("state")/gitsuite/plugins_reports.json` and `User GitsuitePluginsReported`
@@ -179,6 +185,7 @@ marked "no marker convention recognized".
     dashboard = { base_dir = "", extra_paths = {}, groups = {}, pull_scope = "behind" },
     plugins = { sources = "auto", roots = {}, log_limit = 50, timeout_ms = 30000,
       include_local = false, mode = "updated", max_commits = 1000, parallel = 4,
+      fetch_jobs = 2, fetch_timeout_ms = 60000, fetch_confirm = 5,
       run_window_s = 300, merges = false, keep_reports = 20, max_age_days = 365,
       after_sync = "off",
       breaking = { collapse_repeats = 5, ignore = {}, plugins = {} } },

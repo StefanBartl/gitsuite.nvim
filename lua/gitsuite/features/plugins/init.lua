@@ -141,6 +141,8 @@ end
 ---@field quiet? boolean                      No info messages ("reading the clones", the `open = false` summary); warnings and errors still show.
 ---@field accept? fun(report: GitSuite.Plugins.Report): boolean  Called with the built report before it is stored: false = neither store, announce nor show it (`on_done` still gets it). For the `:Lazy sync` hook: a sync that changed nothing.
 ---@field queue? boolean                      While another report is being built, run after it instead of giving up with "already running".
+---@field fetch? boolean                      `pending` only: `git fetch` every clone first (network; never a default). From `plugins.fetch_confirm` clones on it asks first.
+---@field yes? boolean                        With `fetch`: do not ask.
 ---@field on_done? fun(report: GitSuite.Plugins.Report|nil, err: string|nil)  Called once (for scripts and tests).
 
 ---Show a report as Markdown.
@@ -209,10 +211,13 @@ local function nothing_stored(store, info, mode)
   return "no stored report yet"
 end
 
+local build, fetch_then_build
+
 ---Build a report of what changed in the installed plugins -- the last update's
 ---changes (`mode = "updated"`) or what the next one would bring
----(`"pending"`) -- store it and show it. Reads local state only: no fetch, no
----install, no change to any clone.
+---(`"pending"`) -- store it and show it. Reads local state only: no install, no
+---change to any clone, and no fetch unless `opts.fetch` asks for one (pending
+---only; it moves remote-tracking refs, see `features.plugins.fetch`).
 ---@param opts? GitSuite.Plugins.ReportCmdOpts
 ---@return { stop: fun() }|nil handle
 function M.report(opts)
@@ -222,6 +227,20 @@ function M.report(opts)
   if opts.mode ~= nil and opts.mode ~= "updated" and opts.mode ~= "pending" then
     report_fail(opts, ("unknown mode '%s' (updated or pending)"):format(tostring(opts.mode)))
     return nil
+  end
+
+  if opts.fetch then
+    if opts.last then
+      report_fail(opts, "--fetch builds a new report; it does not go with --last")
+      return nil
+    end
+    if (opts.mode or config.get().plugins.mode) ~= "pending" then
+      report_fail(
+        opts,
+        "--fetch is for --mode=pending (an updated report compares the clones' own states only)"
+      )
+      return nil
+    end
   end
 
   if opts.last then
@@ -265,9 +284,18 @@ function M.report(opts)
     return running
   end
 
+  if opts.fetch then return fetch_then_build(opts) end
+  return build(opts)
+end
+
+---Build, store and show a report (the part of `M.report` after its checks).
+---@param opts GitSuite.Plugins.ReportCmdOpts
+---@param fetched? GitSuite.Plugins.FetchRun  The `--fetch` that ran just before.
+---@return { stop: fun() } handle
+function build(opts, fetched)
   if not opts.quiet then notify.info("plugins report: reading the clones ...") end
   local handle = require("gitsuite.features.plugins.report").build(
-    { mode = opts.mode, all = opts.all, accept = opts.accept },
+    { mode = opts.mode, all = opts.all, accept = opts.accept, fetched = fetched },
     function(report, info)
       running = nil
       -- (a queued call starts after this one is fully handled)
@@ -341,6 +369,121 @@ function M.report(opts)
     end,
   }
   return running
+end
+
+---Ask before a fetch over `n` clones; `go` runs on "yes".
+---@param n integer
+---@param cfg GitSuite.Config.Plugins
+---@param go fun()
+---@param cancel fun()
+local function confirm_fetch(n, cfg, go, cancel)
+  local question = (
+    "Fetch %d plugin clones?\n"
+    .. "Network: %d at a time, up to %d s each; only remote-tracking refs move."
+  ):format(n, cfg.fetch_jobs, math.ceil(cfg.fetch_timeout_ms / 1000))
+  local function answer(yes)
+    if yes then
+      go()
+    else
+      cancel()
+    end
+  end
+  local ok, kit = pcall(require, "ui.kit")
+  if ok and type(kit) == "table" and type(kit.confirm) == "function" then
+    kit.confirm({ question = question, on_answer = answer })
+    return
+  end
+  vim.ui.select({ "Yes", "No" }, { prompt = question:gsub("\n", " ") }, function(choice)
+    answer(choice == "Yes")
+  end)
+end
+
+---`--fetch`: fetch every clone the report will look at (asking first from
+---`plugins.fetch_confirm` clones on), then build the report with the result.
+---The run counts as `running` from the start of the fetch to the end of the
+---build; the handle stops whichever part is in progress.
+---@param opts GitSuite.Plugins.ReportCmdOpts
+---@return { stop: fun() }|nil handle  `nil` when nothing was started (refused, or waiting for the answer).
+function fetch_then_build(opts)
+  local fetch = require("gitsuite.features.plugins.fetch")
+  local cfg = config.get().plugins
+  local busy = fetch.busy()
+  if busy then
+    report_fail(opts, busy)
+    return nil
+  end
+  local refs, _, errors =
+    sources.list({ include_local = (opts.all or cfg.include_local) and true or false })
+  if #refs == 0 then
+    report_fail(
+      opts,
+      "no installed plugins found"
+        .. (#errors > 0 and (" (" .. table.concat(errors, "; ") .. ")") or "")
+    )
+    return nil
+  end
+
+  local function go()
+    -- (the question may have been open while another report started)
+    if running then
+      notify.warn("plugins report: already running")
+      if opts.on_done then opts.on_done(nil, "already running") end
+      return running
+    end
+    if not opts.quiet then
+      notify.info(
+        ("plugins report: fetching %d clones (%d at a time, up to %d s each) ..."):format(
+          #refs,
+          cfg.fetch_jobs,
+          math.ceil(cfg.fetch_timeout_ms / 1000)
+        )
+      )
+    end
+    local stopped = false
+    local fetching, building
+    local handle
+    handle = {
+      stop = function()
+        if stopped then return end
+        stopped = true
+        if building then
+          -- the build has taken over: its own handle stops it (a no-op once it ended)
+          if running == building then building.stop() end
+          return
+        end
+        running = nil
+        local dropped = queued
+        queued = nil
+        fetching.stop()
+        if dropped and dropped.on_done then dropped.on_done(nil, "stopped") end
+        if opts.on_done then opts.on_done(nil, "stopped") end
+      end,
+    }
+    running = handle
+    fetching = fetch.run(refs, {}, function(run)
+      if stopped then return end
+      if #run.failed > 0 then
+        notify.warn(
+          ("plugins report: %d of %d fetches failed; the report lists them and does not count them as fetched"):format(
+            #run.failed,
+            run.clones - #run.skipped
+          )
+        )
+      end
+      running = nil
+      building = build(opts, run)
+    end)
+    return handle
+  end
+
+  if #refs >= cfg.fetch_confirm and not opts.yes then
+    confirm_fetch(#refs, cfg, go, function()
+      if not opts.quiet then notify.info("plugins report: fetch cancelled") end
+      if opts.on_done then opts.on_done(nil, "cancelled") end
+    end)
+    return nil
+  end
+  return go()
 end
 
 return M

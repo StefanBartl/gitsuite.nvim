@@ -31,6 +31,9 @@ describe("gitsuite.config", function()
       { "run_window_s", 31536000 },
       { "keep_reports", 10000 },
       { "max_age_days", 36500 },
+      { "fetch_jobs", 16 },
+      { "fetch_timeout_ms", 3600000 },
+      { "fetch_confirm", 100000 },
     }
     local function fresh(plugins)
       package.loaded["gitsuite.config"] = nil

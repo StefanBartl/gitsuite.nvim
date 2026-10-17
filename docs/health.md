@@ -69,6 +69,9 @@ What `:Git plugins report` keeps. The check only looks; an unreadable file is mo
 | ⚠️ `the report store is not a plain file ...` / `could not be opened` / `could not be moved aside` | The file is left as it is and nothing is saved; the advice names the cause (replace it by a regular file, close what holds it, or move it by hand) |
 | ⚠️ `N stored report(s) are not usable` | Entries of the wrong shape are ignored |
 | ℹ️ `plugins.mode = ..., keep_reports = ..., max_age_days = ...` | The retention settings in effect |
+| ℹ️ `fetch: only on report --mode=pending --fetch (...)` | gitsuite never fetches on its own; the line shows the `--fetch` settings (`fetch_jobs`, `fetch_timeout_ms`, `fetch_confirm`) |
+| ✅ `the last --fetch (<date>) fetched N of M clones` | The newest stored report built with `--fetch` fetched every clone it tried |
+| ⚠️ `the last --fetch (<date>) failed for N of M clones` | Some fetches timed out, needed credentials or found no remote; the report names each one, and those clones do not count as fetched ("remote state" stays unknown for them). Check the URL / access, or raise `plugins.fetch_timeout_ms` |
 | ℹ️ `lazy integration: off (plugins.after_sync)` | The `:Lazy sync` hook is off (default); no listener is registered |
 | ✅ `lazy integration: toast (listening on User LazySync)` / `open (...)` | The hook is on and its listener is registered (see [integrations.md](integrations.md#lazy-sync-hook)) |
 | ℹ️ `lazy integration: toast, not listening yet (...)` | The hook is configured, but gitsuite's `setup()` has not run yet (lazy-loaded); add `"User LazySync"` to the spec's `event` list: the sync that loads it is then reported as well |

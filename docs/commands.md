@@ -75,7 +75,7 @@ that is not installed (`owner/repo` naming something you never installed) is
 refused with that reason: gitsuite does not clone or look anything up.
 
 ```vim
-:Git plugins report [--mode=updated|pending] [--all] [--last] [--out=buffer|clipboard|path] [--to=<path>] [--no-open]
+:Git plugins report [--mode=updated|pending] [--all] [--last] [--out=buffer|clipboard|path] [--to=<path>] [--no-open] [--fetch [--yes]]
 ```
 
 The question behind `:Lazy sync`: *which plugins changed, and what did they
@@ -97,8 +97,20 @@ each with its commits, as a Markdown report (a read-only buffer by default).
   (`defaults.version` included) or the tip of its branch. A pinned plugin is
   listed as pinned; one whose target cannot be told is listed as such, never
   compared with some other branch. This is the state **as of the last fetch**
-  (`:Lazy check` fetches; gitsuite does not) and the report says how old that
-  is.
+  (`:Lazy check` fetches; gitsuite only with `--fetch`) and the report says how
+  old that is.
+- `--fetch` (with `--mode=pending` only, never a default): first `git fetch
+  --all --prune` every clone the report looks at, then build the report — the
+  ages it shows are then fresh. This is the one place gitsuite uses the
+  network, and it moves remote-tracking refs (never HEAD or the work tree).
+  From `plugins.fetch_confirm` (5) clones on it asks first; `--yes` skips the
+  question. `plugins.fetch_jobs` (2) at a time, each killed with its child
+  processes after `plugins.fetch_timeout_ms` (60 s); no credential prompt can
+  appear, so a private or vanished repository fails and the others go on. The
+  report says how many clones were fetched, and names each failed one (which
+  then does not count as fetched) and each skipped one (an `index.lock` is
+  held). Refused while lazy.nvim is working on plugins. Without gitsuite:
+  `:Lazy check`, then `:Git plugins report --mode=pending`.
 - `--all` also takes `dir`-mode plugins (usually your own repositories;
   `plugins.include_local`). `--last` shows the newest stored report without
   scanning. `--out=path` writes the Markdown to `--to` (default a file in
