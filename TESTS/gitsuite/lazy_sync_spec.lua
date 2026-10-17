@@ -253,11 +253,14 @@ describe("gitsuite.integrations.lazy", function()
   end)
 
   it("without LazySyncPre the stored run decides: the same run is no change", function()
+    -- One clock reading for both sides: two os.time() calls can straddle a
+    -- second, which made the "same run" look newer than the stored one.
+    local stored = os.time() - 30
     lazy.stored_last = function()
-      return os.time() - 30
+      return stored
     end
     next_report = function()
-      return fake_report(nil, run_ago(30))
+      return fake_report(nil, { first = stored - 4, last = stored, older = 0, plugins = 5 })
     end
     lazy.setup(config.setup({ plugins = { after_sync = "toast" } }))
     fire(1)
