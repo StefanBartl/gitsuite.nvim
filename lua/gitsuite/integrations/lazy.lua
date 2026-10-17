@@ -54,11 +54,36 @@ local function has_ui()
   return #vim.api.nvim_list_uis() > 0
 end
 
+---How many plugins of the report have breaking hits: at least one commit the
+---classifier calls `sure` or `probable` (the `!`/`?` of the report's Breaking
+---column; hints and grouped commits do not count). Judged like the report
+---view judges it (`report.context()` unless `ctx` is given).
+---@param report GitSuite.Plugins.Report
+---@param ctx? GitSuite.Plugins.ClassifyContext
+---@return integer
+function M.breaking_count(report, ctx)
+  local ok, n = pcall(function()
+    local summary = require("gitsuite.features.plugins.summary")
+    ctx = ctx or require("gitsuite.features.plugins.report").context()
+    local count = 0
+    for _, entry in ipairs(report.plugins or {}) do
+      if type(entry.commits) == "table" and #entry.commits > 0 then
+        local digest = summary.build(entry, summary.options(ctx, entry.name)).digest
+        if #digest.sure + #digest.probable > 0 then count = count + 1 end
+      end
+    end
+    return count
+  end)
+  -- (a classifier failure must not cost the toast)
+  return ok and n or 0
+end
+
 ---The one-line summary the toast shows.
 ---@param report GitSuite.Plugins.Report
 ---@param fresh boolean  Whether the report's update run is the sync that just ended.
+---@param ctx? GitSuite.Plugins.ClassifyContext  What the breaking hits are judged against (default `report.context()`).
 ---@return string
-function M.summary(report, fresh)
+function M.summary(report, fresh, ctx)
   local cmd = require("gitsuite.config").get().commands.git
   local counts = report.counts
   if not fresh then
@@ -68,6 +93,8 @@ function M.summary(report, fresh)
     ("%d of %d updated"):format(counts.changed, counts.checked),
     ("%d commit%s"):format(counts.commits, counts.commits == 1 and "" or "s"),
   }
+  local breaking = M.breaking_count(report, ctx)
+  if breaking > 0 then parts[#parts + 1] = ("%d with breaking"):format(breaking) end
   local errors = #report.errors + (counts.failed or 0)
   if errors > 0 then parts[#parts + 1] = ("%d failed"):format(errors) end
   return ("plugins: %s -> :%s plugins report --last"):format(table.concat(parts, ", "), cmd)

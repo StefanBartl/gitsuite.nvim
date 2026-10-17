@@ -66,7 +66,7 @@ the named augroup `gitsuite_lazy_sync`.
 | `plugins.after_sync` | After `:Lazy sync` |
 | --- | --- |
 | `"off"` (default) | Nothing. No listener is registered and the module is not even loaded; `:checkhealth gitsuite` says `lazy integration: off`. |
-| `"toast"` | The `updated` report is built and stored, `User GitsuitePluginsReported` fires, and a corner toast that never takes focus sums it up: `plugins: 5 of 50 updated, 87 commits -> :Git plugins report --last`. A sync that updated nothing only gets the toast `plugins: the sync updated nothing (50 checked)`: nothing is stored and the event does not fire. |
+| `"toast"` | The `updated` report is built and stored, `User GitsuitePluginsReported` fires, and a corner toast that never takes focus sums it up: `plugins: 5 of 50 updated, 87 commits, 2 with breaking -> :Git plugins report --last`. `N with breaking` counts the plugins with at least one commit the breaking classifier marks `!` (marked breaking) or `?` (probably breaking), judged with the `plugins.breaking` settings like the report's Breaking column; it is left out when there is none (a heuristic: no count does not mean nothing broke). A sync that updated nothing only gets the toast `plugins: the sync updated nothing (50 checked)`: nothing is stored and the event does not fire. |
 | `"open"` | The same, and the report opens as with `:Git plugins report` (only when the sync updated something). |
 
 - The report is built on `LazySync`: lazy.nvim fires it once, after the lock

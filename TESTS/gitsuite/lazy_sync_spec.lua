@@ -356,6 +356,55 @@ describe("gitsuite.integrations.lazy", function()
     )
   end)
 
+  ---A forward report entry with one commit per subject/body pair.
+  ---@param name string
+  ---@param commits { [1]: string, [2]?: string }[]
+  ---@return table
+  local function entry(name, commits)
+    local list = {}
+    for i, c in ipairs(commits) do
+      list[i] = { sha = ("%040d"):format(i), subject = c[1], body = c[2] or "", time = os.time() }
+    end
+    return { name = name, status = "forward", order = "topo", commits = list }
+  end
+
+  it("summary counts the plugins with sure or probable breaking hits", function()
+    local report =
+      fake_report({ checked = 50, changed = 4, commits = 5, unchanged = 46, failed = 0 })
+    report.plugins = {
+      entry("a.nvim", { { "feat!: drop the old API" }, { "fix: typo" } }),
+      entry("b.nvim", { { "refactor: config", "breaking change: opts.x is gone" } }),
+      -- a hint only (the word in the body): not counted
+      entry("c.nvim", { { "fix: keep it working", "this is not breaking" } }),
+      entry("d.nvim", { { "docs: readme" } }),
+    }
+    assert.equals(
+      "plugins: 4 of 50 updated, 5 commits, 2 with breaking -> :Git plugins report --last",
+      lazy.summary(report, true, {})
+    )
+  end)
+
+  it("summary names no breaking count when nothing breaking was found", function()
+    local report =
+      fake_report({ checked = 50, changed = 1, commits = 2, unchanged = 49, failed = 0 })
+    report.plugins = { entry("d.nvim", { { "docs: readme" }, { "fix: typo" } }) }
+    assert.equals(
+      "plugins: 1 of 50 updated, 2 commits -> :Git plugins report --last",
+      lazy.summary(report, true, {})
+    )
+  end)
+
+  it("summary honours plugins.breaking ignore patterns from the context", function()
+    local report =
+      fake_report({ checked = 50, changed = 1, commits = 1, unchanged = 49, failed = 0 })
+    report.plugins = { entry("a.nvim", { { "feat!: drop the old API" } }) }
+    local ctx = { breaking = { ignore = { "old API" } } }
+    assert.equals(
+      "plugins: 1 of 50 updated, 1 commit -> :Git plugins report --last",
+      lazy.summary(report, true, ctx)
+    )
+  end)
+
   it("rejects an unknown after_sync value", function()
     local cfg = config.setup({ plugins = { after_sync = "always" } })
     assert.equals("off", cfg.plugins.after_sync)
