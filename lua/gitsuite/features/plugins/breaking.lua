@@ -512,7 +512,7 @@ function M.digest(commits, opts)
 
   -- The parser group: every parser bump, one row.
   local parsers = { kind = "parsers", key = "parsers", members = {}, breaking = 0 }
-  local have = {}
+  local have, unknown = {}, false
   for i, v in ipairs(d.verdicts) do
     if v.tier == "bulk" then
       parsers.members[#parsers.members + 1] = i
@@ -520,14 +520,20 @@ function M.digest(commits, opts)
       -- `feat(kdl)!: update parser and queries` -> `feat(<lang>)!: ...`
       parsers.label = parsers.label
         or (tostring(commits[i].subject or ""):gsub("^([%a][%w_%-]*)%b()", "%1(<lang>)", 1))
+      -- (no relevance: no installed parsers were handed in, or the subject
+      -- names no language, as in `feat(parsers)!: update kdl`)
+      if not (v.relevance and v.relevance.installed) then unknown = true end
       for _, lang in ipairs(v.relevance and v.relevance.installed or {}) do
         have[lang] = true
       end
     end
   end
   if #parsers.members > 0 then
-    parsers.installed = vim.tbl_keys(have)
-    table.sort(parsers.installed)
+    -- An empty list says "none of them installed": only when every member's
+    -- languages were checked. Unknown members leave it out unless some are.
+    local installed = vim.tbl_keys(have)
+    table.sort(installed)
+    if #installed > 0 or not unknown then parsers.installed = installed end
     d.groups[1] = parsers
     for _, i in ipairs(parsers.members) do
       d.grouped[i] = 1

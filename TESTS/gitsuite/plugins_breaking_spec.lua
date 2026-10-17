@@ -163,6 +163,25 @@ describe("gitsuite.features.plugins.breaking", function()
       )
       assert.is_nil(v.relevance)
     end)
+
+    it("claims no parser is installed only when every language was checked", function()
+      local function group(commits, opts)
+        for _, g in ipairs(B.digest(commits, opts).groups) do
+          if g.kind == "parsers" then return g end
+        end
+      end
+      local bumps = {
+        { subject = "feat(kdl)!: update parser and queries" },
+        { subject = "feat(tmux)!: update parser and queries" },
+      }
+      assert.are.same({}, group(bumps, { parsers = { lua = true } }).installed)
+      -- no installed parsers handed in: nothing is known
+      assert.is_nil(group(bumps, {}).installed)
+      -- `feat(parsers)!: update kdl` names no language in its scope
+      local mixed = { { subject = "feat(parsers)!: update kdl" }, bumps[2] }
+      assert.is_nil(group(mixed, { parsers = { lua = true } }).installed)
+      assert.are.same({ "tmux" }, group(mixed, { parsers = { tmux = true } }).installed)
+    end)
   end)
 
   describe("convention", function()
