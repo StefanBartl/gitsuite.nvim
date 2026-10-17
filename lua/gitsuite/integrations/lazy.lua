@@ -14,9 +14,18 @@
 --- sync started, and the report counts as this sync's only when its update run
 --- ended at or after that moment (reflog times are checkout times, so a long
 --- build step after the checkouts does not matter). When gitsuite was not
---- loaded yet at `LazySyncPre` (lazy-loaded on `User LazySync`), the run is
---- compared with the newest stored `updated` report instead: the same run means
---- the sync changed nothing.
+--- loaded yet at `LazySyncPre` (lazy-loaded on `User LazySync`), lazy.nvim's
+--- own record decides instead: a sync clears `plugin._.updated` of every plugin
+--- before it starts, and its checkout sets it for each plugin it moves. The
+--- report is this sync's only when one of its entries ends at a commit lazy.nvim
+--- moved a plugin to in this sync. Without that record (lazy.nvim's state
+--- cannot be read) nothing tells this sync's checkouts from an earlier update
+--- that was never reported (a `:Lazy update`, a headless sync), so the report
+--- does not count as this sync's.
+---
+--- (A `plugin/` file cannot record `LazySyncPre` for a lazy-loaded gitsuite:
+--- lazy.nvim sources it only when it loads the plugin, i.e. inside
+--- `LazySync`.)
 ---
 --- Lazy-loading on `User LazySync`: lazy.nvim loads the plugin from inside that
 --- event and then re-fires `User` into the plugin's new augroups WITHOUT a
@@ -101,13 +110,28 @@ function M.summary(report, fresh, ctx)
 end
 
 ---@class GitSuite.LazySync.Baseline
----@field since? integer       `os.time()` when the sync started (`User LazySyncPre`), if seen.
----@field stored_last? integer `run.last` of the newest stored `updated` report, if any.
+---@field since? integer  `os.time()` when the sync started (`User LazySyncPre`), if seen.
+---@field moved? string[] The commits lazy.nvim moved plugins to in this sync (`M.lazy_moved()`), if readable.
+
+---Whether two commit names mean the same commit (a full hash and an
+---abbreviation of at least 7 hex digits of it count as the same).
+---@param a string
+---@param b string
+---@return boolean
+local function same_commit(a, b)
+  a, b = a:lower(), b:lower()
+  if a == b then return true end
+  if #a > #b then
+    a, b = b, a
+  end
+  return #a >= 7 and b:sub(1, #a) == a
+end
 
 ---Whether the report's update run is what the sync changed. With `since` (the
 ---sync's start was seen): the run's newest update happened at or after it.
----Without: the run is newer than the one of the newest stored `updated` report
----(no stored report: any change counts).
+---Without: one of the report's entries ends at a commit lazy.nvim moved a
+---plugin to in this sync (`moved`). Neither known: not this sync's (an older,
+---never reported update must not be announced as this sync's).
 ---@param report GitSuite.Plugins.Report
 ---@param baseline GitSuite.LazySync.Baseline
 ---@return boolean
@@ -115,22 +139,38 @@ function M.is_fresh(report, baseline)
   local run = report.run
   if not run or report.counts.changed == 0 then return false end
   if baseline.since then return run.last >= baseline.since end
-  if baseline.stored_last then return run.last > baseline.stored_last end
-  return true
+  for _, entry in ipairs(baseline.moved or {}) do
+    for _, plugin in ipairs(report.plugins or {}) do
+      if type(plugin.to) == "string" and same_commit(plugin.to, entry) then return true end
+    end
+  end
+  return false
 end
 
----`run.last` of the newest stored `updated` report (read before the build
----stores a new one).
----@return integer|nil
-function M.stored_last()
-  local ok, store = pcall(function()
-    return (require("gitsuite.features.plugins.state").load(nil, { peek = true }))
+---The commits lazy.nvim moved plugins to in the sync that just ended, from its
+---own record: `plugin._.updated` is cleared for every plugin when a sync
+---starts and set by the checkout of each plugin (`from ~= to` when it moved).
+---`nil` when lazy.nvim's state cannot be read.
+---@return string[]|nil
+function M.lazy_moved()
+  local ok, moved = pcall(function()
+    local plugins = require("lazy.core.config").plugins
+    if type(plugins) ~= "table" then return nil end
+    local list = {}
+    for _, plugin in pairs(plugins) do
+      local updated = type(plugin) == "table" and type(plugin._) == "table" and plugin._.updated
+      if
+        type(updated) == "table"
+        and type(updated.to) == "string"
+        and updated.to ~= ""
+        and updated.from ~= updated.to
+      then
+        list[#list + 1] = updated.to
+      end
+    end
+    return list
   end)
-  if not ok or type(store) ~= "table" then return nil end
-  for _, stored in ipairs(store.reports or {}) do
-    if stored.mode == "updated" then return stored.run and stored.run.last or nil end
-  end
-  return nil
+  return ok and moved or nil
 end
 
 ---Build, store and announce the `updated` report of the sync that just ended.
@@ -173,8 +213,8 @@ function M.on_sync(mode)
   end
   ---@type GitSuite.LazySync.Baseline
   local baseline = { since = started_at }
-  -- (read now, before a build of this sync can store a newer report)
-  if not baseline.since then baseline.stored_last = M.stored_last() end
+  -- (read now, while lazy.nvim's record is the one of this sync)
+  if not baseline.since then baseline.moved = M.lazy_moved() end
   local timer = assert((vim.uv or vim.loop).new_timer())
   pending = timer
   timer:start(
@@ -207,6 +247,14 @@ function M.setup(cfg)
   local mode = cfg.plugins.after_sync
   if mode ~= "toast" and mode ~= "open" then
     pcall(vim.api.nvim_del_augroup_by_name, M.GROUP)
+    -- Off means off: no build of a sync seen before, and a later "toast" does
+    -- not take an old `LazySyncPre` for its own sync's start.
+    if pending then
+      pending:stop()
+      pending:close()
+      pending = nil
+    end
+    started_at = nil
     return
   end
   local group = vim.api.nvim_create_augroup(M.GROUP, { clear = true })

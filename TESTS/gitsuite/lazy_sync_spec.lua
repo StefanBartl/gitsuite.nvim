@@ -35,6 +35,22 @@ local function run_ago(ago)
   return { first = os.time() - ago - 4, last = os.time() - ago, older = 0, plugins = 5 }
 end
 
+local SHA_A = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+local SHA_B = "0f1e2d3c4b5a69788796a5b4c3d2e1f0aabbccdd"
+
+---An `updated` report whose run of 5 plugins ended `ago` seconds ago and whose
+---entries end at the commits `tos`.
+---@param ago integer
+---@param tos string[]
+---@return GitSuite.Plugins.Report
+local function report_to(ago, tos)
+  local report = fake_report(nil, run_ago(ago))
+  for i, to in ipairs(tos) do
+    report.plugins[i] = { name = "p" .. i, status = "forward", source = "reflog", to = to }
+  end
+  return report
+end
+
 ---A lazy.nvim checkout to run the real event handler with, if there is one.
 ---@return string|nil
 local function lazy_nvim_dir()
@@ -70,9 +86,10 @@ describe("gitsuite.integrations.lazy", function()
     end
     saved.report, saved.show = plugins.report, plugins.show
     saved.deliver, saved.list_uis = popup.deliver, vim.api.nvim_list_uis
-    saved.delay, saved.stored_last = lazy.DELAY_MS, lazy.stored_last
+    saved.delay, saved.lazy_moved = lazy.DELAY_MS, lazy.lazy_moved
     lazy.DELAY_MS = 20
-    lazy.stored_last = function()
+    -- (no lazy.nvim here: its record of the sync is unknown unless a spec says so)
+    lazy.lazy_moved = function()
       return nil
     end
     plugins.report = function(opts)
@@ -98,10 +115,11 @@ describe("gitsuite.integrations.lazy", function()
   after_each(function()
     plugins.report, plugins.show = saved.report, saved.show
     popup.deliver, vim.api.nvim_list_uis = saved.deliver, saved.list_uis
-    lazy.DELAY_MS, lazy.stored_last = saved.delay, saved.stored_last
-    pcall(vim.api.nvim_del_augroup_by_name, lazy.GROUP)
+    lazy.DELAY_MS, lazy.lazy_moved = saved.delay, saved.lazy_moved
+    -- "off" also forgets a LazySyncPre a spec left unconsumed and stops a pending
+    -- build, so no spec inherits the module state of the one before it.
+    lazy.setup(config.setup({}))
     pcall(vim.api.nvim_del_augroup_by_name, "gitsuite_spec_lazy_handler")
-    config.setup({})
   end)
 
   local function fire(times, pattern)
@@ -252,26 +270,106 @@ describe("gitsuite.integrations.lazy", function()
     assert.equals(1, #shown)
   end)
 
-  it("without LazySyncPre the stored run decides: the same run is no change", function()
-    -- One clock reading for both sides: two os.time() calls can straddle a
-    -- second, which made the "same run" look newer than the stored one.
-    local stored = os.time() - 30
-    lazy.stored_last = function()
-      return stored
+  it("without LazySyncPre lazy.nvim's record decides which run is this sync's", function()
+    local moved = { SHA_A }
+    lazy.lazy_moved = function()
+      return moved
     end
     next_report = function()
-      return fake_report(nil, { first = stored - 4, last = stored, older = 0, plugins = 5 })
+      return report_to(30, { SHA_B, SHA_A })
     end
     lazy.setup(config.setup({ plugins = { after_sync = "toast" } }))
     fire(1)
     settle()
-    assert.same({ false }, accepted)
-    lazy.stored_last = function()
-      return os.time() - 3000
-    end
+    assert.same({ true }, accepted, "an entry ends where lazy.nvim moved a plugin to")
+    assert.equals(
+      "plugins: 5 of 50 updated, 42 commits -> :Git plugins report --last",
+      toasts[1].msg
+    )
+    moved = { SHA_B:sub(1, 12) }
     fire(1)
     settle()
-    assert.same({ false, true }, accepted, "a newer run than the stored one is this sync's")
+    assert.same({ true, true }, accepted, "an abbreviated commit is the same commit")
+  end)
+
+  it("without LazySyncPre an older, never reported update is not announced", function()
+    -- A `:Lazy update` (no sync, no hook) moved 5 plugins earlier; nothing stored it.
+    -- Then a `:Lazy sync` that changes nothing loads gitsuite: lazy.nvim moved nothing.
+    lazy.lazy_moved = function()
+      return {}
+    end
+    next_report = function()
+      return report_to(600, { SHA_A, SHA_B })
+    end
+    lazy.setup(config.setup({ plugins = { after_sync = "open" } }))
+    fire(1)
+    settle()
+    assert.same({ false }, accepted, "the older run is neither stored nor announced")
+    assert.equals("plugins: the sync updated nothing (50 checked)", toasts[1].msg)
+    assert.equals(0, #shown, "the older run is not opened")
+  end)
+
+  it("without LazySyncPre and without lazy.nvim's record nothing counts as this sync's", function()
+    -- (no stored report either: a first use must not announce a run of any age)
+    next_report = function()
+      return report_to(0, { SHA_A })
+    end
+    lazy.setup(config.setup({ plugins = { after_sync = "open" } }))
+    fire(1)
+    settle()
+    assert.same({ false }, accepted)
+    assert.equals(0, #shown)
+  end)
+
+  it("is_fresh: a commit abbreviated below 7 digits does not match", function()
+    local report = report_to(0, { SHA_A:sub(1, 6) })
+    assert.is_false(lazy.is_fresh(report, { moved = { SHA_A } }))
+    report.plugins[1].to = SHA_A:sub(1, 7):upper()
+    assert.is_true(lazy.is_fresh(report, { moved = { SHA_A } }))
+    assert.is_false(lazy.is_fresh(report, { moved = { SHA_B } }))
+    assert.is_false(lazy.is_fresh(report, {}))
+  end)
+
+  it("lazy_moved reads the plugins lazy.nvim checked out to a new commit", function()
+    local saved_module = package.loaded["lazy.core.config"]
+    package.loaded["lazy.core.config"] = {
+      plugins = {
+        moved = { _ = { updated = { from = SHA_B, to = SHA_A } } },
+        same = { _ = { updated = { from = SHA_B, to = SHA_B } } },
+        untouched = { _ = {} },
+      },
+    }
+    local ok, err = pcall(function()
+      -- the real function, not the stub of before_each
+      assert.same({ SHA_A }, saved.lazy_moved())
+      package.loaded["lazy.core.config"] = { plugins = "broken" }
+      assert.is_nil(saved.lazy_moved())
+    end)
+    package.loaded["lazy.core.config"] = saved_module
+    assert(ok, err)
+  end)
+
+  it("'off' forgets a LazySyncPre seen before it", function()
+    lazy.lazy_moved = function()
+      return {}
+    end
+    lazy.setup(config.setup({ plugins = { after_sync = "toast" } }))
+    fire(1, "LazySyncPre")
+    lazy.setup(config.setup({ plugins = { after_sync = "off" } }))
+    lazy.setup(config.setup({ plugins = { after_sync = "toast" } }))
+    -- This sync's start was not seen: the old LazySyncPre must not stand in for it.
+    fire(1)
+    settle()
+    assert.same({ false }, accepted, "lazy.nvim's record decides, not the forgotten start")
+  end)
+
+  it("'off' stops a build that is still waiting for the debounce", function()
+    lazy.setup(config.setup({ plugins = { after_sync = "toast" } }))
+    fire(1)
+    lazy.setup(config.setup({ plugins = { after_sync = "off" } }))
+    settle()
+    assert.equals(0, #builds)
+    assert.equals(0, #toasts)
   end)
 
   it("reports the sync that lazy-loads gitsuite (lazy re-fires User without a pattern)", function()
@@ -425,9 +523,11 @@ describe("gitsuite.features.plugins.report({ open = false })", function()
   local presented, infos, warns, builds
   ---Delay of the stubbed builder, in milliseconds.
   local build_ms
+  ---What the stubbed builder's store read reports.
+  local store_info
 
   before_each(function()
-    presented, infos, warns, builds, build_ms = {}, {}, {}, 0, 0
+    presented, infos, warns, builds, build_ms, store_info = {}, {}, {}, 0, 0, {}
     saved.build, saved.show_markdown = builder.build, view.show_markdown
     saved.info, saved.warn, saved.load = notify.info, notify.warn, state.load
     builder.build = function(opts, cb)
@@ -437,8 +537,10 @@ describe("gitsuite.features.plugins.report({ open = false })", function()
         if stopped then return end
         local report = fake_report()
         -- like the real builder: a report `accept` turns down is not stored
-        if opts.accept and not opts.accept(report) then return cb(report, { discarded = true }) end
-        cb(report, {})
+        if opts.accept and not opts.accept(report) then
+          return cb(report, vim.tbl_extend("force", {}, store_info, { discarded = true }))
+        end
+        cb(report, vim.deepcopy(store_info))
       end, build_ms)
       return {
         stop = function()
@@ -509,6 +611,37 @@ describe("gitsuite.features.plugins.report({ open = false })", function()
     end)
     assert.equals(0, events, "no GitsuitePluginsReported with an older run's numbers")
     assert.equals(0, #presented)
+  end)
+
+  it("a report accept turns down still says what the store read found", function()
+    -- build() read the store first: a broken file is already moved aside, and no
+    -- later report would mention it (the file is gone by then).
+    store_info = {
+      recovered = "/state/plugins_reports.json.corrupt",
+      foreign = "other-host",
+      dropped = 2,
+    }
+    run({
+      quiet = true,
+      accept = function()
+        return false
+      end,
+    })
+    local all = table.concat(warns, "\n")
+    assert.is_truthy(
+      all:find("could not be read; it was moved to /state/plugins_reports.json.corrupt", 1, true)
+    )
+    assert.is_truthy(all:find("another machine (other-host); it is not used", 1, true))
+    assert.is_truthy(all:find("2 stored reports could not be used (the file is unchanged", 1, true))
+    assert.equals(3, #warns)
+  end)
+
+  it("a stored report says the foreign store was kept aside", function()
+    store_info = { foreign = "other-host", dropped = 1 }
+    run({ quiet = true, open = false })
+    local all = table.concat(warns, "\n")
+    assert.is_truthy(all:find("another machine (other-host); it was kept aside", 1, true))
+    assert.is_truthy(all:find("1 stored report could not be used and was left out", 1, true))
   end)
 
   it("quiet suppresses the info messages", function()

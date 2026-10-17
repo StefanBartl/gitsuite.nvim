@@ -79,8 +79,19 @@ the named augroup `gitsuite_lazy_sync`.
   when the clone was checked out) must lie at or after that moment. A long
   build step after the checkouts does not matter, and an earlier sync's run
   is never announced again. When gitsuite was loaded only by the `LazySync`
-  itself (see below), the run is compared with the newest stored `updated`
-  report instead: the same run means the sync changed nothing.
+  itself (see below), it never saw `LazySyncPre`; lazy.nvim's own record
+  decides instead: a sync clears `plugin._.updated` of every plugin when it
+  starts, and its checkout sets it for each plugin it moves. The report is this
+  sync's only when one of its plugins ends at a commit lazy.nvim moved a plugin
+  to in this sync. An earlier update nothing reported (a `:Lazy update`, a
+  headless `Lazy! sync`, a sync with the hook off) is therefore never announced
+  as this sync's, not even on first use with an empty report store. Should
+  lazy.nvim's record not be readable, the report does not count as this sync's
+  (the toast says the sync updated nothing; `:Git plugins report` shows it).
+  A `plugin/` file cannot record `LazySyncPre` for a lazy-loaded gitsuite:
+  lazy.nvim sources it only when it loads the plugin, inside `LazySync`.
+- Switching the hook to `"off"` (a new `setup()`) drops a build still waiting
+  for its debounce and forgets a `LazySyncPre` not yet followed by `LazySync`.
 - A statusline chip or another notifier stays the consumer's business: it
   subscribes to `User GitsuitePluginsReported` (above), which fires for these
   reports too.

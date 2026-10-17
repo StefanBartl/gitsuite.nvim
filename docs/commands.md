@@ -179,7 +179,9 @@ previous commit) are shown as such, not as "N new commits".
 
 Reports live in `stdpath("state")/gitsuite/plugins_reports.json` — one file per
 machine, written atomically, never silently overwritten (an unreadable one is
-moved to `.corrupt`; one written on another host is kept aside as `.foreign-<host>.bak` and this machine starts its own; one from a newer gitsuite, or a store that is not a plain file, is not touched and the report is not saved).
+moved to `.corrupt`; one written on another host is kept aside as `.foreign-<host>.bak` and this machine starts its own; one from a newer gitsuite, or a store that is not a plain file, is not touched and the report is not saved). Each of these is announced with a
+warning, also when the `:Lazy sync` hook turns its report down because the sync
+changed nothing (the read has already moved an unreadable store aside then).
 `plugins.keep_reports`/`max_age_days` bound it, the newest report is never
 rotated out. After each report `User GitsuitePluginsReported` fires (see
 `doc/gitsuite.txt` §7).

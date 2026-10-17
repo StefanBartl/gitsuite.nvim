@@ -213,6 +213,46 @@ end
 
 local build, fetch_then_build
 
+---Tell what reading the report store did or found. `stored`: whether the
+---report was written (`add` then also set a foreign store aside and kept a
+---copy of one with unusable reports); a discarded report left the file as it
+---was, except for an unreadable one, which the read itself moved aside.
+---@param info GitSuite.Plugins.StoreInfo
+---@param stored boolean
+---@return nil
+local function warn_store(info, stored)
+  if info.recovered then
+    notify.warn(
+      "plugins report: the report store could not be read; it was moved to "
+        .. text.one_line(info.recovered)
+    )
+  end
+  if info.foreign then
+    notify.warn(
+      (
+        stored
+          and "plugins report: the report store came from another machine (%s); it was kept aside"
+        or "plugins report: the report store came from another machine (%s); it is not used (the next stored report keeps it aside)"
+      ):format(text.one_line(info.foreign))
+    )
+  end
+  if info.dropped then
+    local n, one = info.dropped, info.dropped == 1
+    notify.warn(
+      stored
+          and ("plugins report: %d stored report%s could not be used and %s left out (the old file is kept as .dropped-<time>.bak)"):format(
+            n,
+            one and "" or "s",
+            one and "was" or "were"
+          )
+        or ("plugins report: %d stored report%s could not be used (the file is unchanged until the next report is stored)"):format(
+          n,
+          one and "" or "s"
+        )
+    )
+  end
+end
+
 ---Build a report of what changed in the installed plugins -- the last update's
 ---changes (`mode = "updated"`) or what the next one would bring
 ---(`"pending"`) -- store it and show it. Reads local state only: no install, no
@@ -305,6 +345,8 @@ function build(opts, fetched)
         M.report(next_opts)
       end) end
       if info.discarded then
+        -- (nothing stored, but the read may have moved a broken store aside)
+        warn_store(info, false)
         if opts.on_done then opts.on_done(report, nil) end
         return
       end
@@ -317,28 +359,7 @@ function build(opts, fetched)
         errors = #report.errors + (report.counts.failed or 0),
         saved = report.save_error == nil,
       })
-      if info.recovered then
-        notify.warn(
-          "plugins report: the report store could not be read; it was moved to "
-            .. text.one_line(info.recovered)
-        )
-      end
-      if info.foreign then
-        notify.warn(
-          ("plugins report: the report store came from another machine (%s); it was kept aside"):format(
-            text.one_line(info.foreign)
-          )
-        )
-      end
-      if info.dropped then
-        notify.warn(
-          ("plugins report: %d stored report%s could not be used and %s left out (the old file is kept as .dropped-<time>.bak)"):format(
-            info.dropped,
-            info.dropped == 1 and "" or "s",
-            info.dropped == 1 and "was" or "were"
-          )
-        )
-      end
+      warn_store(info, true)
       if report.save_error then
         notify.warn("plugins report: not saved: " .. text.one_line(report.save_error))
       end
