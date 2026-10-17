@@ -327,6 +327,159 @@ describe("gitsuite.features.ui", function()
         assert.equals("float", opts.layout)
         assert.equals("always", opts.close)
         assert.equals("function", type(opts.on_open))
+        -- A native terminal gets $NVIM from Neovim; tmux/WezTerm refuse `env`.
+        assert.is_nil(opts.env, "no env is passed")
+      end)
+
+      -- terminal.nvim's tmux/WezTerm backends refuse any `env` (preflight):
+      -- this fake answers like them, so passing $NVIM keeps lazygit from
+      -- starting in a pane.
+      it("starts under a multiplexer backend (which refuses env)", function()
+        package.loaded["terminal"] = {
+          run = function(cmd, opts)
+            runs[#runs + 1] = { cmd = cmd, opts = opts }
+            if opts.env ~= nil and next(opts.env) ~= nil then
+              return false, "the tmux backend cannot set environment variables for a pane"
+            end
+            return true, nil, { name = "lazygit", pane = "%1" }
+          end,
+        }
+        local repo = scratch .. "/repo"
+        git_init(repo)
+
+        ui.lazygit(repo)
+
+        assert.equals(1, #runs)
+        assert.is_nil(runs[1].opts.env)
+        assert.equals(0, #spawned, "lazygit runs in the pane, not in an own float")
+        assert.equals(0, #errors, table.concat(errors, "\n"))
+      end)
+
+      it("run() returning false falls back to the own float", function()
+        package.loaded["terminal"] = {
+          run = function(cmd, opts)
+            runs[#runs + 1] = { cmd = cmd, opts = opts }
+            return false, "cannot start"
+          end,
+        }
+        local repo = scratch .. "/repo"
+        git_init(repo)
+
+        ui.lazygit(repo)
+
+        assert.equals(1, #runs)
+        assert.equals(1, #spawned, "the own jobstart route is used")
+        assert.equals(real(repo), real(spawned[1].argv[3]))
+      end)
+
+      it("run() raising is reported and falls back to the own float", function()
+        package.loaded["terminal"] = {
+          run = function()
+            error("kaputt")
+          end,
+        }
+        local repo = scratch .. "/repo"
+        git_init(repo)
+
+        ui.lazygit(repo)
+
+        assert.equals(1, #errors)
+        assert.is_truthy(errors[1]:find("terminal.nvim failed", 1, true), errors[1])
+        assert.equals(1, #spawned, "the own jobstart route is used")
+      end)
+
+      -- A fake with a registry like terminal.nvim's: `run` creates a native
+      -- handle (a real buffer) and calls on_open like run_direct does.
+      describe("a lazygit terminal that already exists", function()
+        local registry
+        local opens
+        local bufs
+
+        ---@param handle table
+        local function add(handle)
+          bufs[#bufs + 1] = handle.bufnr
+          registry[#registry + 1] = handle
+        end
+
+        before_each(function()
+          registry, opens, bufs = {}, {}, {}
+          package.loaded["terminal"] = {
+            run = function(cmd, opts)
+              runs[#runs + 1] = { cmd = cmd, opts = opts }
+              -- run_direct replaces the earlier terminal of that name.
+              for i = #registry, 1, -1 do
+                if registry[i].name == opts.name then table.remove(registry, i) end
+              end
+              local handle = {
+                name = opts.name,
+                backend = "native",
+                bufnr = vim.api.nvim_create_buf(false, true),
+              }
+              add(handle)
+              opts.on_open(handle)
+              return true, nil, handle
+            end,
+            list = function()
+              return registry
+            end,
+            open = function(target)
+              opens[#opens + 1] = target
+              for _, h in ipairs(registry) do
+                if h.name == target.name then return h end
+              end
+              return nil, "no such terminal"
+            end,
+          }
+        end)
+
+        after_each(function()
+          for _, b in ipairs(bufs) do
+            pcall(vim.api.nvim_buf_delete, b, { force = true })
+          end
+        end)
+
+        it("is shown again for the same repo, not replaced (q only hid it)", function()
+          local repo = scratch .. "/repo"
+          git_init(repo)
+
+          ui.lazygit(repo)
+          ui.lazygit(repo)
+
+          assert.equals(1, #runs, "the running lazygit is not replaced")
+          assert.equals(1, #opens)
+          assert.equals("lazygit", opens[1].name)
+          assert.equals("float", opens[1].layout)
+          assert.equals(0, #errors, table.concat(errors, "\n"))
+        end)
+
+        it("is replaced for another repo", function()
+          local repo_a, repo_b = scratch .. "/a", scratch .. "/b"
+          git_init(repo_a)
+          git_init(repo_b)
+
+          ui.lazygit(repo_a)
+          ui.lazygit(repo_b)
+
+          assert.equals(2, #runs)
+          assert.equals(0, #opens)
+          assert.equals(real(repo_b), real(runs[2].cmd[3]))
+        end)
+
+        it("is replaced when it is not gitsuite's (a session restore) or has exited", function()
+          local repo = scratch .. "/repo"
+          git_init(repo)
+          -- Restored by terminal.nvim's sessions: same name, no on_open.
+          add({ name = "lazygit", backend = "native", bufnr = vim.api.nvim_create_buf(false, true) })
+
+          ui.lazygit(repo)
+          assert.equals(1, #runs, "the restored terminal is replaced")
+          assert.equals(0, #opens)
+
+          registry[1].exited = true
+          ui.lazygit(repo)
+          assert.equals(2, #runs, "an exited lazygit is not shown again")
+          assert.equals(0, #opens)
+        end)
       end)
 
       it("on_open maps q/<Esc> in the buffer; a pane without one is fine", function()

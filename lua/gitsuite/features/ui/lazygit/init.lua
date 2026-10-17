@@ -82,34 +82,90 @@ local function terminal_facade()
 end
 
 ---@internal
---- Start lazygit through terminal.nvim: it owns the float, the job, the
---- exit handling (`close = "always"`) and the identity (a second
---- `:Git ui lazygit` replaces the earlier one instead of stacking floats).
---- A failure is reported by terminal.nvim itself, so nothing is added here.
+--- The terminal.nvim name of the lazygit terminal (one per project).
+local TERM_NAME = "lazygit"
+
+---@internal
+--- Buffer variable naming the repo root a lazygit terminal started by
+--- gitsuite.nvim runs in. A terminal of the same name without it (one a
+--- terminal.nvim session restore brought back: no q/<Esc> maps, no
+--- `close = "always"`) is not reused but replaced.
+local MARKER = "gitsuite_lazygit_root"
+
+---@internal
+--- The live lazygit terminal gitsuite.nvim started for `root` in this
+--- project, when terminal.nvim keeps one (hidden by `q`, or visible).
+--- Native backend only: that is where `q` hides a terminal whose job keeps
+--- running; a multiplexer pane is left to the multiplexer.
 ---@param term table terminal.nvim's facade
 ---@param root string repo root
----@return nil
+---@return boolean
+local function has_running_lazygit(term, root)
+  if type(term.list) ~= "function" or type(term.open) ~= "function" then return false end
+  local ok, handles = pcall(term.list)
+  if not ok or type(handles) ~= "table" then return false end
+  for _, h in ipairs(handles) do
+    if
+      type(h) == "table"
+      and h.name == TERM_NAME
+      and not h.exited
+      and not h.disposed
+      and type(h.bufnr) == "number"
+      and vim.api.nvim_buf_is_valid(h.bufnr)
+      and vim.b[h.bufnr][MARKER] == root
+    then
+      return true
+    end
+  end
+  return false
+end
+
+---@internal
+--- Start lazygit through terminal.nvim: it owns the float, the job, the
+--- exit handling (`close = "always"`) and the identity.
+---
+--- * A lazygit of the same repo that is still running (hidden with `q`) is
+---   shown again, never replaced: replacing would stop it, and with it a
+---   push or rebase lazygit may be in the middle of.
+--- * Otherwise `run(argv, { direct = true })` starts one, replacing an
+---   earlier lazygit terminal of this project (another repo's, or one a
+---   session restore brought back).
+---
+--- No `env` is passed: a native terminal already gets $NVIM (the `nvr`
+--- bridge) from Neovim, and the tmux/WezTerm backends refuse any `env`, so
+--- passing it would keep lazygit from starting there at all.
+---@param term table terminal.nvim's facade
+---@param root string repo root
+---@return boolean started false: terminal.nvim did not start it (it reports why itself), use the own float
 local function open_via_terminal(term, root)
-  ---@type table<string, string>|nil
-  local env
-  -- The `nvr` bridge (O/<C-o>) needs $NVIM. A native terminal gets it from
-  -- Neovim anyway; a multiplexer pane (tmux/WezTerm backend) does not.
-  if vim.v.servername ~= "" then env = { NVIM = vim.v.servername } end
-  term.run(build_argv(root), {
+  if has_running_lazygit(term, root) then
+    local ok, handle = pcall(term.open, { name = TERM_NAME, layout = "float" })
+    if ok and handle then return true end
+    -- Could not be shown again: start a new one below.
+  end
+  local ok, started = pcall(term.run, build_argv(root), {
     direct = true,
-    name = "lazygit",
+    name = TERM_NAME,
     title = "lazygit",
     cwd = root,
     layout = "float",
     float = { width = 0.9, height = 0.9 },
     close = "always",
-    env = env,
     on_open = function(handle)
       -- Multiplexer backends have no Neovim buffer to map keys in.
       local bufnr = type(handle) == "table" and handle.bufnr or nil
-      if bufnr and vim.api.nvim_buf_is_valid(bufnr) then setup_terminal_keymaps(bufnr) end
+      if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
+        vim.b[bufnr][MARKER] = root
+        setup_terminal_keymaps(bufnr)
+      end
     end,
   })
+  if not ok then
+    -- A false return is reported by terminal.nvim itself; a raised error is not.
+    notify.error("ui lazygit: terminal.nvim failed: " .. tostring(started))
+    return false
+  end
+  return started == true
 end
 
 ---@internal
@@ -170,8 +226,9 @@ end
 ---repo of the current cwd; with one, at the repo containing that directory
 ---(any subdirectory of a work tree works, not only its root). With
 ---terminal.nvim installed the float is terminal.nvim's
----(`require("terminal").run(argv, { direct = true })`); without it,
----gitsuite.nvim's own.
+---(`require("terminal").run(argv, { direct = true })`, or the same repo's
+---lazygit hidden with `q` shown again); without it, or when it does not
+---start lazygit, gitsuite.nvim's own.
 ---@param repo_dir? string
 ---@return nil
 function M.open(repo_dir)
@@ -188,11 +245,10 @@ function M.open(repo_dir)
     return
   end
 
+  -- terminal.nvim first; when it is missing or did not start lazygit (it
+  -- reported why), the own float.
   local term = terminal_facade()
-  if term then
-    open_via_terminal(term, root)
-    return
-  end
+  if term and open_via_terminal(term, root) then return end
   open_own_float(root)
 end
 
