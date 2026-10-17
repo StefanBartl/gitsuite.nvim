@@ -114,4 +114,23 @@ describe("gitsuite.health", function()
     assert.is_truthy(text:find("regular file", 1, true))
     assert.is_nil(text:find("Update gitsuite.nvim", 1, true))
   end)
+
+  it("says whether the :Lazy sync hook listens", function()
+    pcall(require("gitsuite.health").check)
+    assert.is_truthy(messages("info"):find("lazy integration: off", 1, true))
+
+    local lazy = require("gitsuite.integrations.lazy")
+    local cfg = require("gitsuite.config").setup({ plugins = { after_sync = "toast" } })
+    records = {}
+    pcall(require("gitsuite.health").check)
+    assert.is_truthy(messages("info"):find("lazy integration: toast, not listening yet", 1, true))
+
+    lazy.setup(cfg)
+    records = {}
+    pcall(require("gitsuite.health").check)
+    pcall(vim.api.nvim_del_augroup_by_name, lazy.GROUP)
+    assert.is_truthy(
+      messages("ok"):find("lazy integration: toast (listening on User LazySync)", 1, true)
+    )
+  end)
 end)

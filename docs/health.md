@@ -69,6 +69,9 @@ What `:Git plugins report` keeps. The check only looks; an unreadable file is mo
 | ⚠️ `the report store is not a plain file ...` / `could not be opened` / `could not be moved aside` | The file is left as it is and nothing is saved; the advice names the cause (replace it by a regular file, close what holds it, or move it by hand) |
 | ⚠️ `N stored report(s) are not usable` | Entries of the wrong shape are ignored |
 | ℹ️ `plugins.mode = ..., keep_reports = ..., max_age_days = ...` | The retention settings in effect |
+| ℹ️ `lazy integration: off (plugins.after_sync)` | The `:Lazy sync` hook is off (default); no listener is registered |
+| ✅ `lazy integration: toast (listening on User LazySync)` / `open (...)` | The hook is on and its listener is registered (see [integrations.md](integrations.md#lazy-sync-hook)) |
+| ℹ️ `lazy integration: toast, not listening yet (...)` | The hook is configured, but gitsuite's `setup()` has not run yet (lazy-loaded); add `"User LazySync"` to the spec's `event` list so it is loaded when a sync ends |
 
 ## gitsuite: plugin state
 

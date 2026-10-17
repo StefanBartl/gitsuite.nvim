@@ -228,6 +228,22 @@ function M.check()
       reports_cfg.max_age_days
     )
   )
+  if reports_cfg.after_sync == "off" then
+    vim.health.info("lazy integration: off (plugins.after_sync)")
+  else
+    local status = require("gitsuite.integrations.lazy").status()
+    if status.registered then
+      vim.health.ok(
+        ("lazy integration: %s (listening on User LazySync)"):format(reports_cfg.after_sync)
+      )
+    else
+      vim.health.info(
+        ("lazy integration: %s, not listening yet (gitsuite's setup() has not run)"):format(
+          reports_cfg.after_sync
+        )
+      )
+    end
+  end
 
   vim.health.start("gitsuite: plugin state")
   if vim.g.loaded_gitsuite then

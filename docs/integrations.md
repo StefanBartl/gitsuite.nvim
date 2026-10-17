@@ -55,6 +55,55 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
+<a id="lazy-sync-hook"></a>
+
+## `lazy.lua` — the `:Lazy sync` hook
+
+Opt-in through `plugins.after_sync` (default `"off"`): the one module that
+listens to lazy.nvim's own `User LazySync` event, in the named augroup
+`gitsuite_lazy_sync`.
+
+| `plugins.after_sync` | After `:Lazy sync` |
+| --- | --- |
+| `"off"` (default) | Nothing. No listener is registered and the module is not even loaded; `:checkhealth gitsuite` says `lazy integration: off`. |
+| `"toast"` | The `updated` report is built and stored, `User GitsuitePluginsReported` fires, and a corner toast that never takes focus sums it up: `plugins: 5 of 50 updated, 87 commits -> :Git plugins report --last`. |
+| `"open"` | The same, and the report opens as with `:Git plugins report` (only when the sync updated something). |
+
+- Only `LazySync`: lazy.nvim fires it once, after the lock file is written
+  (`LazyUpdate` comes before that). Events within 200 ms are folded into one
+  build, and only one report runs at a time, so one sync means one report.
+- A sync that updated nothing says so (`the sync updated nothing`) instead of
+  repeating the previous update's numbers — the newest update run is compared
+  with the time of the sync (`plugins.run_window_s`).
+- A statusline chip or another notifier stays the consumer's business: it
+  subscribes to `User GitsuitePluginsReported` (above), which fires for these
+  reports too.
+- Never in a headless instance (`nvim --headless`, no UI attached):
+  `"+Lazy! sync" +qa` would quit before an asynchronous report finishes. A
+  script builds the report itself and waits for it:
+
+  ```sh
+  nvim --headless "+Lazy! sync" \
+    "+lua local done; require('gitsuite.features.plugins').report({ mode = 'updated', open = false, on_done = function() done = true end }); vim.wait(120000, function() return done end)" \
+    +qa
+  ```
+
+  Interactively, `:Git plugins report --no-open` does the same without the wait.
+
+gitsuite must be loaded when the event fires. With lazy.nvim lazy-loading it
+(`cmd = "Git"`, `event = "BufReadPost"`), add the event to its spec — lazy.nvim
+then loads gitsuite on the sync and re-fires the event into the groups the
+plugin just created:
+
+```lua
+{
+  "StefanBartl/gitsuite.nvim",
+  cmd = "Git",
+  event = { "BufReadPost", "BufNewFile", "User LazySync" },
+  opts = { plugins = { after_sync = "toast" } },
+}
+```
+
 ## See also
 
 - [Architecture](architecture.md) — the "adapter vs. integration" naming and the dependency-direction rule both are built on.

@@ -132,7 +132,7 @@ process. It only reads -- one `git log`, never a fetch -- and works offline in a
 blobless clone. See docs/commands.md and docs/configuration.md (`plugins.*`).
 
 `:Git plugins report [--mode=updated|pending] [--all] [--last] [--out=buffer|clipboard|path]
-[--to=path]` says what changed across ALL installed plugins: `updated` (default) is what
+[--to=path] [--no-open]` says what changed across ALL installed plugins: `updated` (default) is what
 the last update changed -- each clone's own HEAD reflog, so it survives a restart --
 and `pending` what the next update would bring, against the target lazy.nvim itself
 would check out, as of the last fetch (gitsuite never fetches; `:Lazy check` does).
@@ -140,7 +140,10 @@ The output is Markdown (a buffer, the clipboard or a file); a rollback, a diverg
 branch and a force-pushed-away old state are named as such. Reports are kept in
 `stdpath("state")/gitsuite/plugins_reports.json` and `User GitsuitePluginsReported`
 fires after each. It reads local state only -- no install, update, pin or clean.
-See docs/commands.md.
+`--no-open` stores the report and shows only a one-line summary. With
+`plugins.after_sync = "toast"` (or `"open"`) the `updated` report is built after
+every `:Lazy sync` and summed up in a toast that never takes focus (default
+`"off"`: no listener). See docs/commands.md and docs/integrations.md.
 
 ==============================================================================
 5. CONFIGURATION                                                *gitsuite-config*

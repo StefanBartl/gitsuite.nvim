@@ -167,6 +167,7 @@ plugins = {
   merges = false,        -- keep merge commits in the commit lists
   keep_reports = 20,     -- stored reports, newest first
   max_age_days = 365,    -- older stored reports are dropped (the newest never is)
+  after_sync = "off",    -- after :Lazy sync: "off" | "toast" | "open"
 },
 ```
 
@@ -198,6 +199,14 @@ report is always kept. The report store is **per machine** (clones, reflogs and
 the lock file are machine-local); a store written on another host is kept
 aside, not used. An unknown key or a wrong-typed value is dropped with a
 warning, like everywhere else.
+
+`after_sync` is the optional `:Lazy sync` hook. `"off"` (default) registers
+nothing: a report is built only when you ask for one. `"toast"` builds and
+stores the `updated` report after every `:Lazy sync` and shows a toast that
+never takes focus (`5 of 50 updated, 87 commits -> :Git plugins report
+--last`); `"open"` also opens the report. Never in a headless instance. With a
+lazy-loaded gitsuite, add `"User LazySync"` to its `event` list so it is loaded
+when the sync ends — see [integrations.md](integrations.md#lazy-sync-hook).
 
 ## `progress_style`
 

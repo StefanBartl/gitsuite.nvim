@@ -491,6 +491,11 @@ local function build_routes()
           bool = true,
           desc = "Show the newest stored report instead of building a new one",
         },
+        {
+          name = "no-open",
+          bool = true,
+          desc = "Build and store the report, show only a one-line summary (scripts, hooks)",
+        },
       },
       desc = "Report what changed in the installed plugins: the last update (--mode=updated) or what is pending (--mode=pending); reads local state only",
       run = function(ctx)
@@ -513,6 +518,7 @@ local function build_routes()
           to = to,
           all = ctx.flags.all == true,
           last = ctx.flags.last == true,
+          open = ctx.flags["no-open"] ~= true,
         })
       end,
     },

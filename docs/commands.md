@@ -75,7 +75,7 @@ that is not installed (`owner/repo` naming something you never installed) is
 refused with that reason: gitsuite does not clone or look anything up.
 
 ```vim
-:Git plugins report [--mode=updated|pending] [--all] [--last] [--out=buffer|clipboard|path] [--to=<path>]
+:Git plugins report [--mode=updated|pending] [--all] [--last] [--out=buffer|clipboard|path] [--to=<path>] [--no-open]
 ```
 
 The question behind `:Lazy sync`: *which plugins changed, and what did they
@@ -106,6 +106,10 @@ each with its commits, as a Markdown report (a read-only buffer by default).
   with another `--out` it is ignored with a warning. Only one report runs at a
   time. The picker of `plugins log` shows at most the newest 1000 commits (use
   `--out=buffer` for all).
+- `--no-open` builds and stores the report and fires the event, but shows only
+  a one-line summary; `--last` opens it later. Meant for scripts and hooks; to
+  run it automatically after every `:Lazy sync`, see `plugins.after_sync`
+  ([integrations.md](integrations.md#lazy-sync-hook)).
 
 Each plugin is read from files first (HEAD, refs, reflog — about 100 ms for fifty
 clones); only a plugin that **changed** costs a git process (one

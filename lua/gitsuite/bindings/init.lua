@@ -21,6 +21,10 @@ function M.register(cfg)
     -- targets, not part of the :Git tree (see features/ui/lazygit/init.lua).
     require("gitsuite.features.ui.lazygit").setup()
   end
+
+  -- `plugins.after_sync`: the optional `User LazySync` listener. "off" (the
+  -- default) does not even load the integration.
+  if cfg.plugins.after_sync ~= "off" then require("gitsuite.integrations.lazy").setup(cfg) end
 end
 
 return M

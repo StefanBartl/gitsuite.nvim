@@ -97,6 +97,10 @@ local DEFAULTS = {
     -- Stored reports (newest first): how many, and for how many days.
     keep_reports = 20,
     max_age_days = 365,
+    -- After `:Lazy sync` (`User LazySync`): "off" = nothing (no listener at
+    -- all); "toast" = build and store the `updated` report, show a corner toast
+    -- that never takes focus; "open" = also open the report.
+    after_sync = "off",
   },
   -- Indicator style for `:Git dashboard`/`:Git dashboard update` over many
   -- repositories; "auto" picks fidget.nvim when installed, else `vim.notify`.

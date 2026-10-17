@@ -55,6 +55,7 @@
 ---@field merges boolean       Keep merge commits in the commit lists.
 ---@field keep_reports integer Stored reports (newest first).
 ---@field max_age_days integer Stored reports older than this are dropped.
+---@field after_sync "off"|"toast"|"open"  After `:Lazy sync`: nothing (default), a toast with the `updated` report's summary, or the toast plus the report.
 
 --- The **resolved** configuration, as `config.get()` returns it: DEFAULTS
 --- deep-merged with the user's `setup()` table. Every field below is

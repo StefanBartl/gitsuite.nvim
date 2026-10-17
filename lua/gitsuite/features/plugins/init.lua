@@ -137,6 +137,8 @@ end
 ---@field last? boolean                       Show the newest stored report instead of building one.
 ---@field out? "buffer"|"clipboard"|"path"    Where to put the Markdown (default "buffer").
 ---@field to? string                          The file for `out = "path"`.
+---@field open? boolean                      false = build and store only, show nothing (default true).
+---@field quiet? boolean                      No info messages ("reading the clones", the `open = false` summary); warnings and errors still show.
 ---@field on_done? fun(report: GitSuite.Plugins.Report|nil, err: string|nil)  Called once (for scripts and tests).
 
 ---Show a report as Markdown.
@@ -145,6 +147,14 @@ end
 local function present(report, opts)
   local lines = require("gitsuite.features.plugins.markdown").render(report)
   view.show_markdown(lines, report.id, opts.out, opts.to)
+end
+
+---Show a report that was already built (e.g. by the `:Lazy sync` hook).
+---@param report GitSuite.Plugins.Report
+---@param opts? { out?: "buffer"|"clipboard"|"path", to?: string }
+---@return nil
+function M.show(report, opts)
+  present(report, opts or {})
 end
 
 ---The report run in flight, if any: a second `:Git plugins report` before the
@@ -223,7 +233,7 @@ function M.report(opts)
     return running
   end
 
-  notify.info("plugins report: reading the clones ...")
+  if not opts.quiet then notify.info("plugins report: reading the clones ...") end
   local handle = require("gitsuite.features.plugins.report").build(
     { mode = opts.mode, all = opts.all },
     function(report, info)
@@ -262,7 +272,19 @@ function M.report(opts)
       if report.save_error then
         notify.warn("plugins report: not saved: " .. text.one_line(report.save_error))
       end
-      present(report, opts)
+      if opts.open ~= false then
+        present(report, opts)
+      elseif not opts.quiet then
+        notify.info(
+          ("plugins report: %d of %d changed, %d commits (%s) -- :%s plugins report --last shows it"):format(
+            report.counts.changed,
+            report.counts.checked,
+            report.counts.commits,
+            report.save_error and "not saved" or "saved",
+            config.get().commands.git
+          )
+        )
+      end
       if opts.on_done then opts.on_done(report, nil) end
     end
   )

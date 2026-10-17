@@ -114,6 +114,14 @@ local function is_report_mode(v)
 end
 
 ---@internal
+---`plugins.after_sync`: what happens after `:Lazy sync`.
+---@param v any
+---@return boolean
+local function is_after_sync(v)
+  return v == "off" or v == "toast" or v == "open"
+end
+
+---@internal
 ---`dashboard.pull_scope`: which choice `gP`'s prompt focuses first.
 ---@param v any
 ---@return boolean
@@ -192,6 +200,7 @@ local KNOWN = {
     merges = { ok = is_boolean, expect = "a boolean" },
     keep_reports = { ok = int_in(10000), expect = "a whole number from 1 to 10000" },
     max_age_days = { ok = int_in(36500), expect = "a whole number of days (1 to 36500)" },
+    after_sync = { ok = is_after_sync, expect = '"off", "toast" or "open"' },
   },
   progress_style = { ok = is_string, expect = "a non-empty string" },
 }
