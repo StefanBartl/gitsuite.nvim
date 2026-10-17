@@ -39,6 +39,9 @@ One line per optional plugin (`color_my_ascii`, `insights`, `pickers`, `terminal
 | --- | --- |
 | ✅ `<name> found: <feature>` | The plugin resolved; the feature is on |
 | ℹ️ `<name> not installed: <effect>` | The plugin is absent; see the effect named in the line |
+| ⚠️ `module 'terminal' found but not terminal.nvim / too old (no run())` | A Lua module `terminal` loads but has no `run()`: another plugin's module of that name, or a terminal.nvim too old for `:Git ui lazygit`. The check asks the same question `:Git ui lazygit` asks, so lazygit opens in gitsuite.nvim's own float; update terminal.nvim or find which plugin ships `terminal` |
+
+`terminal found` means exactly what `:Git ui lazygit` checks at runtime (a module `terminal` with a `run()` function), not merely that `require("terminal")` succeeds.
 
 ## gitsuite: plugin sources
 

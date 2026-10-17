@@ -157,4 +157,22 @@ describe("gitsuite.health", function()
     assert.is_nil(absent_warn:find("terminal", 1, true))
     assert.is_truthy(present:find("terminal found: :Git ui lazygit runs as", 1, true))
   end)
+
+  it("does not report a 'terminal' module without run() as terminal.nvim", function()
+    local saved_loaded, saved_preload = package.loaded["terminal"], package.preload["terminal"]
+    package.loaded["terminal"] = nil
+    package.preload["terminal"] = function()
+      return { open = function() end } -- another plugin's module, or a terminal.nvim without run()
+    end
+    pcall(require("gitsuite.health").check)
+    local used = require("gitsuite.features.ui.lazygit.facade").resolve()
+    package.loaded["terminal"], package.preload["terminal"] = saved_loaded, saved_preload
+
+    assert.is_nil(used, "the runtime falls back to the own float")
+    assert.is_nil(messages("ok"):find("terminal found", 1, true))
+    assert.is_truthy(
+      messages("warn"):find("module 'terminal' found but not terminal.nvim / too old", 1, true)
+    )
+    assert.is_truthy(messages("warn"):find("falls back to gitsuite.nvim's own float", 1, true))
+  end)
 end)

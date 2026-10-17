@@ -34,13 +34,6 @@ local function check_soft_dependencies()
       "branch picker through the configured picker engine",
       "the branch picker falls back to vim.ui.select",
     },
-    {
-      "terminal",
-      "terminal",
-      "terminal.nvim",
-      ":Git ui lazygit runs as a terminal.nvim terminal (its backend, one per project)",
-      ":Git ui lazygit opens in gitsuite.nvim's own float",
-    },
   }
   for _, dep in ipairs(soft) do
     if pcall(require, dep[2]) then
@@ -48,6 +41,24 @@ local function check_soft_dependencies()
     else
       vim.health.info(("%s not installed: %s"):format(dep[1], dep[5]))
     end
+  end
+
+  -- terminal.nvim: "loadable" is not enough -- the runtime only uses it when it
+  -- offers `run`, so ask the very predicate `:Git ui lazygit` asks.
+  local _, status = require("gitsuite.features.ui.lazygit.facade").resolve()
+  if status == "ok" then
+    vim.health.ok(
+      "terminal found: :Git ui lazygit runs as a terminal.nvim terminal (its backend, one per project)"
+    )
+  elseif status == "foreign" then
+    vim.health.warn(
+      "module 'terminal' found but not terminal.nvim / too old (no run()): :Git ui lazygit falls back to gitsuite.nvim's own float",
+      {
+        "Update terminal.nvim, or check which plugin provides the Lua module 'terminal'",
+      }
+    )
+  else
+    vim.health.info("terminal not installed: :Git ui lazygit opens in gitsuite.nvim's own float")
   end
 end
 

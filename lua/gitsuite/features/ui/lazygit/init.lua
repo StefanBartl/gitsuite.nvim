@@ -73,12 +73,11 @@ end
 ---@internal
 --- terminal.nvim's facade when it is installed and new enough to offer
 --- `run(argv, { direct = true })`; nil otherwise (optional dependency, the
---- own float below is the fallback).
+--- own float below is the fallback). Same predicate as `:checkhealth`
+--- (`lazygit.facade`), so the two cannot disagree.
 ---@return table|nil
 local function terminal_facade()
-  local ok, term = pcall(require, "terminal")
-  if ok and type(term) == "table" and type(term.run) == "function" then return term end
-  return nil
+  return (require("gitsuite.features.ui.lazygit.facade").resolve())
 end
 
 ---@internal
