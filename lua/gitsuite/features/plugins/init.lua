@@ -137,8 +137,10 @@ end
 ---@field last? boolean                       Show the newest stored report instead of building one.
 ---@field out? "buffer"|"clipboard"|"path"    Where to put the Markdown (default "buffer").
 ---@field to? string                          The file for `out = "path"`.
----@field open? boolean                      false = build and store only, show nothing (default true).
+---@field open? boolean                      false = do not open a buffer (default true). An explicit `out = "clipboard"|"path"` is still honoured: copying or writing a file is not opening.
 ---@field quiet? boolean                      No info messages ("reading the clones", the `open = false` summary); warnings and errors still show.
+---@field accept? fun(report: GitSuite.Plugins.Report): boolean  Called with the built report before it is stored: false = neither store, announce nor show it (`on_done` still gets it). For the `:Lazy sync` hook: a sync that changed nothing.
+---@field queue? boolean                      While another report is being built, run after it instead of giving up with "already running".
 ---@field on_done? fun(report: GitSuite.Plugins.Report|nil, err: string|nil)  Called once (for scripts and tests).
 
 ---Show a report as Markdown.
@@ -147,6 +149,14 @@ end
 local function present(report, opts)
   local lines = require("gitsuite.features.plugins.markdown").render(report)
   view.show_markdown(lines, report.id, opts.out, opts.to)
+end
+
+---Whether `present` runs: `open = false` only suppresses the buffer, an
+---explicit clipboard or file output still happens.
+---@param opts GitSuite.Plugins.ReportCmdOpts
+---@return boolean
+local function presents(opts)
+  return opts.open ~= false or opts.out == "clipboard" or opts.out == "path"
 end
 
 ---Show a report that was already built (e.g. by the `:Lazy sync` hook).
@@ -161,6 +171,11 @@ end
 ---first finished would read the same clones and run every git process twice.
 ---@type { stop: fun() }|nil
 local running
+
+---A `queue = true` call that arrived while `running`: started once that run
+---ends (only the newest waits; an older one is told it was superseded).
+---@type GitSuite.Plugins.ReportCmdOpts|nil
+local queued
 
 ---Tell the user (and `on_done`) that the call gave up.
 ---@param opts GitSuite.Plugins.ReportCmdOpts
@@ -222,12 +237,28 @@ function M.report(opts)
       report_fail(opts, nothing_stored(store, info, opts.mode))
       return nil
     end
-    present(newest, opts)
+    if presents(opts) then
+      present(newest, opts)
+    elseif not opts.quiet then
+      notify.info(
+        ("plugins report: the newest stored report has %d of %d changed, %d commits (not shown: --no-open)"):format(
+          newest.counts.changed,
+          newest.counts.checked,
+          newest.counts.commits
+        )
+      )
+    end
     if opts.on_done then opts.on_done(newest, nil) end
     return nil
   end
 
   if running then
+    if opts.queue then
+      local older = queued
+      queued = opts
+      if older and older.on_done then older.on_done(nil, "superseded") end
+      return running
+    end
     notify.warn("plugins report: already running")
     if opts.on_done then opts.on_done(nil, "already running") end
     return running
@@ -235,9 +266,19 @@ function M.report(opts)
 
   if not opts.quiet then notify.info("plugins report: reading the clones ...") end
   local handle = require("gitsuite.features.plugins.report").build(
-    { mode = opts.mode, all = opts.all },
+    { mode = opts.mode, all = opts.all, accept = opts.accept },
     function(report, info)
       running = nil
+      -- (a queued call starts after this one is fully handled)
+      local next_opts = queued
+      queued = nil
+      if next_opts then vim.schedule(function()
+        M.report(next_opts)
+      end) end
+      if info.discarded then
+        if opts.on_done then opts.on_done(report, nil) end
+        return
+      end
       require("gitsuite.events").plugins_reported({
         id = report.id,
         mode = report.mode,
@@ -272,7 +313,7 @@ function M.report(opts)
       if report.save_error then
         notify.warn("plugins report: not saved: " .. text.one_line(report.save_error))
       end
-      if opts.open ~= false then
+      if presents(opts) then
         present(report, opts)
       elseif not opts.quiet then
         notify.info(
@@ -292,7 +333,10 @@ function M.report(opts)
   running = {
     stop = function()
       running = nil
+      local dropped = queued
+      queued = nil
       handle.stop()
+      if dropped and dropped.on_done then dropped.on_done(nil, "stopped") end
     end,
   }
   return running

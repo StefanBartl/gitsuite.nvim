@@ -494,7 +494,7 @@ local function build_routes()
         {
           name = "no-open",
           bool = true,
-          desc = "Build and store the report, show only a one-line summary (scripts, hooks)",
+          desc = "Open no buffer: build and store the report and print a one-line summary (--out=clipboard/path still copy or write it; with --last: only the summary)",
         },
       },
       desc = "Report what changed in the installed plugins: the last update (--mode=updated) or what is pending (--mode=pending); reads local state only",
@@ -511,6 +511,11 @@ local function build_routes()
             ("plugins report: --to is only used with --out=path (ignored for --out=%s)"):format(out)
           )
           to = nil
+        end
+        if ctx.flags["no-open"] == true and out == "buffer" then
+          require("gitsuite.util.notify").warn(
+            "plugins report: --out=buffer is ignored with --no-open (no buffer is opened)"
+          )
         end
         require("gitsuite.features.plugins").report({
           mode = ctx.flags.mode,

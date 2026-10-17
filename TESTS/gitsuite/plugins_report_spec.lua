@@ -1417,6 +1417,30 @@ describe("gitsuite.features.plugins.report", function()
       assert.equals(real.id, state.load(store_path).reports[1].id)
     end)
 
+    it("does not store a report its accept turns down (a no-op :Lazy sync)", function()
+      local sroot = scenario()
+      local real = build({
+        mode = "updated",
+        refs = refs_of(ALL, sroot),
+        store_path = store_path,
+      })
+      local seen
+      local again, info = build({
+        mode = "updated",
+        refs = refs_of(ALL, sroot),
+        store_path = store_path,
+        accept = function(report)
+          seen = report
+          return false
+        end,
+      })
+      assert.equals(again, seen, "accept is asked with the built report")
+      assert.is_true(info.discarded)
+      local stored = state.load(store_path).reports
+      assert.equals(1, #stored, "no second copy of the same run")
+      assert.equals(real.id, stored[1].id)
+    end)
+
     it("falls back to the configured mode for a mode it does not know", function()
       local report = build({ mode = "bogus", refs = {}, persist = false })
       assert.equals(require("gitsuite.config").get().plugins.mode, report.mode)

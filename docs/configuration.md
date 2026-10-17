@@ -202,11 +202,13 @@ warning, like everywhere else.
 
 `after_sync` is the optional `:Lazy sync` hook. `"off"` (default) registers
 nothing: a report is built only when you ask for one. `"toast"` builds and
-stores the `updated` report after every `:Lazy sync` and shows a toast that
-never takes focus (`5 of 50 updated, 87 commits -> :Git plugins report
---last`); `"open"` also opens the report. Never in a headless instance. With a
-lazy-loaded gitsuite, add `"User LazySync"` to its `event` list so it is loaded
-when the sync ends — see [integrations.md](integrations.md#lazy-sync-hook).
+stores the `updated` report after every `:Lazy sync` that updated something and
+shows a toast that never takes focus (`5 of 50 updated, 87 commits -> :Git
+plugins report --last`; a sync that updated nothing stores nothing and only says
+so); `"open"` also opens the report. Never in a headless instance. With a
+lazy-loaded gitsuite, add `"User LazySync"` to its `event` list: the sync that
+loads it is reported too (`setup()` notices it runs inside that event) — see
+[integrations.md](integrations.md#lazy-sync-hook).
 
 ## `progress_style`
 

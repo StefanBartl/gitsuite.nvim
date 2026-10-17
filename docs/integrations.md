@@ -60,21 +60,27 @@ vim.api.nvim_create_autocmd("User", {
 ## `lazy.lua` — the `:Lazy sync` hook
 
 Opt-in through `plugins.after_sync` (default `"off"`): the one module that
-listens to lazy.nvim's own `User LazySync` event, in the named augroup
-`gitsuite_lazy_sync`.
+listens to lazy.nvim's own `User LazySyncPre` and `User LazySync` events, in
+the named augroup `gitsuite_lazy_sync`.
 
 | `plugins.after_sync` | After `:Lazy sync` |
 | --- | --- |
 | `"off"` (default) | Nothing. No listener is registered and the module is not even loaded; `:checkhealth gitsuite` says `lazy integration: off`. |
-| `"toast"` | The `updated` report is built and stored, `User GitsuitePluginsReported` fires, and a corner toast that never takes focus sums it up: `plugins: 5 of 50 updated, 87 commits -> :Git plugins report --last`. |
+| `"toast"` | The `updated` report is built and stored, `User GitsuitePluginsReported` fires, and a corner toast that never takes focus sums it up: `plugins: 5 of 50 updated, 87 commits -> :Git plugins report --last`. A sync that updated nothing only gets the toast `plugins: the sync updated nothing (50 checked)`: nothing is stored and the event does not fire. |
 | `"open"` | The same, and the report opens as with `:Git plugins report` (only when the sync updated something). |
 
-- Only `LazySync`: lazy.nvim fires it once, after the lock file is written
-  (`LazyUpdate` comes before that). Events within 200 ms are folded into one
-  build, and only one report runs at a time, so one sync means one report.
-- A sync that updated nothing says so (`the sync updated nothing`) instead of
-  repeating the previous update's numbers — the newest update run is compared
-  with the time of the sync (`plugins.run_window_s`).
+- The report is built on `LazySync`: lazy.nvim fires it once, after the lock
+  file is written (`LazyUpdate` comes before that). Events within 200 ms are
+  folded into one build. A sync that ends while another report is still being
+  built (a `:Git plugins report` on many clones, or the previous sync's) waits
+  for it and is built afterwards, so one sync means one report.
+- Whether the report is this sync's: `LazySyncPre` records when the sync
+  started, and the newest update of the report's run (a reflog time, i.e.
+  when the clone was checked out) must lie at or after that moment. A long
+  build step after the checkouts does not matter, and an earlier sync's run
+  is never announced again. When gitsuite was loaded only by the `LazySync`
+  itself (see below), the run is compared with the newest stored `updated`
+  report instead: the same run means the sync changed nothing.
 - A statusline chip or another notifier stays the consumer's business: it
   subscribes to `User GitsuitePluginsReported` (above), which fires for these
   reports too.
@@ -90,10 +96,12 @@ listens to lazy.nvim's own `User LazySync` event, in the named augroup
 
   Interactively, `:Git plugins report --no-open` does the same without the wait.
 
-gitsuite must be loaded when the event fires. With lazy.nvim lazy-loading it
-(`cmd = "Git"`, `event = "BufReadPost"`), add the event to its spec — lazy.nvim
-then loads gitsuite on the sync and re-fires the event into the groups the
-plugin just created:
+With lazy.nvim lazy-loading gitsuite (`cmd = "Git"`, `event = "BufReadPost"`),
+add `"User LazySync"` to its `event` list so a sync loads it. lazy.nvim loads
+the plugin from inside that event and then re-fires `User` into the plugin's
+new augroups *without a pattern*, so the `LazySync` listener `setup()` creates
+would miss that first sync; `setup()` therefore notices that it runs inside
+`User LazySync` and starts the hook for that sync itself:
 
 ```lua
 {

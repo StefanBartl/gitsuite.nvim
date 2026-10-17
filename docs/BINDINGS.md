@@ -20,7 +20,7 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 | --- | --- | --- |
 | `gitsuite_conflict_scan` | `BufReadPost`, `BufNewFile` | Scan file buffers for merge-conflict markers; highlight them and bind the buffer-local `co`/`ct`/`cb`/`c0`/`]x`/`[x` keys when one is found (only with `features.conflict`) |
 | `gitsuite_statusline` | `BufDelete`, `BufWipeout` | Forget a deleted buffer's statusline cache (registered once the statusline component is first loaded) |
-| `gitsuite_lazy_sync` | `User LazySync` | After `:Lazy sync`: build and store the `updated` plugin report, show a toast (and with `"open"` the report) -- only with `plugins.after_sync` other than `"off"` |
+| `gitsuite_lazy_sync` | `User LazySyncPre`, `User LazySync` | After `:Lazy sync`: build and store the `updated` plugin report, show a toast (and with `"open"` the report) -- only with `plugins.after_sync` other than `"off"` |
 
 ## User commands
 

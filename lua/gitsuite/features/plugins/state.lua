@@ -39,6 +39,7 @@ M.MAX_READ = 64 * 1024 * 1024
 ---@field readonly? string   Why the store must not be written (newer format, not a plain file).
 ---@field readonly_kind? "newer"|"not_file"|"unopenable"|"unmovable"  What `readonly` is about, for advice that fits the cause.
 ---@field dropped? integer   Reports in the file that were not usable and are left out.
+---@field discarded? boolean The build's `accept` turned the report down: it was not stored.
 
 ---@return string
 function M.path()

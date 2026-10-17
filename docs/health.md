@@ -71,7 +71,7 @@ What `:Git plugins report` keeps. The check only looks; an unreadable file is mo
 | ℹ️ `plugins.mode = ..., keep_reports = ..., max_age_days = ...` | The retention settings in effect |
 | ℹ️ `lazy integration: off (plugins.after_sync)` | The `:Lazy sync` hook is off (default); no listener is registered |
 | ✅ `lazy integration: toast (listening on User LazySync)` / `open (...)` | The hook is on and its listener is registered (see [integrations.md](integrations.md#lazy-sync-hook)) |
-| ℹ️ `lazy integration: toast, not listening yet (...)` | The hook is configured, but gitsuite's `setup()` has not run yet (lazy-loaded); add `"User LazySync"` to the spec's `event` list so it is loaded when a sync ends |
+| ℹ️ `lazy integration: toast, not listening yet (...)` | The hook is configured, but gitsuite's `setup()` has not run yet (lazy-loaded); add `"User LazySync"` to the spec's `event` list: the sync that loads it is then reported as well |
 
 ## gitsuite: plugin state
 

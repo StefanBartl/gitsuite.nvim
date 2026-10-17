@@ -140,10 +140,14 @@ The output is Markdown (a buffer, the clipboard or a file); a rollback, a diverg
 branch and a force-pushed-away old state are named as such. Reports are kept in
 `stdpath("state")/gitsuite/plugins_reports.json` and `User GitsuitePluginsReported`
 fires after each. It reads local state only -- no install, update, pin or clean.
-`--no-open` stores the report and shows only a one-line summary. With
+`--no-open` stores the report and opens no buffer, only a one-line summary
+(`--out=clipboard`/`--out=path` still copy or write it). With
 `plugins.after_sync = "toast"` (or `"open"`) the `updated` report is built after
-every `:Lazy sync` and summed up in a toast that never takes focus (default
-`"off"`: no listener). See docs/commands.md and docs/integrations.md.
+every `:Lazy sync` that updated something and summed up in a toast that never
+takes focus; a sync that updated nothing stores nothing and only says so
+(default `"off"`: no listener). A lazy-loaded gitsuite with
+`event = "User LazySync"` reports the sync that loads it too. See
+docs/commands.md and docs/integrations.md.
 
 ==============================================================================
 5. CONFIGURATION                                                *gitsuite-config*
@@ -157,7 +161,8 @@ every `:Lazy sync` and summed up in a toast that never takes focus (default
     dashboard = { base_dir = "", extra_paths = {}, groups = {}, pull_scope = "behind" },
     plugins = { sources = "auto", roots = {}, log_limit = 50, timeout_ms = 30000,
       include_local = false, mode = "updated", max_commits = 1000, parallel = 4,
-      run_window_s = 300, merges = false, keep_reports = 20, max_age_days = 365 },
+      run_window_s = 300, merges = false, keep_reports = 20, max_age_days = 365,
+      after_sync = "off" },
     progress_style = "auto",
   })
 <

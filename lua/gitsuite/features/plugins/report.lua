@@ -89,6 +89,7 @@ M.MAX_BODY = 2048
 ---@field now? integer
 ---@field store_path? string                   Report store (default: below `stdpath("state")`).
 ---@field persist? boolean                     Write the report to the store (default true).
+---@field accept? fun(report: GitSuite.Plugins.Report): boolean  Asked before storing: false = do not store it (`info.discarded` is then set).
 ---@field on_progress? fun(done: integer, total: integer)
 
 ---Fill the fields every entry has, from the plugin and what its clone says.
@@ -572,6 +573,10 @@ function M.build(opts, on_done)
     }
 
     local info = store_info
+    if opts.accept and not opts.accept(report) then
+      on_done(report, vim.tbl_extend("force", {}, store_info, { discarded = true }))
+      return
+    end
     if opts.persist ~= false and #refs == 0 then
       -- An empty report would become the newest one and push real reports out
       -- of the store.
