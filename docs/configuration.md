@@ -144,9 +144,11 @@ of this config without ever rewriting it — see
 `pull_scope` decides which button `gP` (pull the whole page) focuses first.
 `gP` always asks "Only behind (N)" or "All (M)"; "behind" counts the
 repositories whose upstream is ahead of them as of their last fetch. A
-repository without an upstream, or without any fetch recorded yet (no
-non-empty `FETCH_HEAD`), has no trustworthy behind count: the prompt names
-it, and "Only behind" skips it — fetch first (`gf`) or pick "All".
+repository without an upstream, or one that shows nothing behind but has no
+fetch recorded yet (no non-empty `FETCH_HEAD`), has no trustworthy behind
+count: the prompt names it, and "Only behind" skips it — fetch first (`gf`)
+or pick "All". A repository that already shows commits behind is pulled by
+"Only behind" either way.
 
 ## `plugins`
 

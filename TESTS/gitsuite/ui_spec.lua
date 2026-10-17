@@ -192,9 +192,17 @@ describe("gitsuite.features.ui", function()
       vim.notify = function(msg, level)
         if level == vim.log.levels.ERROR then errors[#errors + 1] = msg end
       end
+      -- terminal.nvim is absent unless a case installs a fake: a real one
+      -- found on the runtimepath must never change which route is tested.
+      package.loaded["terminal"] = nil
+      package.preload["terminal"] = function()
+        error("terminal.nvim is not installed in this spec")
+      end
     end)
 
     after_each(function()
+      package.loaded["terminal"] = nil
+      package.preload["terminal"] = nil
       vim.fn.executable = original_executable
       vim.fn.jobstart = original_jobstart
       vim.notify = original_notify
@@ -281,6 +289,75 @@ describe("gitsuite.features.ui", function()
       vim.cmd("Git ui lazygit")
       assert.equals(1, #spawned)
       assert.equals(real(original_cwd), real(spawned[1].argv[3]))
+    end)
+
+    -- With terminal.nvim installed, the float, job and exit handling are
+    -- terminal.nvim's (`run(argv, { direct = true })`); the own float and
+    -- `jobstart` are only the fallback.
+    describe("with terminal.nvim", function()
+      local runs
+
+      before_each(function()
+        runs = {}
+        package.loaded["terminal"] = {
+          run = function(cmd, opts)
+            runs[#runs + 1] = { cmd = cmd, opts = opts }
+            return true, nil, { name = "lazygit" }
+          end,
+        }
+      end)
+
+      it("hands the argv to terminal.run as a direct float job, no own float", function()
+        local repo = scratch .. "/repo"
+        git_init(repo)
+        vim.fn.mkdir(repo .. "/sub", "p")
+
+        ui.lazygit(repo .. "/sub")
+
+        assert.equals(0, #errors, table.concat(errors, "\n"))
+        assert.equals(0, #spawned, "the own jobstart route is not used")
+        assert.equals(#wins_before, #vim.api.nvim_list_wins(), "no own float is opened")
+        assert.equals(1, #runs)
+        local cmd, opts = runs[1].cmd, runs[1].opts
+        assert.same({ "lazygit", "-p" }, { cmd[1], cmd[2] })
+        assert.equals(real(repo), real(cmd[3]), "-p is the repo root")
+        assert.equals(real(repo), real(opts.cwd), "the job cwd is the repo root")
+        assert.is_true(opts.direct)
+        assert.equals("lazygit", opts.name)
+        assert.equals("float", opts.layout)
+        assert.equals("always", opts.close)
+        assert.equals("function", type(opts.on_open))
+      end)
+
+      it("on_open maps q/<Esc> in the buffer; a pane without one is fine", function()
+        local repo = scratch .. "/repo"
+        git_init(repo)
+        ui.lazygit(repo)
+        assert.equals(1, #runs)
+
+        local buf = vim.api.nvim_create_buf(false, true)
+        runs[1].opts.on_open({ name = "lazygit", bufnr = buf })
+        vim.api.nvim_buf_call(buf, function()
+          assert.equals(1, vim.fn.maparg("q", "n", false, true).buffer)
+          assert.equals(1, vim.fn.maparg("<Esc>", "t", false, true).buffer)
+        end)
+        vim.api.nvim_buf_delete(buf, { force = true })
+
+        -- A multiplexer backend hands a pane, not a buffer.
+        runs[1].opts.on_open({ name = "lazygit", pane = "%1" })
+        assert.equals(0, #errors, table.concat(errors, "\n"))
+      end)
+
+      it("a terminal module without run() falls back to the own float", function()
+        package.loaded["terminal"] = {}
+        local repo = scratch .. "/repo"
+        git_init(repo)
+
+        ui.lazygit(repo)
+
+        assert.equals(0, #runs)
+        assert.equals(1, #spawned, "the own jobstart route is used")
+      end)
     end)
   end)
 

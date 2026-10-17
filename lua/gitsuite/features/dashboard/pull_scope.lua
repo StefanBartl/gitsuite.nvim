@@ -43,7 +43,8 @@ local function names_of(records, indices)
 end
 
 ---Splits `records` into the repositories known to be behind, the ones whose
----behind state is unknown (no upstream, or never fetched), and all of them.
+---behind state is unknown (no upstream, or a zero count with no fetch recorded),
+---and all of them.
 ---@param records RepoDashboardRecord[]
 ---@param fetch_time? fun(path: string): integer|nil Last fetch of a repository; defaults to `FETCH_HEAD`'s mtime
 ---@return integer[] behind, integer[] unknown, integer[] all
@@ -52,10 +53,15 @@ function M.classify(records, fetch_time)
   local behind, unknown, all = {}, {}, {}
   for i, r in ipairs(records) do
     all[#all + 1] = i
-    if not r.has_upstream or fetch_time(r.path) == nil then
+    if not r.has_upstream then
       unknown[#unknown + 1] = i
     elseif (r.behind or 0) > 0 then
+      -- A positive count is proof on its own (the tracking ref is past HEAD),
+      -- whatever wrote it: a clone, a fetch from another worktree, a `.git`
+      -- file `fetch_time` cannot read. Only a zero needs a fetch to be trusted.
       behind[#behind + 1] = i
+    elseif fetch_time(r.path) == nil then
+      unknown[#unknown + 1] = i
     end
   end
   return behind, unknown, all

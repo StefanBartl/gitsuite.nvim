@@ -259,9 +259,10 @@ describe("gitsuite.features.dashboard", function()
       return { name = name, path = "/r/" .. name, behind = behind, has_upstream = has_upstream }
     end
 
-    -- "never" was not fetched yet; every other repository has a FETCH_HEAD.
+    -- "never" and "never-behind" were not fetched yet; every other repository
+    -- has a FETCH_HEAD.
     local function fetch_time(path)
-      if path == "/r/never" then return nil end
+      if path == "/r/never" or path == "/r/never-behind" then return nil end
       return 1700000000
     end
 
@@ -269,12 +270,12 @@ describe("gitsuite.features.dashboard", function()
       rec("up-to-date", 0, true),
       rec("behind", 3, true),
       rec("no-upstream", 0, false),
-      rec("never", 2, true),
+      rec("never", 0, true),
       rec("behind2", 1, true),
     }
 
     it(
-      "classify: behind needs an upstream and a fetch; the rest is unknown, not dropped",
+      "classify: a zero count needs an upstream and a fetch; the rest is unknown, not dropped",
       function()
         local behind, unknown, all = pull_scope.classify(records, fetch_time)
         assert.same({ 2, 5 }, behind)
@@ -282,6 +283,15 @@ describe("gitsuite.features.dashboard", function()
         assert.same({ 1, 2, 3, 4, 5 }, all)
       end
     )
+
+    it("classify: a positive behind count is behind even without a recorded fetch", function()
+      -- A fresh clone or a linked worktree has no FETCH_HEAD `fetch_time` can
+      -- read, yet its tracking ref already shows commits to pull.
+      local behind, unknown =
+        pull_scope.classify({ rec("never-behind", 2, true), rec("never", 0, true) }, fetch_time)
+      assert.same({ 1 }, behind)
+      assert.same({ 2 }, unknown)
+    end)
 
     it("plan: default scope focuses 'Only behind', names the unknown repositories", function()
       local plan = pull_scope.plan(records, nil, fetch_time)
@@ -314,12 +324,12 @@ describe("gitsuite.features.dashboard", function()
     it("classify: the default fetch lookup reads FETCH_HEAD of a real clone", function()
       local repo = tmpdir("-gitsuite-pull-scope")
       git(repo, { "init", "-q", "-b", "main" })
-      local r = { name = "x", path = repo, behind = 1, has_upstream = true }
+      local r = { name = "x", path = repo, behind = 0, has_upstream = true }
       local _, unknown = pull_scope.classify({ r })
       assert.same({ 1 }, unknown, "no FETCH_HEAD yet")
       vim.fn.writefile({ "deadbeef\t\tbranch 'main' of x" }, repo .. "/.git/FETCH_HEAD")
-      local behind = pull_scope.classify({ r })
-      assert.same({ 1 }, behind)
+      local _, known_unknown = pull_scope.classify({ r })
+      assert.same({}, known_unknown, "a fetch makes the zero count trustworthy")
       pcall(vim.fn.delete, repo, "rf")
     end)
   end)

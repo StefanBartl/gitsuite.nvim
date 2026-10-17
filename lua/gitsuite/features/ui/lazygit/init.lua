@@ -70,26 +70,53 @@ local function resolve_repo_dir(repo_dir)
   return git.repo_root({ dir = dir }) or dir
 end
 
----Open lazygit in a floating terminal. Without `repo_dir` it is rooted at the
----repo of the current cwd; with one, at the repo containing that directory
----(any subdirectory of a work tree works, not only its root).
----@param repo_dir? string
+---@internal
+--- terminal.nvim's facade when it is installed and new enough to offer
+--- `run(argv, { direct = true })`; nil otherwise (optional dependency, the
+--- own float below is the fallback).
+---@return table|nil
+local function terminal_facade()
+  local ok, term = pcall(require, "terminal")
+  if ok and type(term) == "table" and type(term.run) == "function" then return term end
+  return nil
+end
+
+---@internal
+--- Start lazygit through terminal.nvim: it owns the float, the job, the
+--- exit handling (`close = "always"`) and the identity (a second
+--- `:Git ui lazygit` replaces the earlier one instead of stacking floats).
+--- A failure is reported by terminal.nvim itself, so nothing is added here.
+---@param term table terminal.nvim's facade
+---@param root string repo root
 ---@return nil
-function M.open(repo_dir)
-  if vim.fn.executable("lazygit") ~= 1 then
-    notify.error(
-      'ui lazygit: the "lazygit" executable is not on $PATH -- see https://github.com/jesseduffield/lazygit#installation'
-    )
-    return
-  end
+local function open_via_terminal(term, root)
+  ---@type table<string, string>|nil
+  local env
+  -- The `nvr` bridge (O/<C-o>) needs $NVIM. A native terminal gets it from
+  -- Neovim anyway; a multiplexer pane (tmux/WezTerm backend) does not.
+  if vim.v.servername ~= "" then env = { NVIM = vim.v.servername } end
+  term.run(build_argv(root), {
+    direct = true,
+    name = "lazygit",
+    title = "lazygit",
+    cwd = root,
+    layout = "float",
+    float = { width = 0.9, height = 0.9 },
+    close = "always",
+    env = env,
+    on_open = function(handle)
+      -- Multiplexer backends have no Neovim buffer to map keys in.
+      local bufnr = type(handle) == "table" and handle.bufnr or nil
+      if bufnr and vim.api.nvim_buf_is_valid(bufnr) then setup_terminal_keymaps(bufnr) end
+    end,
+  })
+end
 
-  local root, err = resolve_repo_dir(repo_dir)
-  if not root then
-    notify.error("ui lazygit: " .. err)
-    return
-  end
-  repo_dir = root
-
+---@internal
+--- Fallback without terminal.nvim: an own float around `jobstart`.
+---@param repo_dir string repo root
+---@return nil
+local function open_own_float(repo_dir)
   local width = math.floor(vim.o.columns * 0.9)
   local height = math.floor(vim.o.lines * 0.9)
   local row = math.floor((vim.o.lines - height) / 2 - 1)
@@ -137,6 +164,36 @@ function M.open(repo_dir)
 
   setup_terminal_keymaps(bufnr)
   vim.cmd("startinsert")
+end
+
+---Open lazygit in a floating terminal. Without `repo_dir` it is rooted at the
+---repo of the current cwd; with one, at the repo containing that directory
+---(any subdirectory of a work tree works, not only its root). With
+---terminal.nvim installed the float is terminal.nvim's
+---(`require("terminal").run(argv, { direct = true })`); without it,
+---gitsuite.nvim's own.
+---@param repo_dir? string
+---@return nil
+function M.open(repo_dir)
+  if vim.fn.executable("lazygit") ~= 1 then
+    notify.error(
+      'ui lazygit: the "lazygit" executable is not on $PATH -- see https://github.com/jesseduffield/lazygit#installation'
+    )
+    return
+  end
+
+  local root, err = resolve_repo_dir(repo_dir)
+  if not root then
+    notify.error("ui lazygit: " .. err)
+    return
+  end
+
+  local term = terminal_facade()
+  if term then
+    open_via_terminal(term, root)
+    return
+  end
+  open_own_float(root)
 end
 
 ---Register the nvr bridge commands. Idempotent; called once from
