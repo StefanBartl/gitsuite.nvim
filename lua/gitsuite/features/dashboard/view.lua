@@ -44,6 +44,13 @@
 --- calls, and forty simultaneous pushes are a rate limit or an auth-prompt
 --- storm -- and every batch is confirmed first, because unlike a single row
 --- there is nothing on screen that says what is about to be touched.
+---
+--- A running batch does not freeze the table: every repository carries its own
+--- phase (`features.dashboard.repo_state`: pending -> fetching -> done/failed),
+--- shown in its STATE cell and counted in the title, and a row whose phase is
+--- settled can be pushed/pulled/fetched while the batch works through the rest.
+--- A per-repository lock keeps two writing `git` processes off the same
+--- repository; queued or in-flight rows refuse with a message instead.
 
 ---One highlight span produced by `M.render`. Rows and columns are 0-indexed
 ---byte offsets; `end_col = -1` means "to the end of the line".
@@ -69,6 +76,7 @@ local expand_path = require("lib.nvim.cross.fs.expand_path")
 local repo_actions = require("gitsuite.features.dashboard.actions")
 local repos = require("gitsuite.features.dashboard.repos")
 local dashboard_one = require("gitsuite.features.dashboard.status").dashboard_one
+local repo_state = require("gitsuite.features.dashboard.repo_state")
 local progress = require("gitsuite.util.progress")
 local notify = require("gitsuite.util.notify").notify
 local notify_success = require("gitsuite.util.notify").success
@@ -110,6 +118,11 @@ local _sort_index = 1
 local SCRATCH_NAME = "gitsuite://dashboard"
 local DEFAULT_PATH_OUT = vim.fn.stdpath("cache") .. "/gitsuite/dashboard.txt"
 local SPINNER = "⟳"
+---STATE-cell prefixes of a row the running batch has queued / failed on.
+local QUEUED = "·"
+local FAILED = "✗"
+---How often a batch retries a repository whose lock somebody else holds.
+local LOCK_RETRY_MS = 100
 
 ---Mark column, rendered as the first two cells of every row. Present (as two
 ---spaces) on unmarked rows too, so marking a repository never reflows the
@@ -345,7 +358,16 @@ function M.render(records)
     local state = r.state
     if r.state == "dirty" then state = ("dirty (%d)"):format(r.dirty) end
     local pending = _pending[i]
-    if pending then state = ("%s %s..."):format(SPINNER, pending) end
+    local phase = repo_state.phase(r.path)
+    if pending then
+      state = ("%s %s..."):format(SPINNER, pending)
+    elseif phase == "pending" then
+      state = ("%s %s queued"):format(QUEUED, repo_state.bulk_verb())
+    elseif phase == "fetching" then
+      state = ("%s %s..."):format(SPINNER, repo_state.bulk_verb())
+    elseif phase == "failed" then
+      state = ("%s %s failed"):format(FAILED, repo_state.bulk_verb())
+    end
     state_cells[i] = state
     age_cells[i] = _relative_age(r.last_commit)
 
@@ -433,7 +455,17 @@ function M.render(records)
     hls[#hls + 1] =
       { row = row, col = spans[BRANCH][1], end_col = spans[BRANCH][2], hl = HL.branch }
 
-    local state_hl = _pending[i] and HL.pending or HL[r.state] or HL.muted
+    local phase = repo_state.phase(r.path)
+    local state_hl
+    if _pending[i] or phase == "fetching" then
+      state_hl = HL.pending
+    elseif phase == "pending" then
+      state_hl = HL.muted
+    elseif phase == "failed" then
+      state_hl = HL.diverged
+    else
+      state_hl = HL[r.state] or HL.muted
+    end
     hls[#hls + 1] = { row = row, col = spans[STATE][1], end_col = spans[STATE][2], hl = state_hl }
     hls[#hls + 1] = { row = row, col = spans[AGE][1], end_col = spans[AGE][2], hl = HL.muted }
   end
@@ -459,6 +491,13 @@ function M.summary(records)
   -- appending keeps the leading counts from shifting sideways as marks come
   -- and go (see `_redraw`, which re-stamps this onto the float's border).
   if marked > 0 then parts[#parts + 1] = ("%d marked"):format(marked) end
+  -- A running batch says how far it got, so "which rows are still running" is
+  -- answered without scrolling the table for spinners.
+  local verb = repo_state.bulk_verb()
+  if verb then
+    local c = repo_state.counts()
+    parts[#parts + 1] = ("%s %d/%d"):format(verb, c.done + c.failed, c.total)
+  end
 
   -- The active page's name, when there is more than one -- `_last_view` is
   -- always set by the time this runs (`M.show` sets it before calling any
@@ -834,17 +873,20 @@ end
 ---@param action_fn fun(repo: string, on_done: fun(ok: boolean, err: string|nil): nil): nil One of `repo_actions.push/pull/fetch`
 ---@return nil
 local function _run_row_action(bufnr, records, verb, action_fn)
-  if _bulk_running then
-    notify(("A bulk %s is running - wait for it to finish"):format(_bulk_running), 3)
-    return
-  end
-
   local line = vim.api.nvim_win_get_cursor(0)[1]
   local idx = line - 1
   local record = records[idx]
   if not record then return end
   if _pending[idx] then
     notify(("%s: %s already running"):format(record.name, _pending[idx]), 3)
+    return
+  end
+  -- A running batch no longer blocks every row: only the rows it has not
+  -- settled yet refuse, and the lock keeps this action and any other writer
+  -- off the same repository (see `features.dashboard.repo_state`).
+  local acquired, why = repo_state.acquire(record.path, verb)
+  if not acquired then
+    notify(("%s: %s"):format(record.name, why), 3)
     return
   end
 
@@ -860,8 +902,9 @@ local function _run_row_action(bufnr, records, verb, action_fn)
   _pending[idx] = verb
   _redraw(bufnr, records)
 
-  action_fn(record.path, function(ok, err)
+  local function on_done(ok, err)
     vim.schedule(function()
+      repo_state.unlock(record.path)
       -- `_switch_page`/`_rescan_all`/the sort key all refuse to run while
       -- any `_pending` entry is set (guarding exactly this), but a stale
       -- completion for a row that *was* mid-flight before one of those
@@ -880,7 +923,12 @@ local function _run_row_action(bufnr, records, verb, action_fn)
       end
       if still_here then _refresh_row(bufnr, records, idx) end
     end)
-  end)
+  end
+
+  -- A synchronous throw must not leave the lock held: the repository would
+  -- refuse every later action until Neovim restarts.
+  local started, start_err = pcall(action_fn, record.path, on_done)
+  if not started then on_done(false, tostring(start_err)) end
 end
 
 ---@private
@@ -908,20 +956,23 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
     notify(("A bulk %s is already running"):format(_bulk_running), 3)
     return
   end
+  ---@type string[]
+  local paths = {}
   for _, idx in ipairs(indices) do
-    if _pending[idx] then
-      notify(("%s: %s already running"):format(records[idx].name, _pending[idx]), 3)
+    local busy = _pending[idx] or repo_state.holder(records[idx].path)
+    if busy then
+      notify(("%s: %s already running"):format(records[idx].name, busy), 3)
       return
     end
+    paths[#paths + 1] = records[idx].path
   end
 
-  -- Every target is marked pending up front, so the whole batch is visible as
-  -- a column of spinners instead of one row lighting up at a time with no clue
-  -- what else is queued behind it.
+  -- Every target is queued up front, so the whole batch is visible as a column
+  -- of "queued" cells instead of one row lighting up at a time with no clue
+  -- what else is behind it. Per-repository phases (not `_pending`) carry this,
+  -- so a row the batch is through with can take its own action meanwhile.
   _bulk_running = verb
-  for _, idx in ipairs(indices) do
-    _pending[idx] = verb
-  end
+  repo_state.begin_bulk(verb, paths)
   _redraw(bufnr, records)
 
   local handle = progress.create(("%s %d repositories"):format(verb, total), total)
@@ -936,10 +987,9 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
 
   local function finish()
     _bulk_running = nil
-    -- Clears the queue's own spinners as well as the cancelled tail's.
-    for _, idx in ipairs(indices) do
-      _pending[idx] = nil
-    end
+    -- Clears the queue's own phases as well as the cancelled tail's. Row
+    -- actions started meanwhile keep their `_pending` spinner and lock.
+    repo_state.end_bulk()
     _redraw(bufnr, records)
 
     if handle then handle:finish(("%s: %d of %d repositories"):format(verb, succeeded, total)) end
@@ -963,11 +1013,21 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
 
     local idx = indices[position]
     local record = records[idx]
+
+    -- Row actions only start on settled rows and this one is still queued, so
+    -- the lock is normally free; should anything else hold it, the queue waits
+    -- for it rather than starting a second `git` on the same repository.
+    if not repo_state.try_lock(record.path, verb) then
+      vim.defer_fn(step, LOCK_RETRY_MS)
+      return
+    end
+    repo_state.set_phase(record.path, "fetching")
+    _redraw(bufnr, records)
     if handle then handle:update({ text = record.name, current = position - 1, total = total }) end
 
-    action_fn(record.path, function(ok, err)
+    local function on_done(ok, err)
       vim.schedule(function()
-        _pending[idx] = nil
+        repo_state.unlock(record.path)
         if ok then
           succeeded = succeeded + 1
         else
@@ -978,17 +1038,22 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
         -- fired off in parallel, the last repository's re-read would still be
         -- in flight when `finish()` draws the table and announces the batch as
         -- done, leaving that one row showing the state it had before its own
-        -- push.
+        -- push. The phase settles only after that re-read, so a row action
+        -- started on it never races the batch's own stale refresh.
         dashboard_one(record.path, function(new_record)
           vim.schedule(function()
             if new_record then records[idx] = new_record end
+            repo_state.set_phase(record.path, ok and "done" or "failed")
             _redraw(bufnr, records)
             position = position + 1
             step()
           end)
         end)
       end)
-    end)
+    end
+
+    local started, start_err = pcall(action_fn, record.path, on_done)
+    if not started then on_done(false, tostring(start_err)) end
   end
 
   step()
@@ -1263,6 +1328,7 @@ local function _switch_page(ctx, delta)
       _marks = {}
       _sort_index = 1
       _bulk_running = nil
+      repo_state.end_bulk()
       _discovery_order = vim.deepcopy(records)
       for i = #ctx.records, 1, -1 do
         ctx.records[i] = nil

@@ -120,6 +120,15 @@ each push/pull/fetch/update runs through `lib.nvim.progress` (`progress_style`,
 see [configuration.md](configuration.md)) so a statusline component can show
 it, and re-reads just its own row afterwards rather than re-scanning the page.
 
+A running batch does not lock the whole dashboard. Each repository in it is
+`queued` (`· fetch queued`), in flight (`⟳ fetch...`), done, or failed
+(`✗ fetch failed`), and the title counts how far the batch got
+(`fetch 4/12`). A row the batch is done with (or failed on) takes `p`/`P`/`f`
+right away, in parallel with the rest of the batch; a queued or in-flight row
+refuses with a message. A lock per repository keeps two writing `git`
+processes off the same repository. Sorting, re-scanning, page switches and a
+second batch still wait for the running one.
+
 ## Internal (not typed by hand)
 
 `GitsuiteLazygitBadd`/`GitsuiteLazygitReplace` are lazygit's `O`/`<C-o>`
