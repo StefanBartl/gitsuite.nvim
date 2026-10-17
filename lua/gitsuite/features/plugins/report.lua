@@ -21,10 +21,12 @@
 --- the report itself (`state`).
 
 local async = require("lib.nvim.async")
+local breaking = require("gitsuite.features.plugins.breaking")
 local config = require("gitsuite.config")
 local gitfs = require("gitsuite.features.plugins.gitfs")
 local gitlog = require("gitsuite.features.plugins.gitlog")
 local runs = require("gitsuite.features.plugins.runs")
+local semver = require("gitsuite.features.plugins.semver")
 local sources = require("gitsuite.features.plugins.sources")
 local state = require("gitsuite.features.plugins.state")
 local target = require("gitsuite.features.plugins.target")
@@ -44,6 +46,8 @@ M.MAX_BODY = 2048
 ---@field author string
 ---@field time? integer  Committer time.
 ---@field side? "<"|">"  For a symmetric range: which side the commit is on.
+---@field dirs? string[]   Directories it changed (at most `MAX_PATHS`).
+---@field gone? string[]   Lua files it deleted (at most `MAX_PATHS`).
 
 ---@class GitSuite.Plugins.ReportEntry
 ---@field name string
@@ -65,6 +69,14 @@ M.MAX_BODY = 2048
 ---@field fetched_at? integer
 ---@field locked? boolean
 ---@field merges? boolean     Whether merge commits were kept (part of what a cached entry answers).
+---@field order? "topo"        The commits are in topological order (then "commit i of n" can be counted).
+---@field tags? { range: GitSuite.Plugins.ReportTag[], before: GitSuite.Plugins.ReportTag[] }  Releases in the range and the highest ones before it.
+---@field convention? { conventional: integer, total: integer }  Conventional subjects among the newest (up to 100) commits of the new state.
+
+---@class GitSuite.Plugins.ReportTag
+---@field name string
+---@field subject? string  First line of the tag message.
+---@field time? integer
 
 ---@class GitSuite.Plugins.Report
 ---@field version integer
@@ -180,11 +192,55 @@ local function finite_time(t)
   return t
 end
 
+---Directories and removed Lua modules kept per commit (a commit that touches
+---100,000 files must not make the stored report huge).
+M.MAX_PATHS = 8
+
+---Where a changed file lives, for the "changed directories" of the summary:
+---two levels below `lua/` and the other folders a plugin has (`lua/foo`,
+---`queries/kotlin`), one level elsewhere, `.` for the top.
+---@param path string
+---@return string
+local function dir_of(path)
+  local first, second, rest = path:match("^([^/]+)/([^/]+)/(.+)$")
+  if first and rest then return first .. "/" .. second end
+  first = path:match("^([^/]+)/[^/]+$")
+  return first or "."
+end
+
+---The directories and the removed Lua files of a commit, from its file list.
+---@param files Lib.Git.LogFile[]|nil
+---@return string[]|nil dirs
+---@return string[]|nil gone
+local function paths_of(files)
+  if type(files) ~= "table" then return nil, nil end
+  local seen, dirs, gone = {}, {}, {}
+  for _, f in ipairs(files) do
+    local path = type(f) == "table" and f.path
+    if type(path) == "string" then
+      local d = text.utf8(cap(dir_of(path), M.MAX_LINE))
+      if not seen[d] then
+        seen[d] = true
+        dirs[#dirs + 1] = d
+      end
+      if f.status == "D" and path:match("^lua/.+%.lua$") and #gone < M.MAX_PATHS then
+        gone[#gone + 1] = text.utf8(cap(path, M.MAX_LINE))
+      end
+    end
+  end
+  table.sort(dirs)
+  for i = #dirs, M.MAX_PATHS + 1, -1 do
+    dirs[i] = nil
+  end
+  return dirs, (#gone > 0 and gone or nil)
+end
+
 ---@param commit Lib.Git.LogEntry
 ---@return GitSuite.Plugins.ReportCommit
 local function to_commit(commit)
   local body = commit.body or ""
   if #body > M.MAX_BODY then body = body:sub(1, M.MAX_BODY) .. "…" end
+  local dirs, gone = paths_of(commit.files)
   return {
     sha = commit.sha,
     subject = text.utf8(cap(commit.subject or "", M.MAX_LINE)),
@@ -192,6 +248,8 @@ local function to_commit(commit)
     author = text.utf8(cap(commit.author or "", M.MAX_LINE)),
     time = finite_time(commit.commit_time),
     side = (commit.side == "<" or commit.side == ">") and commit.side or nil,
+    dirs = dirs,
+    gone = gone,
   }
 end
 
@@ -210,6 +268,7 @@ local function apply_log(entry, entries, max)
   end
   entry.ahead, entry.behind = ahead, behind
   entry.status = runs.direction(ahead, behind)
+  entry.order = "topo"
   entry.truncated = #entries > max or nil
   if entry.truncated then
     -- `max_count` cuts the whole symmetric difference, so a one-sided answer may
@@ -233,6 +292,89 @@ end
 ---The answers a `from...to` log can give; only these are taken from the store.
 ---@type table<string, true>
 local DIRECTIONS = { forward = true, rollback = true, diverged = true, same = true }
+
+---Tags kept per plugin: in the range, and the highest stable releases before it.
+M.MAX_TAGS_RANGE = 50
+M.MAX_TAGS_BEFORE = 5
+
+---How many subjects the convention check looks at.
+M.CONVENTION_SAMPLE = 100
+
+---@param tags Lib.Git.Tag[]
+---@param max integer
+---@param stable_only boolean
+---@return GitSuite.Plugins.ReportTag[]
+local function keep_tags(tags, max, stable_only)
+  local out = {}
+  for _, t in ipairs(tags) do
+    if #out >= max then break end
+    local v = semver.version(t.name)
+    if t.commit and (not stable_only or (v and not v.prerelease)) then
+      out[#out + 1] = {
+        name = text.utf8(cap(t.name or "", M.MAX_LINE)),
+        subject = text.utf8(cap(t.subject or "", M.MAX_LINE)),
+        time = finite_time(t.time),
+      }
+    end
+  end
+  return out
+end
+
+---What the breaking digest needs beyond the commit list, for an entry whose
+---range was just read: the releases in the range (only when the clone has
+---tags at all -- `gitfs` tells without a process) and whether the project uses
+---conventional commits (from the range itself when it has enough commits,
+---else from the newest commits of the new state). Each is one more process at
+---most; a failure leaves the field out, the entry stands.
+---@param entry GitSuite.Plugins.ReportEntry
+---@param from string
+---@param rev string
+---@param done fun()
+local function read_extras(entry, from, rev, done)
+  if entry.status ~= "forward" and entry.status ~= "diverged" then return done() end
+  local steps = {}
+  local new = {}
+  for _, c in ipairs(entry.commits or {}) do
+    if entry.status == "forward" or c.side == ">" then new[#new + 1] = c.subject end
+  end
+  if #new >= M.CONVENTION_SAMPLE then
+    local c = breaking.convention(new)
+    entry.convention = { conventional = c.conventional, total = c.total }
+  else
+    steps[#steps + 1] = function(next_step)
+      gitlog.subjects(entry.dir, rev, M.CONVENTION_SAMPLE, function(subjects)
+        if subjects then
+          local c = breaking.convention(subjects)
+          entry.convention = { conventional = c.conventional, total = c.total }
+        end
+        next_step()
+      end)
+    end
+  end
+  if #gitfs.tag_names(entry.dir) > 0 then
+    steps[#steps + 1] = function(next_step)
+      gitlog.tags(entry.dir, rev, from, function(range)
+        if not range then return next_step() end
+        gitlog.tags(entry.dir, from, nil, function(before)
+          if before then
+            entry.tags = {
+              range = keep_tags(range, M.MAX_TAGS_RANGE, false),
+              before = keep_tags(before, M.MAX_TAGS_BEFORE, true),
+            }
+          end
+          next_step()
+        end)
+      end)
+    end
+  end
+  local i = 0
+  local function step()
+    i = i + 1
+    if steps[i] then return steps[i](step) end
+    done()
+  end
+  step()
+end
 
 ---@class GitSuite.Plugins.Job
 ---@field entry GitSuite.Plugins.ReportEntry
@@ -416,6 +558,45 @@ local function plan_pending(refs, ctx)
   return ctx.rows, jobs, {}
 end
 
+---The tree-sitter languages that have a parser installed: every
+---`parser/<lang>.<ext>` on the runtimepath plus `stdpath("data")/site/parser`
+---(the extension depends on the platform and the installer: `.so`, `.dll`,
+---`.dylib`). Reads directory listings only.
+---@return table<string, true>
+function M.installed_parsers()
+  local set = {}
+  local function add(path)
+    local name, ext = vim.fs.basename(path):match("^(.+)%.(%w+)$")
+    if name and (ext == "so" or ext == "dll" or ext == "dylib") then set[name] = true end
+  end
+  for _, path in ipairs(vim.api.nvim_get_runtime_file("parser/*", true)) do
+    add(path)
+  end
+  local site = vim.fs.joinpath(vim.fn.stdpath("data") --[[@as string]], "site", "parser")
+  for name, kind in vim.fs.dir(site) do
+    if kind == "file" or kind == "link" then add(name) end
+  end
+  return set
+end
+
+---What the breaking digest of a report is judged against: the running Neovim,
+---the installed parsers, and the `plugins.breaking` settings. Read when a report
+---is shown (it is not stored: install a parser and the next view says so).
+---@return GitSuite.Plugins.ClassifyContext
+function M.context()
+  local v = vim.version()
+  return {
+    nvim = { major = v.major, minor = v.minor, patch = v.patch },
+    parsers = M.installed_parsers(),
+    breaking = config.get().plugins.breaking,
+  }
+end
+
+---@class GitSuite.Plugins.ClassifyContext
+---@field nvim? { major: integer, minor: integer, patch: integer }
+---@field parsers? table<string, true>
+---@field breaking? GitSuite.Config.PluginsBreaking
+
 ---Build a report. Asynchronous (one git process per changed plugin, `parallel`
 ---at a time); `on_done` is called once, scheduled.
 ---@param opts GitSuite.Plugins.BuildOpts
@@ -463,11 +644,14 @@ function M.build(opts, on_done)
     local cached = j.cache_to and cache[state.cache_key(entry.dir, j.from, j.cache_to)]
     -- Only an answer computed under the same settings and not cut short stands
     -- in for the real thing: the range is fixed, what was asked of it is not.
+    -- (an entry stored before the commits came in topological order with
+    -- their directories is read again: the range is the same, the answer is not)
     if
       cached
       and type(cached.commits) == "table"
       and DIRECTIONS[cached.status]
       and cached.merges == cfg.merges
+      and cached.order == "topo"
       and not cached.truncated
       and #cached.commits <= max
     then
@@ -476,6 +660,9 @@ function M.build(opts, on_done)
       entry.behind = type(cached.behind) == "number" and cached.behind or nil
       entry.commits = cached.commits
       entry.merges = cfg.merges
+      entry.order = "topo"
+      entry.tags = cached.tags
+      entry.convention = cached.convention
       return done(entry)
     end
     entry.merges = cfg.merges
@@ -483,11 +670,13 @@ function M.build(opts, on_done)
       entry.dir,
       j.from,
       j.rev,
-      { max_count = max + 1, no_merges = not cfg.merges },
+      { max_count = max + 1, no_merges = not cfg.merges, topo_order = true, name_status = true },
       function(entries, err)
         if entries then
           apply_log(entry, entries, max)
-          return done(entry)
+          return read_extras(entry, j.from, j.rev, function()
+            done(entry)
+          end)
         end
         gitlog.has_commit(entry.dir, j.from, function(has, has_err)
           if has == nil then

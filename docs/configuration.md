@@ -168,6 +168,11 @@ plugins = {
   keep_reports = 20,     -- stored reports, newest first
   max_age_days = 365,    -- older stored reports are dropped (the newest never is)
   after_sync = "off",    -- after :Lazy sync: "off" | "toast" | "open"
+  breaking = {           -- the breaking-change heuristic of the report
+    collapse_repeats = 5, -- fold a subject repeated this often into one group
+    ignore = {},          -- vim.regex patterns on the subject: never flagged
+    plugins = {},         -- per plugin: { ignore = {...}, force = { "<hash>" }, style = "none"|"conventional" }
+  },
 },
 ```
 
@@ -209,6 +214,29 @@ so); `"open"` also opens the report. Never in a headless instance. With a
 lazy-loaded gitsuite, add `"User LazySync"` to its `event` list: the sync that
 loads it is reported too (`setup()` notices it runs inside that event) — see
 [integrations.md](integrations.md#lazy-sync-hook).
+
+`breaking` tunes the breaking-change digest of each plugin in the report (see
+[commands.md](commands.md#breaking-changes-in-the-report)). `collapse_repeats`
+(1–1000) folds a subject that repeats this often (without its `type(scope):`
+prefix) into one expandable group; a commit with a `BREAKING CHANGE:` footer is
+never folded. `ignore` is a list of `vim.regex` patterns matched against the
+subject (a pattern that does not compile is a `setup()` issue). `plugins` holds
+per-plugin overrides by plugin name:
+
+```lua
+breaking = {
+  plugins = {
+    ["vim-matchup"] = { force = { "da04528e" } },   -- always breaking (7+ hex digits)
+    neogit = { style = "none" },                    -- no conventional commits here
+    ["mini.ai"] = { ignore = { [[\v^docs]] } },     -- more ignore patterns
+  },
+},
+```
+
+`style = "none"` marks the project as not using conventional commits (the
+report then says the classifier sees little there), `"conventional"` as using
+them; without it the newest 100 subjects decide (less than half conventional =
+"no marker convention recognized").
 
 ## `progress_style`
 

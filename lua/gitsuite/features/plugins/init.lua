@@ -147,7 +147,8 @@ end
 ---@param report GitSuite.Plugins.Report
 ---@param opts GitSuite.Plugins.ReportCmdOpts
 local function present(report, opts)
-  local lines = require("gitsuite.features.plugins.markdown").render(report)
+  local ok, ctx = pcall(require("gitsuite.features.plugins.report").context)
+  local lines = require("gitsuite.features.plugins.markdown").render(report, nil, ok and ctx or nil)
   view.show_markdown(lines, report.id, opts.out, opts.to)
 end
 

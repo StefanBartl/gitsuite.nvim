@@ -122,6 +122,45 @@ local function is_after_sync(v)
 end
 
 ---@internal
+---A list of `vim.regex` patterns that all compile (`plugins.breaking.ignore`):
+---a broken pattern is reported at setup, not skipped silently on every report.
+---@param v any
+---@return boolean
+local function is_patterns(v)
+  if not is_list_of_strings(v) then return false end
+  for _, p in ipairs(v) do
+    if not pcall(vim.regex, p) then return false end
+  end
+  return true
+end
+
+---@internal
+---`plugins.breaking.plugins`: per plugin name `{ ignore?, force?, style? }`.
+---@param v any
+---@return boolean
+local function is_breaking_plugins(v)
+  if type(v) ~= "table" then return false end
+  for name, spec in pairs(v) do
+    if type(name) ~= "string" or name == "" or type(spec) ~= "table" then return false end
+    for key, value in pairs(spec) do
+      if key == "ignore" then
+        if not is_patterns(value) then return false end
+      elseif key == "force" then
+        if not is_list_of_strings(value) then return false end
+        for _, sha in ipairs(value) do
+          if not sha:match("^%x+$") or #sha < 7 or #sha > 64 then return false end
+        end
+      elseif key == "style" then
+        if value ~= "none" and value ~= "conventional" then return false end
+      else
+        return false
+      end
+    end
+  end
+  return true
+end
+
+---@internal
 ---`dashboard.pull_scope`: which choice `gP`'s prompt focuses first.
 ---@param v any
 ---@return boolean
@@ -201,6 +240,14 @@ local KNOWN = {
     keep_reports = { ok = int_in(10000), expect = "a whole number from 1 to 10000" },
     max_age_days = { ok = int_in(36500), expect = "a whole number of days (1 to 36500)" },
     after_sync = { ok = is_after_sync, expect = '"off", "toast" or "open"' },
+    breaking = {
+      collapse_repeats = { ok = int_in(1000), expect = "a whole number from 1 to 1000" },
+      ignore = { ok = is_patterns, expect = "a list of valid vim.regex patterns" },
+      plugins = {
+        ok = is_breaking_plugins,
+        expect = 'a table of plugin name -> { ignore = { patterns }, force = { commit hashes }, style = "none"|"conventional" }',
+      },
+    },
   },
   progress_style = { ok = is_string, expect = "a non-empty string" },
 }

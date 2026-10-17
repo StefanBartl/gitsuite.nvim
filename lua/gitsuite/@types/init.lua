@@ -56,6 +56,18 @@
 ---@field keep_reports integer Stored reports (newest first).
 ---@field max_age_days integer Stored reports older than this are dropped.
 ---@field after_sync "off"|"toast"|"open"  After `:Lazy sync`: nothing (default), a toast with the `updated` report's summary, or the toast plus the report.
+---@field breaking GitSuite.Config.PluginsBreaking  The breaking-change heuristic of the report.
+
+--- `plugins.breaking`: how the report flags commits that may break the setup.
+---@class GitSuite.Config.PluginsBreaking
+---@field collapse_repeats integer  A subject (without its `type(scope):` prefix) repeated this often is folded into one group.
+---@field ignore string[]           `vim.regex` patterns on the subject: a match is never flagged.
+---@field plugins table<string, GitSuite.Config.PluginsBreakingPlugin>  Per plugin name.
+
+---@class GitSuite.Config.PluginsBreakingPlugin
+---@field ignore? string[]  More `vim.regex` patterns for this plugin.
+---@field force? string[]   Commit hashes (7+ hex digits, a prefix is enough) that are always breaking.
+---@field style? "none"|"conventional"  The project does not / does use conventional commits (instead of guessing from its last 100 subjects).
 
 --- The **resolved** configuration, as `config.get()` returns it: DEFAULTS
 --- deep-merged with the user's `setup()` table. Every field below is

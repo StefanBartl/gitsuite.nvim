@@ -101,6 +101,18 @@ local DEFAULTS = {
     -- all); "toast" = build and store the `updated` report, show a corner toast
     -- that never takes focus; "open" = also open the report.
     after_sync = "off",
+    -- The breaking-change heuristic of the report (commit messages only).
+    breaking = {
+      -- Commits whose subject (without its `type(scope):` prefix) repeats at
+      -- least this often are folded into one expandable group.
+      collapse_repeats = 5,
+      -- `vim.regex` patterns on the subject: a match is never flagged.
+      ignore = {},
+      -- Per plugin (by name): { ignore = { patterns }, force = { commit hashes
+      -- that are always breaking }, style = "none"|"conventional" (the project
+      -- does not / does use conventional commits, instead of guessing) }.
+      plugins = {},
+    },
   },
   -- Indicator style for `:Git dashboard`/`:Git dashboard update` over many
   -- repositories; "auto" picks fidget.nvim when installed, else `vim.notify`.

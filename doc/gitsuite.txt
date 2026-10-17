@@ -149,6 +149,24 @@ takes focus; a sync that updated nothing stores nothing and only says so
 `event = "User LazySync"` reports the sync that loads it too. See
 docs/commands.md and docs/integrations.md.
 
+                                                 *gitsuite-plugins-breaking*
+Each changed plugin of a report gets a deterministic summary (no AI): counts
+per conventional type, top scopes, authors and the share of bots, the changed
+directories, the releases of the range ("MAJOR v1.9.1 -> v2.0.0", or "no
+release tag in this update (last v0.9.3)", pre-releases left out) -- and a
+breaking-change digest from the commit messages: "breaking" (`type(scope)!:`,
+a `BREAKING CHANGE:` footer, a subject starting with `BREAKING`), "probably
+breaking" ("drop support", "requires Neovim x", a lower-case footer, "by
+default", a misplaced `!`), folded "hints" (remove/rename/deprecate, a
+removed Lua module) and one group for tree-sitter parser bumps; a subject
+repeated `plugins.breaking.collapse_repeats` times is folded too, except a
+commit with a breaking footer. Every flagged commit says where it sits in the
+update ("17/86") and whether it concerns you (a dropped older Neovim, a parser
+you have not installed). It is a heuristic: about half of what a person calls
+breaking is found, and 0 hits does not mean there is none -- the report says
+so. A plugin whose recent subjects are mostly not conventional commits is
+marked "no marker convention recognized".
+
 ==============================================================================
 5. CONFIGURATION                                                *gitsuite-config*
 >lua
@@ -162,7 +180,8 @@ docs/commands.md and docs/integrations.md.
     plugins = { sources = "auto", roots = {}, log_limit = 50, timeout_ms = 30000,
       include_local = false, mode = "updated", max_commits = 1000, parallel = 4,
       run_window_s = 300, merges = false, keep_reports = 20, max_age_days = 365,
-      after_sync = "off" },
+      after_sync = "off",
+      breaking = { collapse_repeats = 5, ignore = {}, plugins = {} } },
     progress_style = "auto",
   })
 <

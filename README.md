@@ -38,7 +38,10 @@ moved here from
 stays scoped to GitHub/GitLab/Codeberg discovery. And `:Git plugins`: after a
 `:Lazy sync`, `:Git plugins report` says which plugins the update changed and
 which commits that brought (or, with `--mode=pending`, what the next update
-would bring), and `:Git plugins log` shows the newest commits of one plugin
+would bring) — with a summary per plugin, the releases of the range and the
+commits that are marked breaking, each with its place in the update ("17/86")
+and whether it concerns your setup (a heuristic, and the report says so) — and
+`:Git plugins log` shows the newest commits of one plugin
 or any clone in a picker with a preview — both read local state only: no
 fetch, no install, no change to any clone.
 

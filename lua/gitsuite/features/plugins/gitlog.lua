@@ -243,12 +243,15 @@ end
 ---The commits between two states of a clone, **one** process: `from...to` with
 ---`--left-right`, so `entry.side` says which side a commit is on -- `>` only in
 ---`to`, `<` only in `from` (a rollback, a force-push, a branch switch), which is
----the direction without a second call. No file lists: names are not needed for
----the report and cost output.
+---the direction without a second call.
+---
+---`topo_order` lists parents after all their children (what "commit i of n"
+---counts in); `name_status` adds the changed files (`--no-renames`: trees only,
+---so it works offline in a blobless clone).
 ---@param dir string
 ---@param from string  A hash.
 ---@param to string    A hash or `refs/tags/<tag>^{commit}`.
----@param opts? { max_count?: integer, no_merges?: boolean }
+---@param opts? { max_count?: integer, no_merges?: boolean, topo_order?: boolean, name_status?: boolean }
 ---@param on_done fun(entries: Lib.Git.LogEntry[]|nil, err: string|nil) `vim.schedule`d.
 ---@return { stop: fun() } handle
 function M.range(dir, from, to, opts, on_done)
@@ -264,7 +267,52 @@ function M.range(dir, from, to, opts, on_done)
       left_right = true,
       max_count = opts.max_count,
       no_merges = opts.no_merges,
+      topo_order = opts.topo_order,
+      name_status = opts.name_status,
     }),
+    on_done
+  )
+end
+
+---The subjects of the newest `n` commits reachable from `rev` (merges left
+---out), one process -- what "does this project use conventional commits" is
+---judged on.
+---@param dir string
+---@param rev string  A hash or `refs/tags/<tag>^{commit}`.
+---@param n integer
+---@param on_done fun(subjects: string[]|nil, err: string|nil) `vim.schedule`d.
+---@return { stop: fun() } handle
+function M.subjects(dir, rev, n, on_done)
+  if not M.valid_rev(rev) then return refuse(on_done, nil, "not a usable revision") end
+  local blocked = preflight(dir)
+  if blocked then return refuse(on_done, nil, blocked) end
+  return git.log_async(rev, M.opts(dir, { max_count = n, no_merges = true }), function(entries, err)
+    if not entries then return on_done(nil, err) end
+    local out = {}
+    for i, e in ipairs(entries) do
+      out[i] = e.subject or ""
+    end
+    on_done(out, nil)
+  end)
+end
+
+---The tags reachable from `merged` and (when given) not from `no_merged` --
+---`git for-each-ref --merged=NEW --no-merged=OLD refs/tags/`, one process (plus
+---one per nesting level of a tag on a tag with an old git). Offline: a tag on a
+---blob the blobless clone lacks fails instead of being fetched.
+---@param dir string
+---@param merged string     A hash or `refs/tags/<tag>^{commit}`.
+---@param no_merged? string
+---@param on_done fun(tags: Lib.Git.Tag[]|nil, err: string|nil) `vim.schedule`d.
+---@return { stop: fun() } handle
+function M.tags(dir, merged, no_merged, on_done)
+  if not M.valid_rev(merged) or (no_merged ~= nil and not M.valid_rev(no_merged)) then
+    return refuse(on_done, nil, "not a usable revision")
+  end
+  local blocked = preflight(dir)
+  if blocked then return refuse(on_done, nil, blocked) end
+  return git.tags_async(
+    M.opts(dir, { merged = merged, no_merged = no_merged, sort = "version" }),
     on_done
   )
 end

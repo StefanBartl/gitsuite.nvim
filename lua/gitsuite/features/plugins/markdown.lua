@@ -8,6 +8,7 @@
 --- to, as of the last fetch). Commit text comes from other people's
 --- repositories and goes through `text` before it is printed.
 
+local summary = require("gitsuite.features.plugins.summary")
 local text = require("gitsuite.features.plugins.text")
 
 local M = {}
@@ -148,11 +149,35 @@ local function commit_list(lines, commits, side, heading)
   lines[#lines + 1] = ""
 end
 
+---The Breaking column of the overview: `!3` sure, `?1` probable, `~23`
+---grouped (parser updates, repeated subjects); `-` for none.
+---@param s GitSuite.Plugins.Summary|nil
+---@return string
+local function breaking_cell(s)
+  if not s or s.count == 0 then return "" end
+  local d, parts = s.digest, {}
+  if #d.sure > 0 then parts[#parts + 1] = "!" .. #d.sure end
+  if #d.probable > 0 then parts[#parts + 1] = "?" .. #d.probable end
+  local grouped = 0
+  for _, g in ipairs(d.groups) do
+    grouped = grouped + #g.members
+  end
+  if grouped > 0 then parts[#parts + 1] = "~" .. grouped end
+  return #parts > 0 and table.concat(parts, " ") or "-"
+end
+
 ---@param report table
 ---@param now? integer
+---@param ctx? GitSuite.Plugins.ClassifyContext  What the breaking digest is judged against (`report.context()`); without it, no relevance is shown.
 ---@return string[] lines
-function M.render(report, now)
+function M.render(report, now, ctx)
   now = now or os.time()
+  local summaries = {}
+  for i, entry in ipairs(report.plugins) do
+    if entry.commits and #entry.commits > 0 then
+      summaries[i] = summary.build(entry, summary.options(ctx, entry.name))
+    end
+  end
   local mode = report.mode
   local lines = {}
   local function add(s)
@@ -228,6 +253,10 @@ function M.render(report, now)
   add(
     "- Source: `reflog` exact · `snapshot ~` approximate (state of the last report) · `pending` as of the last fetch."
   )
+  add(
+    "- Breaking: `!` marked breaking · `?` probably breaking · `~` grouped (parser updates, repeated subjects). "
+      .. summary.HEURISTIC_NOTE
+  )
   add("")
 
   local counts = report.counts or {}
@@ -255,16 +284,17 @@ function M.render(report, now)
     add("Nothing to report.")
     add("")
   else
-    add("| Plugin | State | Range | Commits | Source |")
-    add("| --- | --- | --- | --- | --- |")
-    for _, entry in ipairs(shown) do
+    add("| Plugin | State | Range | Commits | Breaking | Source |")
+    add("| --- | --- | --- | --- | --- | --- |")
+    for i, entry in ipairs(shown) do
       local n = #(entry.commits or {})
       add(
-        ("| %s | %s | %s | %s | %s |"):format(
+        ("| %s | %s | %s | %s | %s | %s |"):format(
           cell(entry.name),
           cell(status_label(entry, mode)),
           range_label(entry),
           entry.commits and (tostring(n) .. (entry.truncated and "+" or "")) or "",
+          breaking_cell(summaries[i]),
           source_label(entry)
         )
       )
@@ -272,7 +302,7 @@ function M.render(report, now)
     add("")
   end
 
-  for _, entry in ipairs(shown) do
+  for i, entry in ipairs(shown) do
     local has_commits = entry.commits and #entry.commits > 0
     if has_commits or entry.reason then
       add(("## %s"):format(cell(entry.name)))
@@ -287,6 +317,7 @@ function M.render(report, now)
         add(esc(entry.reason))
         add("")
       end
+      if summaries[i] then vim.list_extend(lines, summary.markdown(summaries[i])) end
       if has_commits then
         if entry.status == "rollback" then
           commit_list(

@@ -146,6 +146,42 @@ local function count(v)
   return nil
 end
 
+---A short list of strings from a stored report (paths, directories), or nil.
+---@param list any
+---@param max integer  Entries kept.
+---@return string[]|nil
+local function short_list(list, max)
+  if not is_list(list) then return nil end
+  local out = {}
+  for _, v in ipairs(list) do
+    if #out >= max then break end
+    local s = str(v, 1024)
+    if s then out[#out + 1] = s end
+  end
+  return #out > 0 and out or nil
+end
+
+---Stored tags (`{ name, subject?, time? }`), or an empty list.
+---@param list any
+---@param max integer
+---@return table[]
+local function tag_list(list, max)
+  local out = {}
+  if not is_list(list) then return out end
+  for _, t in ipairs(list) do
+    if #out >= max then break end
+    local name = type(t) == "table" and str(t.name, 512) or nil
+    if name then
+      out[#out + 1] = {
+        name = name,
+        subject = str(t.subject, 1024),
+        time = plausible_time(t.time) and t.time or nil,
+      }
+    end
+  end
+  return out
+end
+
 ---One stored commit, field by field; `nil` = unusable.
 ---@param c any
 ---@return table|nil
@@ -159,6 +195,8 @@ local function normalize_commit(c)
     author = str(c.author, 1024) or "",
     time = plausible_time(c.time) and c.time or nil,
     side = (c.side == "<" or c.side == ">") and c.side or nil,
+    dirs = short_list(c.dirs, 32),
+    gone = short_list(c.gone, 32),
   }
 end
 
@@ -190,7 +228,15 @@ local function normalize_entry(entry)
     truncated = bool(entry.truncated),
     locked = bool(entry.locked),
     merges = bool(entry.merges),
+    order = entry.order == "topo" and "topo" or nil,
   }
+  if type(entry.tags) == "table" then
+    out.tags = { range = tag_list(entry.tags.range, 200), before = tag_list(entry.tags.before, 20) }
+  end
+  if type(entry.convention) == "table" then
+    local n, total = count(entry.convention.conventional), count(entry.convention.total)
+    if n and total and n <= total then out.convention = { conventional = n, total = total } end
+  end
   if entry.commits ~= nil and is_list(entry.commits) then
     local commits = {}
     for _, c in ipairs(entry.commits) do

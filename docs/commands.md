@@ -117,10 +117,50 @@ each with its commits, as a Markdown report (a read-only buffer by default).
   `plugins.after_sync` ([integrations.md](integrations.md#lazy-sync-hook)).
 
 Each plugin is read from files first (HEAD, refs, reflog — about 100 ms for fifty
-clones); only a plugin that **changed** costs a git process (one
-`git log from...to --left-right`, which also tells the direction), at most
-`plugins.parallel` at a time. A range seen in an earlier report is taken from
-the store. The direction is stated, not assumed: **rolled back** (the old state
+clones); only a plugin that **changed** costs git processes: one
+`git log from...to --left-right --topo-order --name-status`, which also tells
+the direction, plus — only when the clone has tags at all — two
+`git for-each-ref --merged/--no-merged` for its releases, and one short
+`git log` of the newest subjects when the update itself has fewer than 100
+commits (for the convention check below); at most `plugins.parallel` plugins at
+a time. A range seen in an earlier report is taken from the store.
+
+#### Breaking changes in the report
+
+Every changed plugin gets a summary that is computed, not written by an AI, and
+is the same for the same commits: commits per conventional type, top scopes,
+authors (with the share of bots), changed directories, the releases of the
+range — `MAJOR v1.9.1 → v2.0.0`, or `no release tag in this update (last
+v0.9.3)`; pre-release tags are left out — and a breaking-change digest. The
+overview table has a **Breaking** column (`!3` breaking, `?1` probably,
+`~23` grouped).
+
+| Tier | What counts | Shown |
+| --- | --- | --- |
+| breaking | `type(scope)!:` (also `feat(a,b)!:`), a `BREAKING CHANGE:` / `BREAKING-CHANGE:` / `BREAKING_CHANGE:` footer (upper case), a subject that starts with `BREAKING` | listed |
+| probably breaking | "drop support/compat", "requires Neovim x", a lower-case `breaking change:` footer, "by default" in the subject, a misplaced marker (`fix!(lsp):`) | listed |
+| hint | remove/rename/deprecate in the subject, a removed Lua module, "breaking" in the body — scored | folded, best 5 first |
+| parser updates | a `!` on a tree-sitter parser bump (`feat(kdl)!: update parser and queries`) | one folded group, with the installed languages |
+
+Reverts never count, a `!` elsewhere in the subject (`buffer!`, `:!`) or in the
+body is no marker, CI/docs/test/chore commits without a marker of their own get
+no tier, and commit bodies with CRLF line ends are normalized first. A subject
+that repeats `plugins.breaking.collapse_repeats` (5) times or more is folded into
+one group — except a commit with a breaking marker, which always stays listed.
+Each flagged commit carries its place in the update (`17/86`, oldest first, in
+the order git applied them; only when the list is complete) and, where it can
+be told offline, whether it concerns you: "drops Neovim 0.11; you run 0.12.2
+(does not affect you)", "requires Neovim 0.13 (NOT met)", or the installed
+languages of a parser commit.
+
+This is a heuristic over commit messages. On a hand-labelled corpus of real
+plugin commits (`TESTS/fixtures/breaking/`) "breaking" is right about nine
+times in ten and "probably breaking" about every other time — but only about
+half of what a person calls breaking carries a marker at all, so **0 hits does
+not mean no breaking changes**; the report says so in its header. A plugin
+whose newest 100 subjects are mostly not conventional commits is marked "no
+marker convention recognized". Per-plugin overrides (`force`, `ignore`,
+`style`) are in [configuration.md](configuration.md#plugins). The direction is stated, not assumed: **rolled back** (the old state
 had commits the new one lacks), **diverged** (both sides have some, e.g. a
 `master` → `main` switch) and **old state gone** (a force-push removed the
 previous commit) are shown as such, not as "N new commits".
