@@ -21,9 +21,11 @@
 --- directory: each entry is either itself a repository, or a directory
 --- whose immediate git-repository children are all included.
 ---
---- Reading is side-effect free, so each repository is queried through a
---- non-blocking job and the aggregated records are handed back once all
---- queries finish, preserving discovery order.
+--- Reading is side-effect free, so each repository is queried through
+--- `lib.nvim.git.run_async` (read-only, 60 s timeout) and the repositories are
+--- fanned out through `lib.nvim.async.map_limit` (at most 8 at a time); the
+--- aggregated records are handed back once all queries finish, preserving
+--- discovery order.
 ---
 --- Live feedback while the repositories are being read goes through
 --- `gitsuite.util.progress` (nil if its own internal lib.nvim.progress
@@ -53,6 +55,8 @@ local uv = vim.uv or vim.loop
 local expand = require("lib.nvim.cross.fs.expand_path")
 local unify_slashes = require("lib.nvim.cross.fs.separators.unify_slashes")
 local is_windows = require("lib.nvim.cross.platform.is_windows")
+local git = require("lib.nvim.git")
+local map_limit = require("lib.nvim.async").map_limit
 -- Utils
 local notify = require("gitsuite.util.notify").notify
 local config = require("gitsuite.config")
@@ -66,35 +70,36 @@ local progress = require("gitsuite.util.progress")
 
 ---Ceiling for a single `git` call. A repository that never answers (a network
 ---mount, a stuck credential helper) must not hold the whole scan, and its
----progress indicator, open forever: on expiry `vim.system` kills the process
----and reports exit code 124.
+---progress indicator, open forever: on expiry lib.nvim kills the process tree
+---and reports the result as `timed_out`.
 local GIT_TIMEOUT_MS = 60000
-local TIMEOUT_EXIT_CODE = 124
 
 ---Upper bound on repositories read at the same time. Each read starts two `git`
 ---processes, so an unbounded fan-out over a few dozen clones means a hundred
 ---simultaneous processes, which starves the machine (Windows in particular).
 local MAX_PARALLEL = 8
 
----Builds the `git status` argv for one repository.
----`--no-optional-locks` keeps a read-only overview from taking `index.lock`,
----which `git status` otherwise does to refresh the index. Without it, scanning
----a repository somebody is committing in (or that gitsigns/lazygit is polling)
----makes their `git` fail with "Unable to create index.lock".
----@param ... string Arguments following `status`
----@return string[]
-local function status_argv(...)
-  return { "git", "--no-optional-locks", "status", ... }
+---Runs one read-only `git <args>` in `repo`. `read_only` adds
+---`--no-optional-locks`, which keeps a read-only overview from taking
+---`index.lock` (`git status` otherwise does to refresh the index): without it,
+---scanning a repository somebody is committing in (or that gitsigns/lazygit is
+---polling) makes their `git` fail with "Unable to create index.lock".
+---`on_done` runs on the main loop (`git.run_async`'s own guarantee), so it may
+---drive a progress handle or open a window directly.
+---@param repo string Absolute path to the repository
+---@param args string[] Arguments after `git`
+---@param on_done fun(res: Lib.Git.RunResult): nil
+---@return nil
+local function git_read(repo, args, on_done)
+  git.run_async(args, { dir = repo, timeout_ms = GIT_TIMEOUT_MS, read_only = true }, on_done)
 end
 
 ---Turns a failed `git` result into a one-line error message.
----@param res { code: integer, stderr?: string }
+---@param res Lib.Git.RunResult
 ---@param what string Short name of the call, e.g. "git status"
 ---@return string
 local function failure_text(res, what)
-  if res.code == TIMEOUT_EXIT_CODE then
-    return ("%s timed out after %ds"):format(what, GIT_TIMEOUT_MS / 1000)
-  end
+  if res.timed_out then return ("%s timed out after %ds"):format(what, GIT_TIMEOUT_MS / 1000) end
   local stderr = res.stderr or ""
   return stderr ~= "" and stderr or (what .. " failed")
 end
@@ -175,24 +180,13 @@ end
 ---@param on_done fun(ts: integer|nil): nil
 ---@return nil
 local function last_commit_ts(repo, on_done)
-  vim.system(
-    { "git", "log", "-1", "--format=%ct" },
-    { cwd = repo, text = true, timeout = GIT_TIMEOUT_MS },
-    -- `vim.system`'s completion callback runs in a fast-event context, not
-    -- on the main loop -- `on_done` eventually reaches a progress handle's
-    -- `:update()` (see `read_statuses`/`finish` below), which touches
-    -- `nvim_win_*` and raises E5560 unscheduled. `vim.schedule_wrap` matches
-    -- `lib.nvim.cross.run_argv.run_async_captured`'s own contract ("on_done
-    -- is always invoked on the main loop"), which this hand-rolled
-    -- `vim.system` call bypasses.
-    vim.schedule_wrap(function(res)
-      if res.code ~= 0 then
-        on_done(nil)
-        return
-      end
-      on_done(tonumber(vim.trim(res.stdout or "")))
-    end)
-  )
+  git_read(repo, { "log", "-1", "--format=%ct" }, function(res)
+    if res.code ~= 0 then
+      on_done(nil)
+      return
+    end
+    on_done(tonumber(vim.trim(res.stdout or "")))
+  end)
 end
 
 ---@private
@@ -217,22 +211,15 @@ local function status_repo(repo, on_done)
     on_done(record, err)
   end
 
-  vim.system(
-    status_argv("--porcelain=v2", "--branch"),
-    { cwd = repo, text = true, timeout = GIT_TIMEOUT_MS },
-    -- Same fast-event-context issue as `last_commit_ts` above: `settle()`
-    -- ultimately drives a progress handle's `:update()`, which needs the
-    -- main loop.
-    vim.schedule_wrap(function(res)
-      if res.code ~= 0 then
-        err = failure_text(res, "git status")
-      else
-        record = parse_status(repo, res.stdout or "")
-      end
-      got_status = true
-      settle()
-    end)
-  )
+  git_read(repo, { "status", "--porcelain=v2", "--branch" }, function(res)
+    if res.code ~= 0 then
+      err = failure_text(res, "git status")
+    else
+      record = parse_status(repo, res.stdout or "")
+    end
+    got_status = true
+    settle()
+  end)
 
   last_commit_ts(repo, function(value)
     ts = value
@@ -288,27 +275,18 @@ function M.dashboard_detail(repo, on_done)
     on_done(lines)
   end
 
-  -- Both callbacks below are `vim.schedule_wrap`ped for the same reason as
-  -- `status_repo`/`last_commit_ts`: `on_done` (via `settle()`) is meant to
-  -- open a UI popup with the result, which needs the main loop.
-  vim.system(
-    status_argv("--short", "--branch"),
-    { cwd = repo, text = true, timeout = GIT_TIMEOUT_MS },
-    vim.schedule_wrap(function(res)
-      short = (res.code == 0) and vim.trim(res.stdout or "")
-        or ("error: " .. vim.trim(failure_text(res, "git status")))
-      settle()
-    end)
-  )
+  -- `on_done` (via `settle()`) opens a UI popup with the result; `git_read`
+  -- calls back on the main loop, so that is safe.
+  git_read(repo, { "status", "--short", "--branch" }, function(res)
+    short = (res.code == 0) and vim.trim(res.stdout or "")
+      or ("error: " .. vim.trim(failure_text(res, "git status")))
+    settle()
+  end)
 
-  vim.system(
-    { "git", "log", "-5", "--format=%h  %<(18,trunc)%an  %s" },
-    { cwd = repo, text = true, timeout = GIT_TIMEOUT_MS },
-    vim.schedule_wrap(function(res)
-      log = (res.code == 0) and vim.trim(res.stdout or "") or ""
-      settle()
-    end)
-  )
+  git_read(repo, { "log", "-5", "--format=%h  %<(18,trunc)%an  %s" }, function(res)
+    log = (res.code == 0) and vim.trim(res.stdout or "") or ""
+    settle()
+  end)
 end
 
 ---@private
@@ -384,59 +362,44 @@ local function read_statuses(repos, progress_text, on_complete)
     return
   end
 
-  -- Indexed by discovery order so the dashboard stays stable despite async completion.
-  ---@type table<integer, RepoDashboardRecord>
-  local indexed = {}
-  ---@type string[]
-  local errors = {}
   local total = #repos
-  local remaining = total
-
   local handle = progress.create(progress_text, total)
 
-  local function finish()
-    remaining = remaining - 1
-    if handle then
-      handle:update({
-        text = ("%d of %d read"):format(total - remaining, total),
-        current = total - remaining,
-        total = total,
-      })
-    end
-    if remaining > 0 then return end
-    if handle then handle:finish(("read %d of %d repositories"):format(total - #errors, total)) end
+  -- A bounded worker pool (`lib.nvim.async.map_limit`): MAX_PARALLEL reads in
+  -- flight, the next repository starts whenever one finishes, and the results
+  -- come back indexed by discovery order, so the dashboard stays stable despite
+  -- async completion (the error list, too, is in discovery order). No cancel:
+  -- a read is side-effect free and bounded by GIT_TIMEOUT_MS, so the scan
+  -- always runs to its end. Both callbacks run on the main loop.
+  map_limit(repos, MAX_PARALLEL, function(repo, _, done)
+    status_repo(repo, done)
+  end, function(results, failures)
     ---@type RepoDashboardRecord[]
     local records = {}
+    ---@type string[]
+    local errors = {}
     for i = 1, total do
-      if indexed[i] then records[#records + 1] = indexed[i] end
-    end
-    vim.schedule(function()
-      on_complete(records, errors)
-    end)
-  end
-
-  -- A bounded worker pool: MAX_PARALLEL reads start up front, and every
-  -- completion starts the next repository in discovery order.
-  local next_index = 1
-  local function launch_next()
-    if next_index > total then return end
-    local i = next_index
-    next_index = next_index + 1
-    local repo = repos[i]
-    status_repo(repo, function(record, err)
-      if record then
-        indexed[i] = record
+      if results[i] then
+        records[#records + 1] = results[i]
       else
-        errors[#errors + 1] = fnamemodify(repo, ":t") .. ": " .. (err or "unknown error")
+        errors[#errors + 1] = fnamemodify(repos[i], ":t")
+          .. ": "
+          .. (failures[i] or "unknown error")
       end
-      finish()
-      launch_next()
-    end)
-  end
-
-  for _ = 1, math.min(MAX_PARALLEL, total) do
-    launch_next()
-  end
+    end
+    if handle then handle:finish(("read %d of %d repositories"):format(total - #errors, total)) end
+    on_complete(records, errors)
+  end, {
+    on_progress = function(finished)
+      if handle then
+        handle:update({
+          text = ("%d of %d read"):format(finished, total),
+          current = finished,
+          total = total,
+        })
+      end
+    end,
+  })
 end
 
 ---Collects the git status of every repository in the resolved base directory

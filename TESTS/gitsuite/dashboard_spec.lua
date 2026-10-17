@@ -160,6 +160,56 @@ describe("gitsuite.features.dashboard", function()
       assert.equals("clean", result.records[1].state)
     end)
 
+    it("more repositories than the pool runs at once all come back, in discovery order", function()
+      -- MAX_PARALLEL is 8: ten repositories make the pool start the last two
+      -- from completions, and one dirty repository proves the records are not
+      -- interchangeable.
+      local paths = {}
+      for i = 1, 10 do
+        local repo = ("%s/r%02d"):format(root, i)
+        vim.fn.mkdir(repo, "p")
+        git(repo, { "init", "-q", "-b", "main" })
+        vim.fn.writefile({ tostring(i) }, repo .. "/f.txt")
+        git(repo, { "add", "-A" })
+        git(repo, { "commit", "-q", "-m", "c" .. i })
+        paths[#paths + 1] = repo
+      end
+      vim.fn.writefile({ "changed" }, paths[7] .. "/f.txt")
+
+      local result
+      status.scan_group(paths, function(records, errors)
+        result = { records = records, errors = errors }
+      end)
+      vim.wait(10000, function()
+        return result ~= nil
+      end)
+
+      assert.is_not_nil(result)
+      assert.same({}, result.errors)
+      assert.equals(10, #result.records)
+      for i, record in ipairs(result.records) do
+        assert.equals(("r%02d"):format(i), record.name)
+        assert.equals(i == 7 and "dirty" or "clean", record.state)
+        assert.equals("main", record.branch)
+        assert.is_number(record.last_commit)
+      end
+    end)
+
+    it("dashboard_detail shows the short status and the recent commits", function()
+      local lines
+      status.dashboard_detail(root .. "/repo1", function(result)
+        lines = result
+      end)
+      vim.wait(5000, function()
+        return lines ~= nil
+      end)
+
+      assert.is_not_nil(lines)
+      local text = table.concat(lines, "\n")
+      assert.truthy(text:find("working tree clean", 1, true), text)
+      assert.truthy(text:find("first", 1, true), text)
+    end)
+
     it("an empty resolved path list completes immediately with no records", function()
       local result
       status.scan_group({ root .. "/does-not-exist" }, function(records, errors)
