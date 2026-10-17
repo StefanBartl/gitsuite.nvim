@@ -337,10 +337,42 @@ describe("gitsuite.features.plugins report --fetch", function()
     git.fetch_async = original
     assert.equals("stopped", box.err)
     assert.equals(1, stopped)
-    -- the slot is free again
-    local _, err = report({ mode = "pending", last = true })
-    assert.is_not_nil(err)
-    assert.is_nil(err:find("already running", 1, true))
+    -- the slot is free again: a new build (not `--last`, which never checks the
+    -- slot) starts instead of answering "already running"
+    local r, err = report({ mode = "pending" })
+    assert.is_nil(err)
+    assert.is_not_nil(r)
+  end)
+
+  it("checks for a working lazy.nvim again once the question is answered", function()
+    local bare = upstream(1)
+    clone_of(bare, "a")
+    clone_of(bare, "b")
+    require("gitsuite.config").setup({
+      plugins = { roots = { root }, sources = { "clones" }, fetch_confirm = 2 },
+    })
+    local calls = 0
+    local original = gitlog.fetch
+    gitlog.fetch = function(...)
+      calls = calls + 1
+      return original(...)
+    end
+    local busy_lazy = { plugins = { x = { name = "x", _ = { working = true } } } }
+    with_module("ui.kit", {
+      confirm = function(o)
+        -- lazy.nvim starts an update while the question is open
+        package.loaded["lazy.core.config"] = busy_lazy
+        o.on_answer(true)
+      end,
+    }, function()
+      with_module("lazy.core.config", nil, function()
+        local r, err = report({ mode = "pending", fetch = true })
+        assert.is_nil(r)
+        assert.is_truthy(err:find("lazy.nvim is working", 1, true))
+      end)
+    end)
+    gitlog.fetch = original
+    assert.equals(0, calls)
   end)
 
   it("busy() and skip_reason() name what they found", function()

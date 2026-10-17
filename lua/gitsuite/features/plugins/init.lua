@@ -430,6 +430,12 @@ function fetch_then_build(opts)
       if opts.on_done then opts.on_done(nil, "already running") end
       return running
     end
+    -- (and lazy.nvim may have started working on plugins while it was open)
+    local busy_now = fetch.busy()
+    if busy_now then
+      report_fail(opts, busy_now)
+      return nil
+    end
     if not opts.quiet then
       notify.info(
         ("plugins report: fetching %d clones (%d at a time, up to %d s each) ..."):format(
