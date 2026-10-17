@@ -100,7 +100,8 @@ former `:Reposcope dashboard`.
 | `m` | n, x | Toggle the mark on the row; in Visual mode mark every row the selection spans |
 | `M` | n | Mark every repository, or clear all marks when everything is already marked |
 | `p` / `P` / `f` | n | Push / pull (`--ff-only`) / fetch the marked repositories, or the row under the cursor when nothing is marked |
-| `gp` / `gP` / `gf` | n | Push / pull / fetch **every** repository on the current page, marks ignored |
+| `gp` / `gf` | n | Push / fetch **every** repository on the current page, marks ignored |
+| `gP` | n | Pull the page, marks ignored: asks "Only behind" (repos behind their upstream) or "All"; repos with unknown behind state (no upstream, never fetched) are named. Default focus: `dashboard.pull_scope` |
 | `gu` | n | Update every repository on the current page: `fetch --all --prune` + `pull --ff-only` |
 | `S` | n | Full `git status --short` plus the last five commits, in a nested popup |
 | `L` | n | Open `:Git ui lazygit` for the repository under the cursor |

@@ -247,6 +247,83 @@ describe("gitsuite.features.dashboard", function()
     end)
   end)
 
+  describe("pull_scope: what gP offers to pull", function()
+    local pull_scope
+
+    before_each(function()
+      package.loaded["gitsuite.features.dashboard.pull_scope"] = nil
+      pull_scope = require("gitsuite.features.dashboard.pull_scope")
+    end)
+
+    local function rec(name, behind, has_upstream)
+      return { name = name, path = "/r/" .. name, behind = behind, has_upstream = has_upstream }
+    end
+
+    -- "never" was not fetched yet; every other repository has a FETCH_HEAD.
+    local function fetch_time(path)
+      if path == "/r/never" then return nil end
+      return 1700000000
+    end
+
+    local records = {
+      rec("up-to-date", 0, true),
+      rec("behind", 3, true),
+      rec("no-upstream", 0, false),
+      rec("never", 2, true),
+      rec("behind2", 1, true),
+    }
+
+    it(
+      "classify: behind needs an upstream and a fetch; the rest is unknown, not dropped",
+      function()
+        local behind, unknown, all = pull_scope.classify(records, fetch_time)
+        assert.same({ 2, 5 }, behind)
+        assert.same({ 3, 4 }, unknown, "no upstream and never fetched are both unknown")
+        assert.same({ 1, 2, 3, 4, 5 }, all)
+      end
+    )
+
+    it("plan: default scope focuses 'Only behind', names the unknown repositories", function()
+      local plan = pull_scope.plan(records, nil, fetch_time)
+      assert.same({ "Only behind (2)", "All (5)" }, plan.choices)
+      assert.same({ 2, 5 }, plan.targets["Only behind (2)"])
+      assert.same({ 1, 2, 3, 4, 5 }, plan.targets["All (5)"])
+      assert.is_not_nil(plan.question:find("no-upstream, never", 1, true))
+    end)
+
+    it("plan: scope 'all' puts 'All' first", function()
+      local plan = pull_scope.plan(records, "all", fetch_time)
+      assert.same({ "All (5)", "Only behind (2)" }, plan.choices)
+    end)
+
+    it("plan: no unknown line when every behind state is known", function()
+      local plan = pull_scope.plan({ rec("a", 1, true), rec("b", 0, true) }, "behind", fetch_time)
+      assert.is_nil(plan.question:find("unknown", 1, true))
+      assert.equals(1, #vim.split(plan.question, "\n", { plain = true }))
+    end)
+
+    it("plan: a long unknown list is shortened with a count", function()
+      local many = {}
+      for i = 1, pull_scope.MAX_NAMES + 3 do
+        many[i] = rec("r" .. i, 0, false)
+      end
+      local plan = pull_scope.plan(many, "behind", fetch_time)
+      assert.is_not_nil(plan.question:find("+3 more", 1, true))
+    end)
+
+    it("classify: the default fetch lookup reads FETCH_HEAD of a real clone", function()
+      local repo = tmpdir("-gitsuite-pull-scope")
+      git(repo, { "init", "-q", "-b", "main" })
+      local r = { name = "x", path = repo, behind = 1, has_upstream = true }
+      local _, unknown = pull_scope.classify({ r })
+      assert.same({ 1 }, unknown, "no FETCH_HEAD yet")
+      vim.fn.writefile({ "deadbeef\t\tbranch 'main' of x" }, repo .. "/.git/FETCH_HEAD")
+      local behind = pull_scope.classify({ r })
+      assert.same({ 1 }, behind)
+      pcall(vim.fn.delete, repo, "rf")
+    end)
+  end)
+
   describe("state.dashboard_pages: normalized path matching, no long-lived cache", function()
     local dashboard_pages
     local original_stdpath, fake_data_dir

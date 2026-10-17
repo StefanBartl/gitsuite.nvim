@@ -1069,6 +1069,35 @@ local function _run_all(ctx, verb, action_fn)
   )
 end
 
+---@private
+---@internal
+---`gP`: asks whether to pull only the repositories behind their upstream or
+---all of them (`dashboard.pull_scope` picks the focused default), naming the
+---ones whose behind state is unknown, then runs the chosen batch.
+---@param ctx DashboardRowContext
+---@return nil
+local function _pull_all(ctx)
+  if #ctx.records == 0 then
+    notify("No repositories to pull", 3)
+    return
+  end
+  local scope = require("gitsuite.config").get().dashboard.pull_scope
+  local plan = require("gitsuite.features.dashboard.pull_scope").plan(ctx.records, scope)
+  kit.confirm({
+    question = plan.question,
+    choices = plan.choices,
+    on_answer = function(choice)
+      local indices = choice and plan.targets[choice]
+      if not indices then return end
+      if #indices == 0 then
+        notify("No repositories behind their upstream - fetch first (gf) or pull all", 3)
+        return
+      end
+      _run_bulk(ctx.bufnr, ctx.records, "pull", repo_actions.pull, indices)
+    end,
+  })
+end
+
 ---Context handed to every row keymap handler.
 ---@class DashboardRowContext
 ---@field bufnr integer
@@ -1376,9 +1405,9 @@ local ROW_KEYMAPS = {
   },
   {
     keys = { "gP" },
-    desc = "Pull every repository in the dashboard (marks ignored)",
+    desc = "Pull the repositories behind their upstream, or every one (asks; marks ignored)",
     run = function(ctx)
-      _run_all(ctx, "pull", repo_actions.pull)
+      _pull_all(ctx)
     end,
   },
   {

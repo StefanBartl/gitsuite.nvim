@@ -39,6 +39,7 @@
 ---@field base_dir    string  Directory `:Git dashboard`/`:Git dashboard update` scan by default. Defaults to `$REPOS_DIR`.
 ---@field extra_paths string[]  Repositories merged onto the default page's scan; each entry must itself be a repository.
 ---@field groups      GitSuite.Config.Dashboard.Group[]  Additional named pages, see `GitSuite.Config.Dashboard.Group`.
+---@field pull_scope  "behind"|"all"  Focused default of `gP`'s prompt: only repositories behind their upstream, or all.
 
 --- `:Git plugins` -- reading the history of the clones a plugin manager installed.
 ---@class GitSuite.Config.Plugins

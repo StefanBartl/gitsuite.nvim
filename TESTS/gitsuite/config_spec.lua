@@ -78,6 +78,17 @@ describe("gitsuite.config", function()
     assert.is_not_nil(table.concat(issues, "\n"):find("dashboard.extra_paths", 1, true))
   end)
 
+  it("dashboard.pull_scope defaults to 'behind', accepts 'all', drops anything else", function()
+    assert.equals("behind", config.get().dashboard.pull_scope)
+    config.setup({ dashboard = { pull_scope = "all" } })
+    assert.equals("all", config.get().dashboard.pull_scope)
+    package.loaded["gitsuite.config"] = nil
+    config = require("gitsuite.config")
+    config.setup({ dashboard = { pull_scope = "everything" } })
+    assert.equals("behind", config.get().dashboard.pull_scope)
+    assert.is_not_nil(table.concat(config.issues(), "\n"):find("dashboard.pull_scope", 1, true))
+  end)
+
   it("drops a non-table dashboard.groups the same way", function()
     config.setup({ dashboard = { groups = "not-a-list" } })
     local c = config.get()

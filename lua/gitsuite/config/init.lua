@@ -114,6 +114,14 @@ local function is_report_mode(v)
 end
 
 ---@internal
+---`dashboard.pull_scope`: which choice `gP`'s prompt focuses first.
+---@param v any
+---@return boolean
+local function is_pull_scope(v)
+  return v == "behind" or v == "all"
+end
+
+---@internal
 ---`plugins.sources`: the word "auto", or a list naming plugin sources.
 ---@param v any
 ---@return boolean
@@ -166,6 +174,7 @@ local KNOWN = {
       ok = is_valid_groups,
       expect = "a table (list of { name: non-empty string, paths?: list of strings })",
     },
+    pull_scope = { ok = is_pull_scope, expect = '"behind" or "all"' },
   },
   plugins = {
     sources = { ok = is_sources, expect = '"auto" or a list of "lazy", "pack", "clones"' },

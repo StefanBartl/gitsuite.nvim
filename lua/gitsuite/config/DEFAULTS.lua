@@ -58,6 +58,10 @@ local DEFAULTS = {
     -- git-repository children (the same rule `extra_paths`' entries do NOT
     -- get -- see docs/configuration.md).
     groups = {},
+    -- `gP` (pull the whole page) asks "Only behind" or "All"; this picks the
+    -- focused default. "behind" = only repositories behind their upstream
+    -- (as of the last fetch); "all" = every repository on the page.
+    pull_scope = "behind",
   },
   -- `:Git plugins` -- the history of the clones a plugin manager installed.
   plugins = {

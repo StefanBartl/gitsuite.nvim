@@ -106,6 +106,7 @@ dashboard = {
   base_dir = "",     -- directory :Git dashboard/:Git dashboard update scan by default; "" -> $REPOS_DIR
   extra_paths = {},  -- repos merged onto the default page's scan; each entry must itself be a repository
   groups = {},       -- additional named pages, see below
+  pull_scope = "behind", -- gP's focused default: "behind" (only repos behind upstream) or "all"
 },
 ```
 
@@ -139,6 +140,13 @@ unlike `extra_paths`, which never scans a plain directory. The `a`/`x` keys
 inside the dashboard add/remove paths per page at runtime, layered on top
 of this config without ever rewriting it — see
 [BINDINGS.md](BINDINGS.md#dashboard-keys-component-local).
+
+`pull_scope` decides which button `gP` (pull the whole page) focuses first.
+`gP` always asks "Only behind (N)" or "All (M)"; "behind" counts the
+repositories whose upstream is ahead of them as of their last fetch. A
+repository without an upstream, or without any fetch recorded yet (no
+non-empty `FETCH_HEAD`), has no trustworthy behind count: the prompt names
+it, and "Only behind" skips it — fetch first (`gf`) or pick "All".
 
 ## `plugins`
 

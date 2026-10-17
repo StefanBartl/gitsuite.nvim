@@ -151,7 +151,7 @@ See docs/commands.md.
     commands = { git = "Git" },
     keymaps = { blame_full = "<leader>gb", ui_lazygit = "<leader>lg" },
     browse = { hosts = {} },
-    dashboard = { base_dir = "", extra_paths = {}, groups = {} },
+    dashboard = { base_dir = "", extra_paths = {}, groups = {}, pull_scope = "behind" },
     plugins = { sources = "auto", roots = {}, log_limit = 50, timeout_ms = 30000,
       include_local = false, mode = "updated", max_commits = 1000, parallel = 4,
       run_window_s = 300, merges = false, keep_reports = 20, max_age_days = 365 },
