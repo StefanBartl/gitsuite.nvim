@@ -327,6 +327,8 @@ describe("gitsuite.features.ui", function()
         assert.equals("float", opts.layout)
         assert.equals("always", opts.close)
         assert.equals("function", type(opts.on_open))
+        -- Kept out of terminal.nvim's sessions: a restore would lack on_open/close.
+        assert.is_false(opts.session, "lazygit is not saved with a session")
         -- A native terminal gets $NVIM from Neovim; tmux/WezTerm refuse `env`.
         assert.is_nil(opts.env, "no env is passed")
       end)

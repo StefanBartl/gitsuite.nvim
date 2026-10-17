@@ -151,6 +151,11 @@ local function open_via_terminal(term, root)
     layout = "float",
     float = { width = 0.9, height = 0.9 },
     close = "always",
+    -- Kept out of terminal.nvim's sessions integration: a restored lazygit
+    -- would lack `close` and the maps `on_open` sets. A terminal.nvim that
+    -- predates the option ignores it (has_running_lazygit's MARKER check
+    -- still replaces a restored one).
+    session = false,
     on_open = function(handle)
       -- Multiplexer backends have no Neovim buffer to map keys in.
       local bufnr = type(handle) == "table" and handle.bufnr or nil
