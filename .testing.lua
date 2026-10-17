@@ -59,13 +59,6 @@ return {
         reason = "only loaded because the user put the component in their statusline; the BufDelete cache cleanup must start with it (no setup() exists)",
         expires = "2027-04-14",
       },
-      {
-        check = "K13",
-        level = "warn",
-        text = ":Git is a prefix of",
-        reason = ":Git is this plugin's own compound command (name configurable); the GitsuiteLazygit* bridge commands are only called via nvr by lazygit, never typed",
-        expires = "2027-04-14",
-      },
     },
   },
 }

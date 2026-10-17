@@ -34,6 +34,13 @@ local function check_soft_dependencies()
       "branch picker through the configured picker engine",
       "the branch picker falls back to vim.ui.select",
     },
+    {
+      "terminal",
+      "terminal",
+      "terminal.nvim",
+      ":Git ui lazygit runs as a terminal.nvim terminal (its backend, one per project)",
+      ":Git ui lazygit opens in gitsuite.nvim's own float",
+    },
   }
   for _, dep in ipairs(soft) do
     if pcall(require, dep[2]) then

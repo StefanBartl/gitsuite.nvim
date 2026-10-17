@@ -133,4 +133,28 @@ describe("gitsuite.health", function()
       messages("ok"):find("lazy integration: toast (listening on User LazySync)", 1, true)
     )
   end)
+
+  it("reports terminal.nvim as an optional dependency of :Git ui lazygit", function()
+    local saved_loaded, saved_preload = package.loaded["terminal"], package.preload["terminal"]
+    package.loaded["terminal"] = nil
+    package.preload["terminal"] = function()
+      error("terminal.nvim is not installed in this spec")
+    end
+    pcall(require("gitsuite.health").check)
+    local absent, absent_warn = messages("info"), messages("warn")
+
+    -- (LuaJIT leaves a sentinel in package.loaded after a loader error)
+    package.loaded["terminal"] = nil
+    package.preload["terminal"] = function()
+      return { run = function() end }
+    end
+    records = {}
+    pcall(require("gitsuite.health").check)
+    local present = messages("ok")
+    package.loaded["terminal"], package.preload["terminal"] = saved_loaded, saved_preload
+
+    assert.is_truthy(absent:find("terminal not installed: :Git ui lazygit opens in", 1, true))
+    assert.is_nil(absent_warn:find("terminal", 1, true))
+    assert.is_truthy(present:find("terminal found: :Git ui lazygit runs as", 1, true))
+  end)
 end)

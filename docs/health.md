@@ -33,7 +33,7 @@ One line per adapter (`gitsigns`, `diffview`, `neogit`, `lazygit`,
 
 ## gitsuite: optional dependencies
 
-One line per optional plugin (`color_my_ascii`, `insights`, `pickers`). Absent is `info`, never a warning or an error — the feature it enables is simply unavailable.
+One line per optional plugin (`color_my_ascii`, `insights`, `pickers`, `terminal`). Absent is `info`, never a warning or an error — the feature it enables is simply unavailable.
 
 | Line | Means |
 | --- | --- |
