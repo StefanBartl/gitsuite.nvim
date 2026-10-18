@@ -402,6 +402,54 @@ describe("gitsuite plugin sources", function()
       assert.is_truthy(err:find("did you mean alpha.nvim", 1, true))
     end)
 
+    describe("a target that is none offers the close plugins", function()
+      local reran, offered
+      before_each(function()
+        reran, offered = nil, nil
+        sources.select = function(items, _opts, cb)
+          offered = items
+          cb("alpha.nvim")
+        end
+        sources.rerun = function(line)
+          reran = line
+        end
+      end)
+      after_each(function()
+        sources.select, sources.rerun = nil, nil
+      end)
+
+      it("names them as candidates only for a word that comes close", function()
+        assert.same({ "alpha.nvim" }, sources.candidates("alph"))
+        assert.same({}, sources.candidates("zzzz"))
+        assert.same(
+          {},
+          sources.candidates("someone/not-installed"),
+          "an owner/repo has its own reason"
+        )
+        assert.same(
+          {},
+          sources.candidates(root .. "/plain-folder"),
+          "a directory has its own reason"
+        )
+      end)
+
+      it("offers them and runs the typed command again with the one picked", function()
+        vim.fn.histadd(":", "Git plugins log alph")
+        assert.is_true(sources.offer("alph", sources.candidates("alph")))
+        vim.wait(500, function()
+          return reran ~= nil
+        end)
+        assert.same({ "alpha.nvim" }, offered)
+        assert.equals("Git plugins log alpha.nvim", reran)
+      end)
+
+      it("offers nothing for a command that has no typed line, or no candidates", function()
+        vim.fn.histadd(":", "Git plugins log something-else")
+        assert.is_false(sources.offer("alph", { "alpha.nvim" }), "the line does not hold the word")
+        assert.is_false(sources.offer("zzzz", {}))
+      end)
+    end)
+
     it("refuses a .git file (worktree) with the reason, and a non-repository", function()
       local _, wt_err = sources.resolve(root .. "/worktree.nvim")
       assert.is_truthy(wt_err:find(".git is a file", 1, true))

@@ -194,8 +194,23 @@ local function resolve_concrete(bufnr, region, keep)
     or not (sep_marker and sep_marker:match("^======="))
     or (region.base_first and not (base_marker and base_marker:match("^|||||||")))
   then
-    notify.error(
-      "conflict: buffer changed since this region was found -- re-run :Git conflict refresh"
+    -- Asked, not only told: the person says whether the buffer is read again, and then the same action runs on what is
+    -- under the cursor NOW (a fresh scan, so a region that is not there any more is refused as it always was).
+    M.ask(
+      "conflict: the buffer changed since this region was found. Read it again and resolve once more?",
+      "read it again",
+      function(accepted)
+        if not accepted then
+          notify.info("conflict: nothing changed")
+          return
+        end
+        if vim.api.nvim_get_current_buf() ~= bufnr then
+          notify.warn("conflict: the buffer is not the current one any more -- nothing changed")
+          return
+        end
+        M.refresh(bufnr)
+        M.choose(keep)
+      end
     )
     return
   end
@@ -204,6 +219,30 @@ local function resolve_concrete(bufnr, region, keep)
   vim.api.nvim_buf_set_lines(bufnr, region.start_line, region.end_line + 1, false, replacement)
   local remaining = M.refresh(bufnr)
   if #remaining == 0 then require("gitsuite.events").conflicts_resolved(bufnr) end
+end
+
+---Seam for the question (`nil`: `ui.kit.confirm`, `vim.ui.select` as the fallback); specs replace it.
+---@type (fun(question: string, yes_label: string, cb: fun(accepted: boolean)))|nil
+M.confirm = nil
+
+---@param question string
+---@param yes_label string
+---@param cb fun(accepted: boolean)
+function M.ask(question, yes_label, cb)
+  if M.confirm then return M.confirm(question, yes_label, cb) end
+  local ok, kit = pcall(require, "ui.kit")
+  if ok and type(kit) == "table" and type(kit.confirm) == "function" then
+    local shown = pcall(kit.confirm, {
+      question = question,
+      on_answer = function(yes)
+        cb(yes == true)
+      end,
+    })
+    if shown then return end
+  end
+  vim.ui.select({ "No", "Yes, " .. yes_label }, { prompt = question }, function(_, index)
+    cb(index == 2)
+  end)
 end
 
 ---Resolve the conflict region under the cursor by keeping `keep`.

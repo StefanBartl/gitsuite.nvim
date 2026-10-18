@@ -133,6 +133,54 @@ local function suggestions(refs, needle)
   return out
 end
 
+---The installed plugins a word that is none comes close to (at most three), for a target that cannot be resolved:
+---empty when the word is a directory or an `owner/repo`, which have their own reasons.
+---@param raw string
+---@param opts? GitSuite.Plugins.ListOpts
+---@return string[]
+function M.candidates(raw, opts)
+  if type(raw) ~= "string" or raw == "" or raw:find("%z") then return {} end
+  if raw:match("^[%w_.-]+/[%w_.-]+$") then return {} end
+  if is_dir(M.absolute(raw)) then return {} end
+  return suggestions(M.list(opts), raw)
+end
+
+---Seams for the specs: the choice (`nil`: `vim.ui.select`) and the command line that runs again with the choice.
+---@type (fun(items: string[], opts: table, cb: fun(choice: string|nil)))|nil
+M.select = nil
+---@type (fun(line: string))|nil
+M.rerun = nil
+
+---Offer the close plugins for a target that was none, and run the command that was typed again with the chosen one.
+---Only for a command that was typed: its line is the last entry of the command history, and it must hold the word
+---(a command run from Lua has no line to run again, and is left with the message).
+---@param raw string
+---@param candidates string[]
+---@return boolean offered
+function M.offer(raw, candidates)
+  if #candidates == 0 then return false end
+  local line = vim.fn.histget(":", -1)
+  local from, to = line:find(raw, 1, true)
+  if not from then return false end
+  vim.schedule(function()
+    local pick = M.select or vim.ui.select
+    pick(candidates, {
+      prompt = ("'%s' is neither an installed plugin nor a directory; did you mean> "):format(
+        text.one_line(raw)
+      ),
+    }, function(choice)
+      if not choice then return end
+      local again = line:sub(1, from - 1) .. choice .. line:sub(to + 1)
+      if M.rerun then
+        M.rerun(again)
+      else
+        vim.cmd(again)
+      end
+    end)
+  end)
+  return true
+end
+
 ---A typed path as an absolute one, expanded once (`~`, `$VAR`). A UNC path
 ---(server/share, wsl$/distro) keeps its leading double separator on Windows:
 ---`to_absolute` would collapse it to the current drive's root.

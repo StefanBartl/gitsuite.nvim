@@ -176,40 +176,72 @@ describe("gitsuite.features.conflict", function()
         assert.same(lines, get_lines())
       end)
 
-      it(
-        "refuses (TOCTOU) if the buffer changed while the vim.ui.select prompt was open",
-        function()
-          -- vim.ui.select is asynchronous -- the prompt can stay open for as
-          -- long as the user takes to decide, during which other code (an
-          -- autocmd, a timer, another choose()) can edit the buffer. Here the
-          -- picked separator row (5) no longer holds `=======` by the time
-          -- on_choice runs; resolving anyway would silently drop content.
-          set_lines(lines)
-          local original_select = vim.ui.select
-          vim.ui.select = function(items, _opts, on_choice)
-            set_lines({ "before", "<<<<<<< HEAD", "Title", "=======", "our text", "EDITED" })
-            on_choice(items[2]) -- row 5: no longer "=======" after the edit above
+      describe("the buffer changed while the vim.ui.select prompt was open (TOCTOU)", function()
+        -- vim.ui.select is asynchronous -- the prompt can stay open for as long as the user takes to decide, during which
+        -- other code (an autocmd, a timer, another choose()) can edit the buffer. Here the picked separator row (5) no
+        -- longer holds `=======` by the time on_choice runs; resolving anyway would silently drop content. The person is
+        -- asked whether to read the buffer again; nothing is written until then, and a No leaves it as it is.
+        local EDITED = { "before", "<<<<<<< HEAD", "Title", "=======", "our text", "EDITED" }
+        local asked, answer, seen, saved
+        before_each(function()
+          asked, seen = {}, {}
+          saved = { select = vim.ui.select, notify = vim.notify, confirm = conflict.confirm }
+          conflict.confirm = function(question, yes_label, cb)
+            asked[#asked + 1] = { question = question, yes = yes_label }
+            cb(answer)
           end
-          local seen = {}
-          local original_notify = vim.notify
           vim.notify = function(msg)
             seen[#seen + 1] = tostring(msg)
           end
-          vim.api.nvim_win_set_cursor(0, { 3, 0 })
-          local ok = pcall(conflict.choose, "ours")
-          vim.notify = original_notify
-          vim.ui.select = original_select
+        end)
+        after_each(function()
+          vim.ui.select, vim.notify, conflict.confirm = saved.select, saved.notify, saved.confirm
+        end)
 
-          assert.is_true(ok, "refusing is a message, not an error")
-          assert.same(
-            { "before", "<<<<<<< HEAD", "Title", "=======", "our text", "EDITED" },
-            get_lines(),
-            "the concurrent edit is left untouched, not overwritten"
-          )
-          assert.equals(1, #seen)
-          assert.is_truthy(seen[1]:find("buffer changed", 1, true))
+        ---@param edited string[]
+        local function choose_with_edit(edited)
+          set_lines(lines)
+          vim.ui.select = function(items, _opts, on_choice)
+            set_lines(edited)
+            on_choice(items[2]) -- row 5: no longer "=======" after the edit above
+          end
+          vim.api.nvim_win_set_cursor(0, { 3, 0 })
+          return pcall(conflict.choose, "ours")
         end
-      )
+
+        it("asks, and a No leaves the concurrent edit untouched", function()
+          answer = false
+          local ok = choose_with_edit(EDITED)
+          assert.is_true(ok, "refusing is a message, not an error")
+          assert.same(EDITED, get_lines(), "the concurrent edit is left untouched, not overwritten")
+          assert.equals(1, #asked)
+          assert.is_truthy(asked[1].question:find("buffer changed", 1, true))
+          assert.is_truthy(seen[#seen]:find("nothing changed", 1, true))
+        end)
+
+        it("a Yes reads the buffer again and resolves what is under the cursor now", function()
+          answer = true
+          local ok = choose_with_edit({ "<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> x" })
+          assert.is_true(ok)
+          assert.equals(1, #asked)
+          assert.same(
+            { "ours" },
+            get_lines(),
+            "the fresh scan found a plain conflict at the cursor"
+          )
+        end)
+
+        it(
+          "a Yes with nothing to resolve any more is refused as it always was, writing nothing",
+          function()
+            answer = true
+            local ok = choose_with_edit(EDITED)
+            assert.is_true(ok)
+            assert.same(EDITED, get_lines())
+            assert.is_truthy(seen[#seen]:find("no conflict region", 1, true))
+          end
+        )
+      end)
     end)
 
     it(

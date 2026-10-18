@@ -592,8 +592,13 @@ end
 local function register_plugin_target_type()
   composer.register_type("GITSUITE_PLUGIN_OR_REPO", {
     validate = function(raw)
-      local target, err = require("gitsuite.features.plugins.sources").resolve(raw)
-      if not target then return false, nil, err end
+      local sources = require("gitsuite.features.plugins.sources")
+      local target, err = sources.resolve(raw)
+      if not target then
+        -- close plugins are offered, and the command that was typed runs again with the one chosen
+        sources.offer(raw, sources.candidates(raw))
+        return false, nil, err
+      end
       return true, target, nil
     end,
     complete = function(arg_lead)
