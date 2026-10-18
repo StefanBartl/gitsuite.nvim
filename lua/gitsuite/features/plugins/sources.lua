@@ -160,7 +160,14 @@ M.rerun = nil
 function M.offer(raw, candidates)
   if #candidates == 0 then return false end
   local line = vim.fn.histget(":", -1)
-  local from, to = line:find(raw, 1, true)
+  -- The word as an argument of its own: the LAST whitespace-delimited token that is exactly `raw`. A plain substring
+  -- search would find `s` inside `plugins` and run a different command.
+  local from, to
+  for first, token, after in line:gmatch("()(%S+)()") do
+    if token == raw then
+      from, to = first, after - 1
+    end
+  end
   if not from then return false end
   vim.schedule(function()
     local pick = M.select or vim.ui.select

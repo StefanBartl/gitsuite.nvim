@@ -443,6 +443,19 @@ describe("gitsuite plugin sources", function()
         assert.equals("Git plugins log alpha.nvim", reran)
       end)
 
+      it("replaces the argument, not a substring of a command word", function()
+        -- `s` is inside `plugins`; only the last token that IS `s` is the target
+        vim.fn.histadd(":", "Git plugins log s")
+        assert.is_true(sources.offer("s", { "s-plugin.nvim" }))
+        vim.wait(500, function()
+          return reran ~= nil
+        end)
+        assert.equals("Git plugins log alpha.nvim", reran)
+        -- a word that is only part of a token (quoted, or glued to another) is not offered for
+        vim.fn.histadd(":", 'Git plugins log "alph"')
+        assert.is_false(sources.offer("alph", { "alpha.nvim" }))
+      end)
+
       it("offers nothing for a command that has no typed line, or no candidates", function()
         vim.fn.histadd(":", "Git plugins log something-else")
         assert.is_false(sources.offer("alph", { "alpha.nvim" }), "the line does not hold the word")
