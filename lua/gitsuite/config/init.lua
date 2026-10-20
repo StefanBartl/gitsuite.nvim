@@ -16,9 +16,6 @@ DEFAULTS.dashboard.base_dir = require("lib.nvim.system.env").get().repo_base
 
 local M = {}
 
----@type GitSuite.Config|nil
-local _active = nil
-
 ---@internal
 ---@param v any
 ---@return boolean
@@ -298,38 +295,56 @@ local function sanitize(opts, schema, prefix)
   return clean, found_issues
 end
 
----@type string[]
-local _issues = {}
+--- The sections whose checks are the predicates of `KNOWN` above (list shapes,
+--- compiled patterns, ranges of whole numbers, enums with their own wording).
+--- To the schema that `lib.lua.config` infers from `DEFAULTS` they are open
+--- tables, so it does not second-guess a value `KNOWN` has already accepted
+--- (`plugins.sources` is "auto" by default and a list when the user names sources).
+--- Unknown top-level keys are still caught there.
+---@type table<string, string|table>
+local SCHEMA = {}
+for key, spec in pairs(KNOWN) do
+  if type(spec) == "table" and spec.ok == nil then SCHEMA[key] = { "table" } end
+end
+
+local cfg = require("lib.lua.config").new(DEFAULTS, {
+  name = "gitsuite",
+  schema = SCHEMA,
+  -- The checks of KNOWN, before the merge: a wrong value is dropped so the built-in default
+  -- underneath applies. `opts` is a private copy, so it is rewritten in place.
+  normalize = function(opts, issues)
+    local clean, found_issues = sanitize(opts, KNOWN, "")
+    for key in pairs(opts) do
+      opts[key] = nil
+    end
+    for key, value in pairs(clean) do
+      opts[key] = value
+    end
+    vim.list_extend(issues, found_issues)
+  end,
+})
 
 ---Whatever the last `setup()` call rejected -- one message per issue, empty
 ---when everything validated. For `:checkhealth gitsuite`.
 ---@return string[]
 function M.issues()
-  return vim.deepcopy(_issues)
+  return cfg.issues()
 end
 
----Merge user options over the defaults and store the result.
+---Set the options over the defaults and store the result. Every call starts
+---from `DEFAULTS`.
 ---@param user_opts? GitSuite.Opts
 ---@return GitSuite.Config
 function M.setup(user_opts)
-  if type(user_opts) ~= "table" then
-    user_opts = {} --[[@as table]]
-  end
-
-  local clean, found_issues = sanitize(user_opts, KNOWN, "")
-  table.sort(found_issues)
-  _issues = found_issues
-
-  _active = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), clean)
-  return _active
+  cfg.setup(type(user_opts) == "table" and user_opts or nil)
+  return cfg.get()
 end
 
 ---Return the active configuration, falling back to defaults if `setup` was
 ---never called.
 ---@return GitSuite.Config
 function M.get()
-  if _active == nil then _active = vim.deepcopy(DEFAULTS) end
-  return _active
+  return cfg.get()
 end
 
 return M
