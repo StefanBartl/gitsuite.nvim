@@ -238,6 +238,14 @@ local function normalize_entry(entry)
     local n, total = count(entry.convention.conventional), count(entry.convention.total)
     if n and total and n <= total then out.convention = { conventional = n, total = total } end
   end
+  local ai = entry.ai_summary
+  if type(ai) == "table" and type(ai.text) == "string" and ai.text ~= "" then
+    out.ai_summary = {
+      text = str(ai.text, 16000) --[[@as string]],
+      provider = str(ai.provider, 128) or "unknown",
+      at = plausible_time(ai.at) and ai.at or nil,
+    }
+  end
   if entry.commits ~= nil and is_list(entry.commits) then
     local commits = {}
     for _, c in ipairs(entry.commits) do
@@ -477,7 +485,7 @@ end
 ---@return boolean ok
 ---@return string|nil err
 ---@return GitSuite.Plugins.StoreInfo|nil info
-function M.add(report, cfg, path)
+function M.add(report, cfg, path, opts)
   path = real_path(path or M.path())
   local store, info = M.load(path)
   if info.readonly then return false, info.readonly, info end
@@ -520,10 +528,15 @@ function M.add(report, cfg, path)
     store = empty()
   end
 
+  -- (`keep_position`: an annotated report stays where it is in the history)
+  local position = 1
   for i = #store.reports, 1, -1 do
-    if store.reports[i].id == report.id then table.remove(store.reports, i) end
+    if store.reports[i].id == report.id then
+      if opts and opts.keep_position then position = i end
+      table.remove(store.reports, i)
+    end
   end
-  table.insert(store.reports, 1, report)
+  table.insert(store.reports, position, report)
   M.prune(store, cfg, report.at)
 
   -- Size each report once, drop the oldest until the file fits, encode once more.

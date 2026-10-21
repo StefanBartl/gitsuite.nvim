@@ -107,6 +107,14 @@ local DEFAULTS = {
     -- all); "toast" = build and store the `updated` report, show a corner toast
     -- that never takes focus; "open" = also open the report.
     after_sync = "off",
+    -- Optional AI summary of one plugin's update in a report: a function
+    -- `function(input, done)` that calls `done(text?, err?, meta?)` (meta.provider
+    -- names the source). `false` = off: no key, no network, no `require("ai")`.
+    -- Only runs when you press `summarize_key` in the report buffer, never by itself;
+    -- `input` is a structured digest marked `untrusted = true` (commit messages
+    -- of other people's repositories). See docs/integrations.md.
+    summarize = false,
+    summarize_key = "gS",
     -- The breaking-change heuristic of the report (commit messages only).
     breaking = {
       -- Commits whose subject (without its `type(scope):` prefix) repeats at

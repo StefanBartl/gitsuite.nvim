@@ -164,6 +164,13 @@ function M.check()
   end
   local plugins_cfg = require("gitsuite.config").get().plugins
   vim.health.info("plugins.sources = " .. vim.inspect(plugins_cfg.sources):gsub("%s+", " "))
+  vim.health.info(
+    require("gitsuite.features.plugins.ai_summary").hook()
+        and ("plugins.summarize is set (key %s in the report buffer; asks only on that key)"):format(
+          require("gitsuite.features.plugins.ai_summary").key()
+        )
+      or "plugins.summarize is not set (no AI summary, no network)"
+  )
   if #plugins_cfg.roots > 0 then
     -- Resolved the way the `clones` source resolves them (`~`, `$VAR`, `%VAR%`),
     -- not with `expand()`, which would also run backtick commands and read

@@ -33,6 +33,13 @@ local function cell(s)
   return (esc(s):gsub("|", "\\|"))
 end
 
+---The text of a `## name` heading for a plugin (what `render` writes).
+---@param name any
+---@return string
+function M.heading(name)
+  return cell(name)
+end
+
 ---Text inside a code span: a backtick would end it.
 ---@param s any
 ---@return string
@@ -56,6 +63,25 @@ end
 ---@return string
 local function moment(t)
   return type(t) == "number" and os.date("%Y-%m-%d %H:%M:%S", t) --[[@as string]] or "?"
+end
+
+---The AI text of an entry as a clearly marked quote: who made it, when, and that
+---it is a generated text over untrusted commit messages -- shown, never run.
+---@param ai { text: string, provider?: string, at?: integer }
+---@return string[]
+local function ai_lines(ai)
+  local lines = {
+    ("> **AI text** (%s, %s) — generated from commit messages, not verified; never executed."):format(
+      cell(ai.provider or "unknown"),
+      ai.at and moment(ai.at) or "?"
+    ),
+    ">",
+  }
+  for _, line in ipairs(text.lines(ai.text, 200)) do
+    lines[#lines + 1] = line == "" and ">" or ("> " .. esc(line))
+  end
+  lines[#lines + 1] = ""
+  return lines
 end
 
 ---@param t integer
@@ -352,6 +378,9 @@ function M.render(report, now, ctx)
         add("")
       end
       if summaries[i] then vim.list_extend(lines, summary.markdown(summaries[i])) end
+      if type(entry.ai_summary) == "table" and type(entry.ai_summary.text) == "string" then
+        vim.list_extend(lines, ai_lines(entry.ai_summary))
+      end
       if has_commits then
         if entry.status == "rollback" then
           commit_list(

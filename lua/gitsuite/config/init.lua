@@ -166,6 +166,13 @@ local function is_pull_scope(v)
 end
 
 ---@internal
+---`plugins.summarize`: the AI summary hook -- a function, or `false` for off.
+---@param v any
+---@return boolean
+local function is_summarize_hook(v)
+  return v == false or type(v) == "function"
+end
+
 ---`plugins.sources`: the word "auto", or a list naming plugin sources.
 ---@param v any
 ---@return boolean
@@ -243,6 +250,8 @@ local KNOWN = {
     keep_reports = { ok = int_in(10000), expect = "a whole number from 1 to 10000" },
     max_age_days = { ok = int_in(36500), expect = "a whole number of days (1 to 36500)" },
     after_sync = { ok = is_after_sync, expect = '"off", "toast" or "open"' },
+    summarize = { ok = is_summarize_hook, expect = "a function(input, done) or false" },
+    summarize_key = { ok = is_string, expect = "a non-empty key string" },
     breaking = {
       collapse_repeats = { ok = int_in(1000), expect = "a whole number from 1 to 1000" },
       ignore = { ok = is_patterns, expect = "a list of valid vim.regex patterns" },

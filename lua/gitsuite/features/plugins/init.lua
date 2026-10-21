@@ -150,8 +150,26 @@ end
 ---@param opts GitSuite.Plugins.ReportCmdOpts
 local function present(report, opts)
   local ok, ctx = pcall(require("gitsuite.features.plugins.report").context)
-  local lines = require("gitsuite.features.plugins.markdown").render(report, nil, ok and ctx or nil)
+  ctx = ok and ctx or nil
+  local markdown = require("gitsuite.features.plugins.markdown")
+  local lines = markdown.render(report, nil, ctx)
   view.show_markdown(lines, report.id, opts.out, opts.to)
+
+  -- The report buffer is the current one now: with a `plugins.summarize` hook
+  -- it gets the key that asks for the AI summary of the plugin under the cursor.
+  if (opts.out or "buffer") == "buffer" then
+    local buf = vim.api.nvim_get_current_buf()
+    require("gitsuite.features.plugins.ai_summary").attach(buf, report, function()
+      if not vim.api.nvim_buf_is_valid(buf) then return end
+      local cursor = vim.api.nvim_buf_call(buf, function()
+        return vim.api.nvim_win_get_cursor(0)
+      end)
+      vim.bo[buf].modifiable = true
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, markdown.render(report, nil, ctx))
+      vim.bo[buf].modifiable = false
+      pcall(vim.api.nvim_win_set_cursor, 0, cursor)
+    end, ctx, opts.store_path)
+  end
 end
 
 ---Whether `present` runs: `open = false` only suppresses the buffer, an
