@@ -316,6 +316,10 @@ for key, spec in pairs(KNOWN) do
   if type(spec) == "table" and spec.ok == nil then SCHEMA[key] = { "table" } end
 end
 
+-- `keymaps` is a table of actions by default, `false` switches them all off, and a value per action
+-- may be a string, a list or `false`: `KNOWN` checks nothing there, so the schema must not either.
+SCHEMA.keymaps = "table|false"
+
 local cfg = require("lib.lua.config").new(DEFAULTS, {
   name = "gitsuite",
   schema = SCHEMA,
