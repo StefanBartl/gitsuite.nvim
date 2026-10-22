@@ -151,7 +151,7 @@ of thing, for the clone under the cursor).
 | `]b` / `[b` | n | Next / previous breaking commit not marked as seen |
 | `m` | n | Mark the commit under the cursor as seen, or every new commit of the plugin under it; again: unmark |
 | `M` | n | Mark every commit this view lists as seen |
-| `o` / `K` | n | Open in the browser: the commit's page, or on a plugin the compare page of its update; what it shows counts as seen |
+| `o` / `K` | n | Open in the browser: the commit, or on a plugin the compare page of its update; counts as seen |
 | `go` | n | Open the compare page of the plugin's update, also from a commit line |
 | `gy` | n | Copy the URL `o` would open |
 | `y` / `Y` | n | Copy the short / full hash (on a plugin: the commit its update ended on) |
@@ -161,6 +161,8 @@ of thing, for the clone under the cursor).
 | `Q` | n | The breaking commits into the quickfix list, opened in the tab the report was opened from |
 | `F` | n | Jump to a plugin or a commit by name (picker) |
 | `O` | n | Menu of the actions for the line under the cursor |
+| `r` | n | Read the clone under the cursor again (a failed one, say); for this tab only, nothing is stored |
+| `R` | n | Build a new report (same mode), store it and show it |
 | `p` | n | Show or hide the preview (follows the cursor) |
 | `q` | n | Close the report tab; the report stays, `:Git plugins` opens it again |
 | `?` | n | List every one of these keys |

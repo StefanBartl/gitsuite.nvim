@@ -195,7 +195,7 @@ marked "no marker convention recognized".
       include_local = false, mode = "updated", max_commits = 1000, parallel = 4,
       fetch_jobs = 2, fetch_timeout_ms = 60000, fetch_confirm = 5,
       run_window_s = 300, merges = false, keep_reports = 20, max_age_days = 365,
-      seen_ttl_days = 180,
+      seen_ttl_days = 180, ascii = false,
       after_sync = "off",
       breaking = { collapse_repeats = 5, ignore = {}, plugins = {} } },
     progress_style = "auto",

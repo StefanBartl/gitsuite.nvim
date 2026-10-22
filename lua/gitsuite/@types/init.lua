@@ -59,6 +59,7 @@
 ---@field merges boolean       Keep merge commits in the commit lists.
 ---@field keep_reports integer Stored reports (newest first).
 ---@field seen_ttl_days integer Days a seen mark of the report tab is kept.
+---@field ascii boolean The report tab's glyphs in plain ASCII.
 ---@field max_age_days integer Stored reports older than this are dropped.
 ---@field after_sync "off"|"toast"|"open"  After `:Lazy sync`: nothing (default), a toast with the `updated` report's summary, or the toast plus the report.
 ---@field breaking GitSuite.Config.PluginsBreaking  The breaking-change heuristic of the report.

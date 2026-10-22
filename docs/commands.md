@@ -101,7 +101,12 @@ copy the hash or the URL, `S` shows the clone's status (read only), `C` its
 CHANGELOG and `Q` puts the breaking commits into the quickfix list (both in the
 tab you came from, never in the report's own windows), `L` opens lazygit in the
 clone, `O` lists all of it as a menu and `F` jumps by name. The report itself
-never pushes, pulls, fetches or writes a clone. The tab can be closed and comes back
+never pushes, pulls, fetches or writes a clone. A clone that could not be read
+is a `✗ error` row; `r` reads it again (for the tab only), `R` builds and
+stores a new report. While a report is built, its progress goes through
+`lib.nvim.progress` (`progress_style`), so a statusline component can show it.
+`plugins.ascii` draws the glyphs as `^ v x @ *`; the groups
+`GitSuitePlugins*` link to standard groups and can be set like any other. The tab can be closed and comes back
 as it was, cursor included: `:Git plugins` opens it again, or after a restart
 the newest stored report, without a scan. Its keys are in
 [BINDINGS.md](BINDINGS.md#plugins-report-keys-component-local). `--out=buffer`

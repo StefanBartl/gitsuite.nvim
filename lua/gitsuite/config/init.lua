@@ -250,6 +250,7 @@ local KNOWN = {
     merges = { ok = is_boolean, expect = "a boolean" },
     keep_reports = { ok = int_in(10000), expect = "a whole number from 1 to 10000" },
     seen_ttl_days = { ok = int_in(36500), expect = "a whole number of days from 1 to 36500" },
+    ascii = { ok = is_boolean, expect = "a boolean" },
     max_age_days = { ok = int_in(36500), expect = "a whole number of days (1 to 36500)" },
     after_sync = { ok = is_after_sync, expect = '"off", "toast" or "open"' },
     summarize = { ok = is_summarize_hook, expect = "a function(input, done) or false" },

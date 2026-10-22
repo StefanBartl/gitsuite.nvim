@@ -208,6 +208,7 @@ function M.render_overview(m)
     }
     if e.status == "error" or e.status == "no_git" then
       parts[#parts + 1] = { text.one_line(e.reason or "could not be read"), "GitSuitePluginsError" }
+      parts[#parts + 1] = { "  (r reads it again)", "GitSuitePluginsDim" }
     else
       local rg = range(e)
       if rg ~= "" then

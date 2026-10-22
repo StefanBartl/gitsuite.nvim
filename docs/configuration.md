@@ -172,6 +172,7 @@ plugins = {
   keep_reports = 20,     -- stored reports, newest first
   max_age_days = 365,    -- older stored reports are dropped (the newest never is)
   seen_ttl_days = 180,   -- the report tab's seen marks (m/M) are kept this many days
+  ascii = false,         -- the report tab's glyphs as ^ v x @ * (the words stay)
   after_sync = "off",    -- after :Lazy sync: "off" | "toast" | "open"
   summarize = false,     -- function(input, done) for an AI summary of one plugin; see integrations.md
   summarize_key = "gS",  -- the key in the report buffer that asks for it

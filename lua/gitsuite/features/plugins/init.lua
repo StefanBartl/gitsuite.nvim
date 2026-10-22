@@ -356,51 +356,65 @@ end
 ---@return { stop: fun() } handle
 function build(opts, fetched)
   if not opts.quiet then notify.info("plugins report: reading the clones ...") end
-  local handle = require("gitsuite.features.plugins.report").build(
-    { mode = opts.mode, all = opts.all, accept = opts.accept, fetched = fetched },
-    function(report, info)
-      running = nil
-      -- (a queued call starts after this one is fully handled)
-      local next_opts = queued
-      queued = nil
-      if next_opts then vim.schedule(function()
-        M.report(next_opts)
-      end) end
-      if info.discarded then
-        -- (nothing stored, but the read may have moved a broken store aside)
-        warn_store(info, false)
-        if opts.on_done then opts.on_done(report, nil) end
-        return
-      end
-      require("gitsuite.events").plugins_reported({
-        id = report.id,
-        mode = report.mode,
-        at = report.at,
-        plugins = report.counts.changed,
-        commits = report.counts.commits,
-        errors = #report.errors + (report.counts.failed or 0),
-        saved = report.save_error == nil,
-      })
-      warn_store(info, true)
-      if report.save_error then
-        notify.warn("plugins report: not saved: " .. text.one_line(report.save_error))
-      end
-      if presents(opts) then
-        present(report, opts)
-      elseif not opts.quiet then
-        notify.info(
-          ("plugins report: %d of %d changed, %d commits (%s) -- :%s plugins report --last shows it"):format(
-            report.counts.changed,
-            report.counts.checked,
-            report.counts.commits,
-            report.save_error and "not saved" or "saved",
-            config.get().commands.git
-          )
-        )
-      end
-      if opts.on_done then opts.on_done(report, nil) end
+  -- Progress for a statusline component (`progress_style`); the count is only
+  -- known once the sources are listed, so it starts without one.
+  local progress = not opts.quiet and require("gitsuite.util.progress").create("plugins report")
+    or nil
+  local handle = require("gitsuite.features.plugins.report").build({
+    mode = opts.mode,
+    all = opts.all,
+    accept = opts.accept,
+    fetched = fetched,
+    on_progress = progress and function(done, total)
+      progress:update({ text = "plugins report", current = done, total = total })
+    end or nil,
+  }, function(report, info)
+    if progress then
+      progress:finish(
+        ("plugins report: %d of %d changed"):format(report.counts.changed, report.counts.checked)
+      )
     end
-  )
+    running = nil
+    -- (a queued call starts after this one is fully handled)
+    local next_opts = queued
+    queued = nil
+    if next_opts then vim.schedule(function()
+      M.report(next_opts)
+    end) end
+    if info.discarded then
+      -- (nothing stored, but the read may have moved a broken store aside)
+      warn_store(info, false)
+      if opts.on_done then opts.on_done(report, nil) end
+      return
+    end
+    require("gitsuite.events").plugins_reported({
+      id = report.id,
+      mode = report.mode,
+      at = report.at,
+      plugins = report.counts.changed,
+      commits = report.counts.commits,
+      errors = #report.errors + (report.counts.failed or 0),
+      saved = report.save_error == nil,
+    })
+    warn_store(info, true)
+    if report.save_error then
+      notify.warn("plugins report: not saved: " .. text.one_line(report.save_error))
+    end
+    if presents(opts) then
+      present(report, opts)
+    elseif not opts.quiet then
+      notify.info(
+        ("plugins report: %d of %d changed, %d commits (%s) -- :%s plugins report --last shows it"):format(
+          report.counts.changed,
+          report.counts.checked,
+          report.counts.commits,
+          report.save_error and "not saved" or "saved",
+          config.get().commands.git
+        )
+      )
+    end
+    if opts.on_done then opts.on_done(report, nil) end
+  end)
   -- (the callback is always scheduled, so `running` is set before it can clear it)
   running = {
     stop = function()

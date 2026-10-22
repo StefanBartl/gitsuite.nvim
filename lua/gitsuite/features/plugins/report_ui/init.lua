@@ -52,6 +52,7 @@ function M.open(report, opts)
   end
   local m = require("gitsuite.features.plugins.report_ui.model").new(report, {
     ctx = ctx,
+    ascii = require("gitsuite.config").get().plugins.ascii == true,
     seen = seen.set(marks),
     heads = M.heads(report),
   })

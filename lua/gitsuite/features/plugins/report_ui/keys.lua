@@ -76,7 +76,7 @@ M.KEYS = {
     keys = { "o", "K" },
     action = "browser",
     label = "o browser",
-    desc = "Open in the browser: the commit's page, or on a plugin the compare page of its update; what it shows counts as seen",
+    desc = "Open in the browser: the commit, or on a plugin the compare page of its update; counts as seen",
   },
   {
     keys = { "go" },
@@ -123,6 +123,16 @@ M.KEYS = {
     action = "menu",
     label = "O actions",
     desc = "Menu of the actions for the line under the cursor",
+  },
+  {
+    keys = { "r" },
+    action = "retry",
+    desc = "Read the clone under the cursor again (a failed one, say); for this tab only, nothing is stored",
+  },
+  {
+    keys = { "R" },
+    action = "rebuild",
+    desc = "Build a new report (same mode), store it and show it",
   },
   {
     keys = { "p" },

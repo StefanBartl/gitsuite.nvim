@@ -109,6 +109,9 @@ local DEFAULTS = {
     -- The report tab's seen marks (`m`/`M`, in plugins_seen.json): a mark older
     -- than this many days is dropped on the next write.
     seen_ttl_days = 180,
+    -- The report tab draws its state glyphs (↑ ↓ ✗ ↻ •) in plain ASCII
+    -- (^ v x @ *) for a terminal or font without them; the words stay.
+    ascii = false,
     -- After `:Lazy sync` (`User LazySync`): "off" = nothing (no listener at
     -- all); "toast" = build and store the `updated` report, show a corner toast
     -- that never takes focus; "open" = also open the report.

@@ -268,6 +268,9 @@ describe("gitsuite.features.plugins.report_ui window", function()
     local help = table.concat(keys.help_lines(), "\n")
     for _, k in ipairs(keys.KEYS) do
       assert.truthy(help:find(k.desc, 1, true), k.desc)
+      -- The ? popup does not wrap: a longer text was cut at 120 columns (seen in
+      -- a real TUI).
+      assert.is_true(#k.desc <= 100, ("%d chars: %s"):format(#k.desc, k.desc))
       for _, lhs in ipairs(k.keys) do
         assert.truthy(help:find(lhs, 1, true), lhs)
       end

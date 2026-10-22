@@ -567,6 +567,63 @@ ACTIONS.menu = function()
   require("ui.kit").menu({ title = "plugins report", items = M.menu_items() })
 end
 
+---The installed plugin whose clone is `dir`, from the configured sources.
+---@param dir string
+---@return GitSuite.Plugins.Ref|nil
+local function ref_of(dir)
+  local refs = require("gitsuite.features.plugins.sources").list({ include_local = true })
+  local want = vim.fs.normalize(dir)
+  for _, ref in ipairs(refs or {}) do
+    if vim.fs.normalize(ref.dir) == want then return ref end
+  end
+end
+
+---Put a freshly read entry in place of the one named `name` (or drop it when
+---the clone now shows no change), in this tab's copy of the report.
+---@param name string
+---@param fresh GitSuite.Plugins.ReportEntry|nil
+function M.replace_entry(name, fresh)
+  local plugins = S.model.report.plugins
+  for i, e in ipairs(plugins) do
+    if e.name == name then
+      if fresh then
+        plugins[i] = fresh
+      else
+        table.remove(plugins, i)
+      end
+      break
+    end
+  end
+  S.model.cache[name] = nil
+  M.redraw({ kind = "plugin", name = name })
+end
+
+ACTIONS.retry = function()
+  local entry = entry_here()
+  if not entry then return end
+  local ref = ref_of(entry.dir)
+  if not ref then return notify_info(entry.name .. " is not installed (any more)") end
+  notify_info("reading " .. entry.name .. " again ...")
+  local name, mode = entry.name, S.model.report.mode
+  require("gitsuite.features.plugins.report").build(
+    { refs = { ref }, mode = mode, persist = false },
+    function(fresh)
+      if not S.model or S.model.report.mode ~= mode then return end
+      local new_entry = fresh and fresh.plugins and fresh.plugins[1] or nil
+      if new_entry and new_entry.status == "same" then new_entry = nil end
+      M.replace_entry(name, new_entry)
+      notify_info(
+        new_entry and (name .. " read again (in this tab; R stores a new report)")
+          or (name .. " shows no change now")
+      )
+    end
+  )
+end
+
+ACTIONS.rebuild = function()
+  require("gitsuite.features.plugins").report({ mode = S.model.report.mode })
+end
+
 ACTIONS.preview = function()
   if valid_win(S.preview_win) then
     S.preview_on = false
@@ -680,6 +737,7 @@ end
 
 ---Make the two buffers once.
 local function ensure_buffers()
+  require("gitsuite.features.plugins.report_ui.highlights").setup()
   if not valid_buf(S.list_buf) then
     S.list_buf = make_buf(M.LIST_NAME, "gitsuite-plugins-report")
     bind(S.list_buf)
