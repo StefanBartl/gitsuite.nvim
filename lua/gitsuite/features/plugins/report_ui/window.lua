@@ -45,6 +45,7 @@ local AUGROUP = "gitsuite_plugins_report"
 ---@field cursor? GitSuite.ReportUi.Item  The key under the cursor, for the rebuild.
 ---@field rendered? GitSuite.ReportUi.Rendered
 ---@field loader? GitSuite.ReportUi.PreviewLoader
+---@field seen_path? string  The marks file (nil: the default; specs set one).
 
 ---@type GitSuite.ReportUi.State
 local S = { preview_on = true }
@@ -135,6 +136,12 @@ end
 local function loader()
   if not S.loader then S.loader = require("gitsuite.features.plugins.report_ui.preview").new() end
   return S.loader
+end
+
+---For specs: the seen-marks file to write.
+---@param path string|nil
+function M.set_seen_path(path)
+  S.seen_path = path
 end
 
 ---For specs: use `l` as the file loader.
@@ -310,6 +317,71 @@ ACTIONS.breaking = function(lhs)
   require("gitsuite.util.notify").info("plugins report: no unseen breaking commit in this view")
 end
 
+---Write `keys` as seen (or not) to the model and to the marks file. A file
+---that cannot be written keeps the marks for this session and says so.
+---@param pairs_ { name: string, sha: string }[]
+---@param on boolean
+local function set_seen(pairs_, on)
+  if #pairs_ == 0 then return end
+  S.model = model.mark(S.model, pairs_, on)
+  local changes = {}
+  for _, k in ipairs(pairs_) do
+    changes[model.seen_key(k.name, k.sha)] = on
+  end
+  local _, err =
+    require("gitsuite.features.plugins.report_ui.seen").update(changes, { path = S.seen_path })
+  if err then
+    require("gitsuite.util.notify").warn("plugins report: " .. err .. " (kept for this session)")
+  end
+  M.redraw()
+end
+
+ACTIONS.mark = function()
+  local it = item_at_cursor()
+  if not it or not it.name then return end
+  local entry = model.entry(S.model, it.name)
+  if not entry then return end
+  local list
+  if it.kind == "commit" then
+    local new = false
+    for _, k in ipairs(model.commit_keys(S.model, entry)) do
+      if k.sha == it.sha then new = true end
+    end
+    if not new then
+      require("gitsuite.util.notify").info(
+        "plugins report: a removed commit is not new; there is nothing to mark"
+      )
+      return
+    end
+    list = { { name = it.name, sha = it.sha } }
+  else
+    list = model.commit_keys(S.model, entry)
+  end
+  local all_seen = true
+  for _, k in ipairs(list) do
+    if not model.is_seen(S.model, k.name, k.sha) then all_seen = false end
+  end
+  set_seen(list, not all_seen)
+end
+
+ACTIONS.mark_all = function()
+  local list = {}
+  if S.model.view.kind == "digest" then
+    for i = 1, #S.rendered.lines do
+      local it = S.rendered.items[i]
+      if it.kind == "commit" then list[#list + 1] = { name = it.name, sha = it.sha } end
+    end
+  elseif S.model.view.kind == "detail" then
+    local entry = model.entry(S.model, S.model.view.name)
+    list = entry and model.commit_keys(S.model, entry) or {}
+  else
+    for _, entry in ipairs(model.entries(S.model)) do
+      vim.list_extend(list, model.commit_keys(S.model, entry))
+    end
+  end
+  set_seen(list, true)
+end
+
 ACTIONS.preview = function()
   if valid_win(S.preview_win) then
     S.preview_on = false
@@ -438,10 +510,14 @@ end
 ---@param m GitSuite.ReportUi.Model
 function M.open(m)
   local same_report = S.model and S.model.report.id == m.report.id
-  -- The same report opened again keeps its view, sort and marks.
   if not same_report then
     S.model = m
     S.cursor = nil
+  else
+    -- The same report opened again keeps its view and sort; the seen marks and
+    -- the clones' HEADs are what `m` read just now (another editor may have
+    -- marked, a clone may have moved).
+    S.model = vim.tbl_extend("force", {}, S.model, { seen = m.seen, heads = m.heads })
   end
   ensure_buffers()
 

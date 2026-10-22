@@ -296,6 +296,8 @@ describe("gitsuite.features.plugins.report_ui window waits for the files", funct
     end
     ui = require("gitsuite.features.plugins.report_ui")
     window = require("gitsuite.features.plugins.report_ui.window")
+    -- Never the real stdpath("state"): marks go to a file of this spec.
+    window.set_seen_path(vim.fn.tempname() .. "/plugins_seen.json")
     report = dofile(dir_of_spec .. "../fixtures/report_ui_report.lua")
     requests = {}
     local cache = {}

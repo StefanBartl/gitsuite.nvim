@@ -148,6 +148,8 @@ dashboard (`p` is the preview, not push).
 | `A` | n | List the unchanged plugins too, or count them again |
 | `]]` / `[[` | n | Next / previous plugin's detail (in the overview's order) |
 | `]b` / `[b` | n | Next / previous breaking commit not marked as seen |
+| `m` | n | Mark the commit under the cursor as seen, or every new commit of the plugin under it; again: unmark |
+| `M` | n | Mark every commit this view lists as seen |
 | `p` | n | Show or hide the preview (follows the cursor) |
 | `q` | n | Close the report tab; the report stays, `:Git plugins` opens it again |
 | `?` | n | List every one of these keys |

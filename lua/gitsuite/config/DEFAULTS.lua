@@ -106,6 +106,9 @@ local DEFAULTS = {
     -- Stored reports (newest first): how many, and for how many days.
     keep_reports = 20,
     max_age_days = 365,
+    -- The report tab's seen marks (`m`/`M`, in plugins_seen.json): a mark older
+    -- than this many days is dropped on the next write.
+    seen_ttl_days = 180,
     -- After `:Lazy sync` (`User LazySync`): "off" = nothing (no listener at
     -- all); "toast" = build and store the `updated` report, show a corner toast
     -- that never takes focus; "open" = also open the report.

@@ -171,6 +171,7 @@ plugins = {
   merges = false,        -- keep merge commits in the commit lists
   keep_reports = 20,     -- stored reports, newest first
   max_age_days = 365,    -- older stored reports are dropped (the newest never is)
+  seen_ttl_days = 180,   -- the report tab's seen marks (m/M) are kept this many days
   after_sync = "off",    -- after :Lazy sync: "off" | "toast" | "open"
   summarize = false,     -- function(input, done) for an AI summary of one plugin; see integrations.md
   summarize_key = "gS",  -- the key in the report buffer that asks for it
@@ -195,7 +196,7 @@ cannot hang the request.
 The numeric options take whole numbers within a range; a value outside it is
 dropped with a `setup()` issue and the default applies: `log_limit` and
 `max_commits` 1–1000000, `timeout_ms` 1–2147483647, `parallel` 1–64,
-`run_window_s` 1–31536000, `keep_reports` 1–10000, `max_age_days` 1–36500,
+`run_window_s` 1–31536000, `keep_reports` 1–10000, `max_age_days` 1–36500, `seen_ttl_days` 1–36500,
 `fetch_jobs` 1–16, `fetch_timeout_ms` 1–3600000, `fetch_confirm` 1–100000
 (`math.huge` is not "no limit").
 

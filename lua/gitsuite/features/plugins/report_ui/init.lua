@@ -10,9 +10,26 @@
 
 local M = {}
 
----Show `report` in the report tab.
+---Where each changed clone's HEAD is now (read from files, no process): a
+---clone that moved since the report is marked as such.
 ---@param report GitSuite.Plugins.Report
----@param opts? { ctx?: GitSuite.Plugins.ClassifyContext }
+---@return table<string, string>
+function M.heads(report)
+  local gitfs = require("gitsuite.features.plugins.gitfs")
+  local out = {}
+  for _, e in ipairs(report.plugins or {}) do
+    if type(e.dir) == "string" and e.head then
+      local ok, head = pcall(gitfs.head, e.dir)
+      if ok and head and head.sha then out[e.dir] = head.sha end
+    end
+  end
+  return out
+end
+
+---Show `report` in the report tab, with the seen marks read fresh from their
+---file and each clone's HEAD as it is now.
+---@param report GitSuite.Plugins.Report
+---@param opts? { ctx?: GitSuite.Plugins.ClassifyContext, seen_path?: string }
 ---@return nil
 function M.open(report, opts)
   opts = opts or {}
@@ -21,8 +38,24 @@ function M.open(report, opts)
     local ok, c = pcall(require("gitsuite.features.plugins.report").context)
     ctx = ok and c or nil
   end
-  local m = require("gitsuite.features.plugins.report_ui.model").new(report, { ctx = ctx })
-  require("gitsuite.features.plugins.report_ui.window").open(m)
+  local seen = require("gitsuite.features.plugins.report_ui.seen")
+  local window = require("gitsuite.features.plugins.report_ui.window")
+  if opts.seen_path then window.set_seen_path(opts.seen_path) end
+  local path = window.state().seen_path
+  local marks, info = seen.load(path)
+  if info.error then
+    require("gitsuite.util.notify").warn(
+      ("plugins report: the seen marks cannot be read (%s); the next mark moves the file aside"):format(
+        info.error
+      )
+    )
+  end
+  local m = require("gitsuite.features.plugins.report_ui.model").new(report, {
+    ctx = ctx,
+    seen = seen.set(marks),
+    heads = M.heads(report),
+  })
+  window.open(m)
 end
 
 ---`:Git plugins`: the report tab again if it was open in this Neovim, else the
@@ -34,7 +67,7 @@ function M.open_last(opts)
   local window = require("gitsuite.features.plugins.report_ui.window")
   local s = window.state()
   if s.model then
-    window.open(s.model)
+    M.open(s.model.report, { ctx = s.model.ctx })
     return true
   end
   local store = require("gitsuite.features.plugins.state").load(opts.store_path, { peek = true })

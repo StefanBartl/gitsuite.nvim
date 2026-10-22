@@ -51,6 +51,8 @@ describe("gitsuite.features.plugins.report_ui window", function()
     end
     ui = require("gitsuite.features.plugins.report_ui")
     window = require("gitsuite.features.plugins.report_ui.window")
+    -- Never the real stdpath("state"): marks go to a file of this spec.
+    window.set_seen_path(vim.fn.tempname() .. "/plugins_seen.json")
     keys = require("gitsuite.features.plugins.report_ui.keys")
     report = dofile(dir_of_spec .. "../fixtures/report_ui_report.lua")
   end)

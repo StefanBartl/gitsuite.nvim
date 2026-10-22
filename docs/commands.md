@@ -89,7 +89,13 @@ from one `git diff-tree` (cached, and only once the cursor rests). A full clone
 also shows the lines added and removed per file; lazy.nvim's clones are
 blobless (`--filter=blob:none`) and keep no contents of past commits, so there
 the preview lists the files without counts and says why -- gitsuite never
-fetches the missing contents. The tab can be closed and comes back
+fetches the missing contents. `m` marks a commit (or every new commit of a
+plugin) as seen, `M` everything the view lists; the marks are kept in
+`stdpath("state")/gitsuite/plugins_seen.json` per plugin and commit, so a later
+update of the same plugin shows only its new commits as unseen (two Neovims
+marking at once both keep their marks; marks expire after
+`plugins.seen_ttl_days`). A clone that moved since the report was made is
+marked `↻ moved since the report`. The tab can be closed and comes back
 as it was, cursor included: `:Git plugins` opens it again, or after a restart
 the newest stored report, without a scan. Its keys are in
 [BINDINGS.md](BINDINGS.md#plugins-report-keys-component-local). `--out=buffer`

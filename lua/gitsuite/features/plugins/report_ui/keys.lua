@@ -62,6 +62,17 @@ M.KEYS = {
     desc = "Next / previous breaking commit not marked as seen",
   },
   {
+    keys = { "m" },
+    action = "mark",
+    label = "m seen",
+    desc = "Mark the commit under the cursor as seen, or every new commit of the plugin under it; again: unmark",
+  },
+  {
+    keys = { "M" },
+    action = "mark_all",
+    desc = "Mark every commit this view lists as seen",
+  },
+  {
     keys = { "p" },
     action = "preview",
     label = "p preview",

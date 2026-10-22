@@ -146,7 +146,8 @@ By default the report opens in a tab of its own (`--out=tab`): an overview of th
 changed plugins, a breaking digest (`D`), a detail per plugin (`<CR>`) and a preview
 of the commit under the cursor, with the files it changed (line counts only in a full
 clone: lazy.nvim's blobless clones have no old contents, and gitsuite never fetches
-them) (keys: docs/BINDINGS.md, "Plugins report keys"). `q`
+them); `m`/`M` mark commits as seen, kept in plugins_seen.json across reports
+(keys: docs/BINDINGS.md, "Plugins report keys"). `q`
 closes it; `:Git plugins` opens it again where it was, or after a restart the newest
 stored report, without a scan. The other outputs are Markdown (a buffer, the
 clipboard or a file); a rollback, a diverged
@@ -194,6 +195,7 @@ marked "no marker convention recognized".
       include_local = false, mode = "updated", max_commits = 1000, parallel = 4,
       fetch_jobs = 2, fetch_timeout_ms = 60000, fetch_confirm = 5,
       run_window_s = 300, merges = false, keep_reports = 20, max_age_days = 365,
+      seen_ttl_days = 180,
       after_sync = "off",
       breaking = { collapse_repeats = 5, ignore = {}, plugins = {} } },
     progress_style = "auto",
