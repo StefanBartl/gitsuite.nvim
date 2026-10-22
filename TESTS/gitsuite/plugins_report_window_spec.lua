@@ -147,8 +147,12 @@ describe("gitsuite.features.plugins.report_ui window", function()
     press("<CR>")
     goto_key({ name = "telescope.nvim", sha = sha("b") })
     assert.equals("fix: keep the cursor in the prompt", lines(S().preview_buf)[1])
-    -- No file list yet: no promise of one either.
-    assert.is_nil(table.concat(lines(S().preview_buf), "\n"):find("loading", 1, true))
+    -- The files are asked for (the fixture's clones do not exist: the answer is
+    -- that they are not available, never a list).
+    assert.truthy(table.concat(lines(S().preview_buf), "\n"):find("Files: loading...", 1, true))
+    assert.is_true(vim.wait(2000, function()
+      return table.concat(lines(S().preview_buf), "\n"):find("Files: not available", 1, true) ~= nil
+    end, 10))
   end)
 
   it("]b jumps to the next breaking commit", function()

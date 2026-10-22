@@ -45,6 +45,9 @@ M.READ_ONLY_VERBS = {
   ["log"] = true,
   ["rev-parse"] = true,
   ["cat-file"] = true,
+  -- The file list of one commit in the report's preview (trees only, or with
+  -- `--numstat` in a clone that has the contents).
+  ["diff-tree"] = true,
 }
 
 ---Options accepted as they are, for any allowed verb.
@@ -68,13 +71,31 @@ local PLAIN_OPTIONS = {
   ["-t"] = true,
 }
 
----Whether one option (an argument starting with `-`) is one this module passes.
----`--format=` values that would ask for a signature check are not: that starts
----the clone's configured gpg program.
+---Options one verb takes beyond `PLAIN_OPTIONS`. `diff-tree` is the preview's
+---file list of one commit: `--numstat` reads file contents, so it stays off
+---every other verb (a `log` never needs it); `argv` adds `--no-textconv
+-----no-ext-diff` to it and the run never fetches, so reading contents cannot
+---start a program or reach the network. The preview asks for it only in a
+---clone that has the contents (`gitfs.partial_clone`).
+---@type table<string, table<string, true>>
+local VERB_OPTIONS = {
+  ["diff-tree"] = {
+    ["--raw"] = true,
+    ["--numstat"] = true,
+    ["--no-commit-id"] = true,
+    ["-r"] = true,
+  },
+}
+
+---Whether one option (an argument starting with `-`) is one this module passes
+---for `verb`. `--format=` values that would ask for a signature check are not:
+---that starts the clone's configured gpg program.
 ---@param arg string
+---@param verb string
 ---@return boolean
-local function option_allowed(arg)
+local function option_allowed(arg, verb)
   if PLAIN_OPTIONS[arg] then return true end
+  if VERB_OPTIONS[verb] and VERB_OPTIONS[verb][arg] then return true end
   if arg:match("^%-n%d+$") or arg:match("^%-%-max%-count=%d+$") or arg:match("^%-%-skip=%d+$") then
     return true
   end
@@ -103,7 +124,7 @@ function M.check(args)
     if arg:find("[%z\r\n]") then return false, "a git argument contains a line break or NUL" end
     -- Everything after a bare `--` is a path, not an option.
     if arg == "--" then break end
-    if arg:sub(1, 1) == "-" and not option_allowed(arg) then
+    if arg:sub(1, 1) == "-" and not option_allowed(arg, verb) then
       return false, ("git option %s is not allowed here"):format(arg)
     end
   end
@@ -112,7 +133,7 @@ end
 
 ---Verbs that produce a diff and so take `--no-textconv` / `--no-ext-diff`.
 ---@type table<string, true>
-local DIFF_VERBS = { ["log"] = true }
+local DIFF_VERBS = { ["log"] = true, ["diff-tree"] = true }
 
 ---Config that makes git START A PROGRAM from a read-only command, pinned off
 ---through the environment (`GIT_CONFIG_COUNT`, git 2.31+, which beats the

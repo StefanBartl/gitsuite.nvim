@@ -84,7 +84,12 @@ bring?* It looks at **every** installed plugin and lists the ones that changed,
 each with its commits. By default the report opens in a tab of its own
 (`--out=tab`): an overview of the changed plugins (breaking ones first), a
 breaking digest over all of them (`D`), a detail per plugin (`<CR>`) and a
-preview of the commit under the cursor. The tab can be closed and comes back
+preview of the commit under the cursor: its message and the files it changed,
+from one `git diff-tree` (cached, and only once the cursor rests). A full clone
+also shows the lines added and removed per file; lazy.nvim's clones are
+blobless (`--filter=blob:none`) and keep no contents of past commits, so there
+the preview lists the files without counts and says why -- gitsuite never
+fetches the missing contents. The tab can be closed and comes back
 as it was, cursor included: `:Git plugins` opens it again, or after a restart
 the newest stored report, without a scan. Its keys are in
 [BINDINGS.md](BINDINGS.md#plugins-report-keys-component-local). `--out=buffer`

@@ -39,11 +39,11 @@ describe("gitsuite.features.plugins.gitlog", function()
 
   describe("check (the verb allowlist)", function()
     it("lets the read-only verbs through", function()
-      for _, verb in ipairs({ "log", "rev-parse", "cat-file" }) do
+      for _, verb in ipairs({ "log", "rev-parse", "cat-file", "diff-tree" }) do
         assert.is_true((gitlog.check({ verb })), verb)
       end
       -- verbs the feature has no use for are not on the list either
-      for _, verb in ipairs({ "for-each-ref", "merge-base", "diff-tree", "diff", "show" }) do
+      for _, verb in ipairs({ "for-each-ref", "merge-base", "diff", "show" }) do
         assert.is_false((gitlog.check({ verb })), verb)
       end
     end)
@@ -132,6 +132,12 @@ describe("gitsuite.features.plugins.gitlog", function()
       end
       -- names and messages stay possible
       assert.is_true((gitlog.check({ "log", "--name-status", "--no-renames", "--format=%H" })))
+      -- the preview's file list: --numstat for diff-tree only (it reads contents), never for log
+      assert.is_true((gitlog.check({ "diff-tree", "-r", "--raw", "--numstat", "-z", "abc1234" })))
+      assert.is_false((gitlog.check({ "log", "--numstat" })))
+      assert.is_false((gitlog.check({ "log", "--raw" })))
+      assert.is_false((gitlog.check({ "diff-tree", "-p", "abc1234" })))
+      assert.is_false((gitlog.check({ "diff-tree", "--stat", "abc1234" })))
       assert.is_true((gitlog.check({ "log", "-n5", "--left-right", "-z", "--no-merges" })))
     end)
 

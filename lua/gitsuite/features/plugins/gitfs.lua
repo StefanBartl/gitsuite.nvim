@@ -814,6 +814,30 @@ function M.forget_network_verdicts()
   verdicts, verdicts_n = {}, 0
 end
 
+---Values git reads as true for a boolean key (a key without a value is true too).
+local TRUE = { ["true"] = true, yes = true, on = true, ["1"] = true }
+
+---Whether `dir` is a partial clone (lazy.nvim clones `--filter=blob:none`): its
+---config names a promisor remote or the `partialclone` extension. Such a clone
+---has the trees of every commit but the file contents only of what was checked
+---out, so anything that needs contents (`--numstat`, a patch) fails offline.
+---Read from `.git/config` as a file, no process. `nil` when the config cannot
+---be read or parsed.
+---@param dir string
+---@return boolean|nil
+function M.partial_clone(dir)
+  local text = read_under(dir .. "/.git", "config", 256 * 1024)
+  if not text then return nil end
+  local entries = config_entries(text)
+  if not entries then return nil end
+  for _, entry in ipairs(entries) do
+    local key, value = entry[1]:lower(), entry[2]
+    if key == "partialclone" and value and value ~= "" then return true end
+    if key == "promisor" and (value == nil or TRUE[value:lower()]) then return true end
+  end
+  return false
+end
+
 ---The config parser, for specs: it is the same on every platform.
 M._config_entries = config_entries
 

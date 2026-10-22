@@ -273,8 +273,11 @@ describe("gitsuite.features.plugins.report_ui", function()
     it("shows subject, author, date, SHA, the verdict, the body and the files", function()
       local m = model.new(report)
       local r = render.render_preview(m, "telescope.nvim", sha("a"), {
-        { status = "M", path = "lua/telescope/pickers.lua" },
-        { status = "D", path = "lua/telescope/layout.lua" },
+        counts = false,
+        files = {
+          { status = "M", path = "lua/telescope/pickers.lua" },
+          { status = "D", path = "lua/telescope/layout.lua" },
+        },
       })
       assert.equals("feat(picker)!: drop the old layout API", r.lines[1])
       assert.truthy(r.lines[2]:find("Bea · ", 1, true), r.lines[2])

@@ -44,6 +44,7 @@ local AUGROUP = "gitsuite_plugins_report"
 ---@field origin_tab? integer  The tab the report was opened from (`q` goes back there).
 ---@field cursor? GitSuite.ReportUi.Item  The key under the cursor, for the rebuild.
 ---@field rendered? GitSuite.ReportUi.Rendered
+---@field loader? GitSuite.ReportUi.PreviewLoader
 
 ---@type GitSuite.ReportUi.State
 local S = { preview_on = true }
@@ -129,15 +130,38 @@ local function first_item_line(rendered)
   return math.min(3, #rendered.lines)
 end
 
----Fill the preview from the item under the cursor.
-local function update_preview()
+---The preview's file loader (one per Neovim; `M.set_loader` for specs).
+---@return GitSuite.ReportUi.PreviewLoader
+local function loader()
+  if not S.loader then S.loader = require("gitsuite.features.plugins.report_ui.preview").new() end
+  return S.loader
+end
+
+---For specs: use `l` as the file loader.
+---@param l GitSuite.ReportUi.PreviewLoader
+function M.set_loader(l)
+  S.loader = l
+end
+
+local update_preview
+
+---Fill the preview from the item under the cursor. The file list is asked for
+---when it is not cached; its answer redraws the preview only if the cursor is
+---still on that commit.
+update_preview = function()
   if not valid_win(S.preview_win) or not valid_buf(S.preview_buf) or not S.model then return end
   local it = item_at_cursor()
   local rendered
   if it and it.kind == "commit" then
-    -- The file list comes with the preview's own loader (stage 3); nothing is
-    -- promised until then.
-    rendered = render.render_preview(S.model, it.name, it.sha, false)
+    local entry = model.entry(S.model, it.name)
+    local files = entry and entry.dir and loader():cached(entry.dir, it.sha) or nil
+    rendered = render.render_preview(S.model, it.name, it.sha, files or "loading")
+    if entry and entry.dir and not files then
+      loader():request(entry.dir, it.sha, function()
+        local now = item_at_cursor()
+        if now and now.sha == it.sha and now.name == it.name then update_preview() end
+      end)
+    end
   else
     rendered = {
       lines = { "Move to a commit to see its message here" },
@@ -489,6 +513,7 @@ function M.reset()
     if valid_buf(b) then pcall(vim.api.nvim_buf_delete, b, { force = true }) end
   end
   pcall(vim.api.nvim_del_augroup_by_name, AUGROUP)
+  if S.loader then S.loader:stop() end
   S = { preview_on = true }
 end
 

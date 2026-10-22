@@ -468,12 +468,13 @@ function M.render_detail(m)
 end
 
 ---The preview of one commit. `files` is what the file list knows so far:
----nil (not asked yet), `"loading"`, a list of `{ status, path }`, or
----`{ error = string }`.
+---nil (not asked yet) or `"loading"`, a `GitSuite.ReportUi.Files` (`preview.lua`:
+---the files, with line counts when the clone has the contents, or an `error`),
+---or false for no file section at all.
 ---@param m GitSuite.ReportUi.Model
 ---@param name string
 ---@param sha string
----@param files? false|"loading"|{ status: string, path: string }[]|{ error: string }  false: no file section at all
+---@param files? false|"loading"|GitSuite.ReportUi.Files
 ---@return GitSuite.ReportUi.Rendered
 function M.render_preview(m, name, sha, files)
   local r = builder()
@@ -528,13 +529,47 @@ function M.render_preview(m, name, sha, files)
     r.add(item, { { "Files: loading...", "GitSuitePluginsDim" } })
   elseif type(files) == "table" and files.error then
     r.add(item, { { "Files: " .. text.one_line(files.error), "GitSuitePluginsDim" } })
-  else
-    r.add(item, { { ("Files (%d)"):format(#files), "GitSuitePluginsSection" } })
-    for _, f in ipairs(files) do
-      r.add(
-        item,
-        { "  ", { text.one_line(f.status), "GitSuitePluginsSha" }, " ", text.one_line(f.path) }
-      )
+  elseif type(files) == "table" and type(files.files) == "table" then
+    local list = files.files
+    if #list == 0 then
+      r.add(item, { { "No file changes (an empty commit, or a merge)", "GitSuitePluginsDim" } })
+      return r
+    end
+    local adds, dels, width = 0, 0, 0
+    for _, f in ipairs(list) do
+      adds, dels = adds + (f.adds or 0), dels + (f.dels or 0)
+    end
+    local function count(f)
+      if f.binary then return "bin" end
+      if f.adds then return ("+%d -%d"):format(f.adds, f.dels or 0) end
+      return ""
+    end
+    for _, f in ipairs(list) do
+      width = math.max(width, #count(f))
+    end
+    local total = #list + (files.more or 0)
+    local head = ("Files (%d)"):format(total)
+    if files.counts then head = head .. ("  +%d -%d"):format(adds, dels) end
+    r.add(item, { { head, "GitSuitePluginsSection" } })
+    for _, f in ipairs(list) do
+      local parts = { "  ", { text.one_line(f.status), "GitSuitePluginsSha" }, " " }
+      if files.counts then
+        parts[#parts + 1] = { pad(count(f), width), "GitSuitePluginsDim" }
+        parts[#parts + 1] = "  "
+      end
+      parts[#parts + 1] = text.one_line(f.path)
+      r.add(item, parts)
+    end
+    if files.more then
+      r.add(item, { { ("  ... and %d more"):format(files.more), "GitSuitePluginsDim" } })
+    end
+    if files.partial then
+      r.add(item, {
+        {
+          "No line counts: this clone is blobless and keeps no file contents of past commits",
+          "GitSuitePluginsDim",
+        },
+      })
     end
   end
   return r

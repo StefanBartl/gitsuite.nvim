@@ -144,7 +144,9 @@ processes after `plugins.fetch_timeout_ms`, and names every failed or skipped
 clone in the report (a failed one never counts as fetched).
 By default the report opens in a tab of its own (`--out=tab`): an overview of the
 changed plugins, a breaking digest (`D`), a detail per plugin (`<CR>`) and a preview
-of the commit under the cursor (keys: docs/BINDINGS.md, "Plugins report keys"). `q`
+of the commit under the cursor, with the files it changed (line counts only in a full
+clone: lazy.nvim's blobless clones have no old contents, and gitsuite never fetches
+them) (keys: docs/BINDINGS.md, "Plugins report keys"). `q`
 closes it; `:Git plugins` opens it again where it was, or after a restart the newest
 stored report, without a scan. The other outputs are Markdown (a buffer, the
 clipboard or a file); a rollback, a diverged
