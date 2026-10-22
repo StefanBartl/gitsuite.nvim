@@ -95,7 +95,13 @@ plugin) as seen, `M` everything the view lists; the marks are kept in
 update of the same plugin shows only its new commits as unseen (two Neovims
 marking at once both keep their marks; marks expire after
 `plugins.seen_ttl_days`). A clone that moved since the report was made is
-marked `↻ moved since the report`. The tab can be closed and comes back
+marked `↻ moved since the report`. From a line, `o` opens the commit (or the
+plugin's compare page) in the browser, which also marks it as seen; `y`/`gy`
+copy the hash or the URL, `S` shows the clone's status (read only), `C` its
+CHANGELOG and `Q` puts the breaking commits into the quickfix list (both in the
+tab you came from, never in the report's own windows), `L` opens lazygit in the
+clone, `O` lists all of it as a menu and `F` jumps by name. The report itself
+never pushes, pulls, fetches or writes a clone. The tab can be closed and comes back
 as it was, cursor included: `:Git plugins` opens it again, or after a restart
 the newest stored report, without a scan. Its keys are in
 [BINDINGS.md](BINDINGS.md#plugins-report-keys-component-local). `--out=buffer`

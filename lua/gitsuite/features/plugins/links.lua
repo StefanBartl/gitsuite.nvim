@@ -85,6 +85,21 @@ function M.commit_url(dir, sha)
   return remote.commit_url(forge.kind, forge.remote, sha), nil
 end
 
+---The web page comparing two commits of the clone (`from..to` of an update).
+---@param dir string
+---@param from string
+---@param to string
+---@return string|nil url
+---@return string|nil err
+function M.compare_url(dir, from, to)
+  for _, s in ipairs({ from, to }) do
+    if type(s) ~= "string" or not s:match("^%x+$") then return nil, "not a commit hash" end
+  end
+  local forge, err = M.forge(dir)
+  if not forge then return nil, err end
+  return remote.compare_url(forge.kind, forge.remote, from, to), nil
+end
+
 ---Open a URL with the system's default application. Hands the URL over and
 ---returns; whether a browser then shows it is the system's business.
 ---@param url string

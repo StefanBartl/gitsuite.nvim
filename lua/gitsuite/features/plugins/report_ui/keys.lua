@@ -73,6 +73,58 @@ M.KEYS = {
     desc = "Mark every commit this view lists as seen",
   },
   {
+    keys = { "o", "K" },
+    action = "browser",
+    label = "o browser",
+    desc = "Open in the browser: the commit's page, or on a plugin the compare page of its update; what it shows counts as seen",
+  },
+  {
+    keys = { "go" },
+    action = "compare",
+    desc = "Open the compare page of the plugin's update, also from a commit line",
+  },
+  {
+    keys = { "gy" },
+    action = "copy_url",
+    desc = "Copy the URL `o` would open",
+  },
+  {
+    keys = { "y", "Y" },
+    action = "yank",
+    desc = "Copy the short / full hash (on a plugin: the commit its update ended on)",
+  },
+  {
+    keys = { "L" },
+    action = "lazygit",
+    desc = "lazygit in the plugin's clone (lazygit can change the clone; the report itself never does)",
+  },
+  {
+    keys = { "S" },
+    action = "status",
+    desc = "The clone's git status and last five commits, read only",
+  },
+  {
+    keys = { "C" },
+    action = "changelog",
+    desc = "The plugin's CHANGELOG, in the tab the report was opened from",
+  },
+  {
+    keys = { "Q" },
+    action = "quickfix",
+    desc = "The breaking commits into the quickfix list, opened in the tab the report was opened from",
+  },
+  {
+    keys = { "F" },
+    action = "find",
+    desc = "Jump to a plugin or a commit by name (picker)",
+  },
+  {
+    keys = { "O" },
+    action = "menu",
+    label = "O actions",
+    desc = "Menu of the actions for the line under the cursor",
+  },
+  {
     keys = { "p" },
     action = "preview",
     label = "p preview",

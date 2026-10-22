@@ -137,7 +137,8 @@ default). Set on the report's list buffer only, declared in one table in
 [`features/plugins/report_ui/keys.lua`](../lua/gitsuite/features/plugins/report_ui/keys.lua),
 which also makes the `winbar` legend and the `?` list; a spec compares this
 table with it, row by row. Some letters mean something else here than on the
-dashboard (`p` is the preview, not push).
+dashboard (`p` is the preview, not push; `S`, `L` and `y` mean the same kind
+of thing, for the clone under the cursor).
 
 | Key | Mode | Action |
 | --- | --- | --- |
@@ -150,6 +151,16 @@ dashboard (`p` is the preview, not push).
 | `]b` / `[b` | n | Next / previous breaking commit not marked as seen |
 | `m` | n | Mark the commit under the cursor as seen, or every new commit of the plugin under it; again: unmark |
 | `M` | n | Mark every commit this view lists as seen |
+| `o` / `K` | n | Open in the browser: the commit's page, or on a plugin the compare page of its update; what it shows counts as seen |
+| `go` | n | Open the compare page of the plugin's update, also from a commit line |
+| `gy` | n | Copy the URL `o` would open |
+| `y` / `Y` | n | Copy the short / full hash (on a plugin: the commit its update ended on) |
+| `L` | n | lazygit in the plugin's clone (lazygit can change the clone; the report itself never does) |
+| `S` | n | The clone's git status and last five commits, read only |
+| `C` | n | The plugin's CHANGELOG, in the tab the report was opened from |
+| `Q` | n | The breaking commits into the quickfix list, opened in the tab the report was opened from |
+| `F` | n | Jump to a plugin or a commit by name (picker) |
+| `O` | n | Menu of the actions for the line under the cursor |
 | `p` | n | Show or hide the preview (follows the cursor) |
 | `q` | n | Close the report tab; the report stays, `:Git plugins` opens it again |
 | `?` | n | List every one of these keys |

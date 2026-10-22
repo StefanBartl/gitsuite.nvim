@@ -48,6 +48,9 @@ M.READ_ONLY_VERBS = {
   -- The file list of one commit in the report's preview (trees only, or with
   -- `--numstat` in a clone that has the contents).
   ["diff-tree"] = true,
+  -- The report tab's `S`: what the work tree of a clone looks like (run with
+  -- --no-optional-locks: it never refreshes the index).
+  ["status"] = true,
 }
 
 ---Options accepted as they are, for any allowed verb.
@@ -85,6 +88,7 @@ local VERB_OPTIONS = {
     ["--no-commit-id"] = true,
     ["-r"] = true,
   },
+  ["status"] = { ["--short"] = true, ["--branch"] = true },
 }
 
 ---Whether one option (an argument starting with `-`) is one this module passes

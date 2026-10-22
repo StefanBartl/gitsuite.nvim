@@ -154,6 +154,10 @@ local function copy(value)
   return true
 end
 
+---Copy `value` to the clipboard (and the unnamed register); false (with a
+---warning) when there is no clipboard.
+M.copy = copy
+
 ---Open a commit's page in the browser; without a usable forge, copy the hash.
 ---@param target GitSuite.Plugins.Target
 ---@param entry Lib.Git.LogEntry

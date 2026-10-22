@@ -382,6 +382,191 @@ ACTIONS.mark_all = function()
   set_seen(list, true)
 end
 
+local function notify_info(msg)
+  require("gitsuite.util.notify").info("plugins report: " .. msg)
+end
+
+---Run `fn` in the tab the report was opened from (a new tab when that one is
+---gone), so files and lists never land in the report's own windows.
+---@param fn fun()
+local function in_origin(fn)
+  local origin = S.origin_tab
+  if origin and vim.api.nvim_tabpage_is_valid(origin) and origin ~= S.tab then
+    vim.api.nvim_set_current_tabpage(origin)
+  else
+    vim.cmd("tabnew")
+  end
+  fn()
+end
+
+---@param compare? boolean
+local function browse(compare)
+  local actions = require("gitsuite.features.plugins.report_ui.actions")
+  local url, err, seen_now = actions.url(S.model, item_at_cursor(), compare)
+  if not url then return notify_info(err or "nothing to open") end
+  local ok, open_err = require("gitsuite.features.plugins.links").open(url)
+  if not ok then return notify_info("could not open the browser: " .. tostring(open_err)) end
+  -- What was opened was looked at (the user's decision of 2026-10-22).
+  local unseen = {}
+  for _, k in ipairs(seen_now) do
+    if not model.is_seen(S.model, k.name, k.sha) then unseen[#unseen + 1] = k end
+  end
+  set_seen(unseen, true)
+end
+
+ACTIONS.browser = function()
+  browse(false)
+end
+
+ACTIONS.compare = function()
+  browse(true)
+end
+
+ACTIONS.copy_url = function()
+  local actions = require("gitsuite.features.plugins.report_ui.actions")
+  local url, err = actions.url(S.model, item_at_cursor(), false)
+  if not url then return notify_info(err or "no URL here") end
+  if require("gitsuite.features.plugins.view").copy(url) then notify_info("copied " .. url) end
+end
+
+ACTIONS.yank = function(lhs)
+  local actions = require("gitsuite.features.plugins.report_ui.actions")
+  local h = actions.hash(S.model, item_at_cursor(), lhs == "Y")
+  if not h then return notify_info("no commit here") end
+  if require("gitsuite.features.plugins.view").copy(h) then notify_info("copied " .. h) end
+end
+
+---The entry of the line under the cursor, or a message.
+---@return GitSuite.Plugins.ReportEntry|nil
+local function entry_here()
+  local actions = require("gitsuite.features.plugins.report_ui.actions")
+  local entry = actions.target(S.model, item_at_cursor())
+  if not entry or type(entry.dir) ~= "string" then
+    notify_info("put the cursor on a plugin or a commit")
+    return nil
+  end
+  return entry
+end
+
+ACTIONS.lazygit = function()
+  local entry = entry_here()
+  if entry then require("gitsuite.features.ui.lazygit").open(entry.dir) end
+end
+
+ACTIONS.status = function()
+  local entry = entry_here()
+  if not entry then return end
+  local actions = require("gitsuite.features.plugins.report_ui.actions")
+  actions.status(entry.dir, function(body)
+    local name = require("gitsuite.features.plugins.text").one_line(entry.name)
+    local lines = { "", " " .. name, "" }
+    vim.list_extend(lines, body)
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = " q / <Esc>  close"
+    require("ui.kit").viewer({
+      lines = lines,
+      title = "git status",
+      filetype = "gitsuite-plugins-status",
+    })
+  end)
+end
+
+ACTIONS.changelog = function()
+  local entry = entry_here()
+  if not entry then return end
+  local path = require("gitsuite.features.plugins.report_ui.actions").changelog(entry.dir)
+  if not path then return notify_info("no CHANGELOG at the top of " .. entry.name) end
+  in_origin(function()
+    vim.cmd("edit " .. vim.fn.fnameescape(path))
+    -- Somebody else's file: read only, so a stray key cannot change the clone.
+    vim.bo.readonly = true
+    vim.bo.modifiable = false
+  end)
+end
+
+ACTIONS.quickfix = function()
+  local items = require("gitsuite.features.plugins.report_ui.actions").breaking_items(S.model)
+  if #items == 0 then return notify_info("no breaking commit in this report") end
+  vim.fn.setqflist({}, " ", { title = "gitsuite plugins: breaking commits", items = items })
+  in_origin(function()
+    vim.cmd("copen")
+  end)
+end
+
+---Show the line of `key` (a plugin or a commit): the detail of its plugin,
+---cursor on it.
+---@param key { name: string, sha?: string }
+function M.jump(key)
+  if not S.model or not model.entry(S.model, key.name) then return end
+  S.model = model.show(S.model, { kind = "detail", name = key.name })
+  if valid_win(S.list_win) then vim.api.nvim_set_current_win(S.list_win) end
+  M.redraw({ kind = key.sha and "commit" or "plugin", name = key.name, sha = key.sha })
+end
+
+---The picker's entries: every changed plugin and each of its new commits.
+---@return { name: string, sha?: string, label: string }[]
+function M.find_items()
+  local text = require("gitsuite.features.plugins.text")
+  local items = {}
+  for _, entry in ipairs(model.entries(S.model)) do
+    items[#items + 1] = { name = entry.name, label = text.one_line(entry.name) }
+    for _, c in ipairs(model.summary(S.model, entry).commits) do
+      items[#items + 1] = {
+        name = entry.name,
+        sha = c.sha,
+        label = ("%s  %s  %s"):format(
+          text.one_line(entry.name),
+          c.sha:sub(1, 7),
+          text.one_line(c.subject or "")
+        ),
+      }
+    end
+  end
+  return items
+end
+
+ACTIONS.find = function()
+  require("ui.kit").picker({
+    title = "plugins report",
+    items = M.find_items(),
+    key = function(x)
+      return x.name .. "@" .. (x.sha or "")
+    end,
+    text = function(x)
+      return x.label
+    end,
+    format = function(x)
+      return { { x.label, x.sha and "Normal" or "Title" } }
+    end,
+    on_submit = function(_, _, x)
+      if x then M.jump({ name = x.name, sha = x.sha }) end
+    end,
+  })
+end
+
+---The menu's entries for the line under the cursor: the actions of the keys
+---that work in this view, named with their first key.
+---@return { label: string, action: fun() }[]
+function M.menu_items()
+  local out = {}
+  for _, k in ipairs(keys.KEYS) do
+    if k.action ~= "menu" and keys.applies(k, S.model.view.kind) then
+      local lhs = k.keys[1]
+      out[#out + 1] = {
+        label = ("%s  %s"):format(lhs, k.desc),
+        action = function()
+          ACTIONS[k.action](lhs)
+        end,
+      }
+    end
+  end
+  return out
+end
+
+ACTIONS.menu = function()
+  require("ui.kit").menu({ title = "plugins report", items = M.menu_items() })
+end
+
 ACTIONS.preview = function()
   if valid_win(S.preview_win) then
     S.preview_on = false
