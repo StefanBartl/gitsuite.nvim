@@ -59,6 +59,14 @@ describe("gitsuite.features.ui.lazygit own float", function()
     vim.api.nvim_buf_delete(calls.bufnr, { force = true })
   end)
 
+  it("names an outdated lib.nvim instead of calling a missing spawn", function()
+    libterm.spawn = nil
+    local ok = pcall(lazygit.open)
+    assert.is_true(ok, "no 'attempt to call a nil value'")
+    assert.equals(1, #errors)
+    assert.is_truthy(errors[1]:find("lib.nvim is too old", 1, true), errors[1])
+  end)
+
   it("names the failure when the process does not start", function()
     libterm.spawn = function(opts)
       calls[#calls + 1] = opts

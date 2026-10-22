@@ -173,14 +173,21 @@ local function open_via_terminal(term, root)
 end
 
 ---@internal
---- Fallback without terminal.nvim: an own float around `jobstart`.
+--- Fallback without terminal.nvim: an own float through lib.nvim.terminal.spawn.
 ---@param repo_dir string repo root
 ---@return nil
 local function open_own_float(repo_dir)
+  local libterm = require("lib.nvim.terminal")
+  -- An installed lib.nvim older than the helper would fail with "attempt to
+  -- call a nil value"; name what to update instead.
+  if type(libterm.spawn) ~= "function" then
+    notify.error("ui lazygit: lib.nvim is too old (no lib.nvim.terminal.spawn) -- update lib.nvim")
+    return
+  end
   -- lib.nvim.terminal.spawn closes the float when lazygit exits (the window
   -- may be gone by then) and leaves no float around a dead terminal when the
   -- process does not start.
-  local term, err = require("lib.nvim.terminal").spawn({
+  local term, err = libterm.spawn({
     argv = build_argv(repo_dir),
     cwd = repo_dir,
     layout = "float",
