@@ -37,6 +37,7 @@ M.SORTS = { "breaking", "name", "commits", "time" }
 ---@return GitSuite.ReportUi.Model
 function M.new(report, opts)
   opts = opts or {}
+  report = M.unique_names(report)
   local sort = opts.sort
   if not vim.tbl_contains(M.SORTS, sort) then sort = M.SORTS[1] end
   return {
@@ -50,6 +51,32 @@ function M.new(report, opts)
     ascii = opts.ascii,
     cache = {},
   }
+end
+
+---`report` with every entry named once: two clones of one name (a `dir`
+---plugin next to an installed one) would share a summary, a detail and their
+---seen marks. A later one gets its folder added (`name (dir)`); the report is
+---copied only then, the common case keeps the very table.
+---@param report GitSuite.Plugins.Report
+---@return GitSuite.Plugins.Report
+function M.unique_names(report)
+  local seen, dup = {}, false
+  for _, e in ipairs(report.plugins or {}) do
+    if seen[e.name] then dup = true end
+    seen[e.name] = true
+  end
+  if not dup then return report end
+  local out = vim.tbl_extend("force", {}, report, { plugins = {} })
+  local used = {}
+  for _, e in ipairs(report.plugins) do
+    local copy = e
+    if used[e.name] then
+      copy = vim.tbl_extend("force", {}, e, { name = ("%s (%s)"):format(e.name, tostring(e.dir)) })
+    end
+    used[copy.name] = true
+    out.plugins[#out.plugins + 1] = copy
+  end
+  return out
 end
 
 ---A copy of `m` with `changes` applied.
@@ -239,11 +266,12 @@ function M.step_plugin(m, delta)
   if m.view.kind ~= "detail" then return m end
   local list = M.entries(m)
   if #list == 0 then return m end
-  local at = 1
+  local at
   for i, e in ipairs(list) do
     if e.name == m.view.name then at = i end
   end
-  local next_i = (at - 1 + delta) % #list + 1
+  -- (the plugin shown is not in the list any more: start at either end)
+  local next_i = at and ((at - 1 + delta) % #list + 1) or (delta > 0 and 1 or #list)
   return with(m, { view = { kind = "detail", name = list[next_i].name } })
 end
 

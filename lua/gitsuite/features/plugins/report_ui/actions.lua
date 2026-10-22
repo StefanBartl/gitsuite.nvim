@@ -52,7 +52,13 @@ function M.url(m, it, compare)
     return url, err, (url and new) and { { name = entry.name, sha = sha } } or {}
   end
   if entry.from and entry.to then
-    local url, err = links.compare_url(entry.dir, entry.from, entry.to)
+    -- A rollback went back: compared the other way round the page lists the
+    -- commits it removed (from...to would be "nothing to compare").
+    local base, head = entry.from, entry.to
+    if entry.status == "rollback" then
+      base, head = entry.to, entry.from
+    end
+    local url, err = links.compare_url(entry.dir, base, head)
     return url, err, url and model.commit_keys(m, entry) or {}
   end
   if entry.to then
@@ -120,7 +126,8 @@ end
 
 ---The status of the clone at `dir` as lines: `git status --short --branch` and
 ---the last five commits, through the read-only runner (no lock, nothing
----refreshed, none of the clone's programs).
+---refreshed, no program the clone's config names). A clean filter the user set
+---up globally (git-lfs) may still run for a file whose stat changed.
 ---@param dir string
 ---@param on_done fun(lines: string[])
 function M.status(dir, on_done)

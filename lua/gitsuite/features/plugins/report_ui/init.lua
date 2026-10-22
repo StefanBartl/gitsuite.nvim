@@ -67,12 +67,21 @@ function M.open_last(opts)
   opts = opts or {}
   local window = require("gitsuite.features.plugins.report_ui.window")
   local s = window.state()
-  if s.model then
-    M.open(s.model.report, { ctx = s.model.ctx })
-    return true
-  end
   local store = require("gitsuite.features.plugins.state").load(opts.store_path, { peek = true })
   local newest = store.reports and store.reports[1]
+  -- The report of this tab, unless a newer one was stored since (a `:Lazy sync`
+  -- toast, another Neovim).
+  if s.model then
+    local shown = s.model.report
+    local newer = newest
+      and newest.id ~= shown.id
+      and type(newest.at) == "number"
+      and newest.at > (shown.at or 0)
+    if not newer then
+      M.open(shown, { ctx = s.model.ctx })
+      return true
+    end
+  end
   if not newest then
     require("gitsuite.util.notify").info(
       "plugins: no report stored yet -- :Git plugins report builds one"

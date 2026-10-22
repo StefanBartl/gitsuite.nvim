@@ -45,6 +45,8 @@ local AUGROUP = "gitsuite_plugins_report"
 ---@field cursor? GitSuite.ReportUi.Item  The key under the cursor, for the rebuild.
 ---@field rendered? GitSuite.ReportUi.Rendered
 ---@field loader? GitSuite.ReportUi.PreviewLoader
+---@field gen? integer  Counts the tab's (re)builds: a scheduled callback from before one is stale.
+---@field unsaved? table<string, boolean>  Seen marks the file did not take (kept for this session).
 ---@field seen_path? string  The marks file (nil: the default; specs set one).
 
 ---@type GitSuite.ReportUi.State
@@ -162,13 +164,15 @@ update_preview = function()
   if it and it.kind == "commit" then
     local entry = model.entry(S.model, it.name)
     local files = entry and entry.dir and loader():cached(entry.dir, it.sha) or nil
-    rendered = render.render_preview(S.model, it.name, it.sha, files or "loading")
     if entry and entry.dir and not files then
       loader():request(entry.dir, it.sha, function()
         local now = item_at_cursor()
         if now and now.sha == it.sha and now.name == it.name then update_preview() end
       end)
+      -- An answer that came at once (a value that is no hash) is what to draw.
+      files = loader():cached(entry.dir, it.sha)
     end
+    rendered = render.render_preview(S.model, it.name, it.sha, files or "loading")
   else
     rendered = {
       lines = { "Move to a commit to see its message here" },
@@ -230,6 +234,17 @@ end
 ---@param win integer|nil
 local function close_win(win)
   if valid_win(win) then pcall(vim.api.nvim_win_close, win, true) end
+end
+
+---Hand `win` back to the user: not fixed, an empty buffer, no legend. For a
+---report window that cannot be closed because it is the last one.
+---@param win integer
+local function release(win)
+  if not valid_win(win) then return end
+  vim.wo[win].winfixbuf = false
+  vim.api.nvim_win_set_buf(win, vim.api.nvim_create_buf(true, false))
+  vim.wo[win].winbar = ""
+  vim.wo[win].cursorline = false
 end
 
 ---Whether the report tab still exists.
@@ -324,14 +339,18 @@ end
 local function set_seen(pairs_, on)
   if #pairs_ == 0 then return end
   S.model = model.mark(S.model, pairs_, on)
-  local changes = {}
+  -- Marks an earlier write could not take go along again.
+  local changes = vim.tbl_extend("force", {}, S.unsaved or {})
   for _, k in ipairs(pairs_) do
     changes[model.seen_key(k.name, k.sha)] = on
   end
   local _, err =
     require("gitsuite.features.plugins.report_ui.seen").update(changes, { path = S.seen_path })
   if err then
+    S.unsaved = changes
     require("gitsuite.util.notify").warn("plugins report: " .. err .. " (kept for this session)")
+  else
+    S.unsaved = nil
   end
   M.redraw()
 end
@@ -595,6 +614,10 @@ function M.replace_entry(name, fresh)
     end
   end
   S.model.cache[name] = nil
+  -- A detail of a plugin that is gone now shows the overview instead.
+  if not fresh and S.model.view.kind == "detail" and S.model.view.name == name then
+    S.model = model.show(S.model, { kind = "overview" })
+  end
   M.redraw({ kind = "plugin", name = name })
 end
 
@@ -604,20 +627,32 @@ ACTIONS.retry = function()
   local ref = ref_of(entry.dir)
   if not ref then return notify_info(entry.name .. " is not installed (any more)") end
   notify_info("reading " .. entry.name .. " again ...")
-  local name, mode = entry.name, S.model.report.mode
-  require("gitsuite.features.plugins.report").build(
-    { refs = { ref }, mode = mode, persist = false },
-    function(fresh)
-      if not S.model or S.model.report.mode ~= mode then return end
-      local new_entry = fresh and fresh.plugins and fresh.plugins[1] or nil
-      if new_entry and new_entry.status == "same" then new_entry = nil end
-      M.replace_entry(name, new_entry)
-      notify_info(
-        new_entry and (name .. " read again (in this tab; R stores a new report)")
-          or (name .. " shows no change now")
-      )
+  local name, dir = entry.name, entry.dir
+  local shown = S.model.report
+  -- The whole report is read again, not stored: which commits belong to the
+  -- last update is decided over all clones (one run of `:Lazy sync`), and the
+  -- snapshot fallback must see the store as it was when this report was made.
+  require("gitsuite.features.plugins.report").build({
+    mode = shown.mode,
+    all = true,
+    persist = false,
+    before = { id = shown.id, at = shown.at },
+  }, function(fresh)
+    -- Another report is shown by now: this answer is not about it.
+    if not S.model or S.model.report ~= shown then return end
+    local want = vim.fs.normalize(dir)
+    local new_entry
+    for _, e in ipairs(fresh and fresh.plugins or {}) do
+      if type(e.dir) == "string" and vim.fs.normalize(e.dir) == want then new_entry = e end
     end
-  )
+    if new_entry and new_entry.status == "same" then new_entry = nil end
+    if new_entry then new_entry.name = name end
+    M.replace_entry(name, new_entry)
+    notify_info(
+      new_entry and (name .. " read again (in this tab; R stores a new report)")
+        or (name .. " shows no change now")
+    )
+  end)
 end
 
 ACTIONS.rebuild = function()
@@ -705,21 +740,27 @@ local function autocmds()
     group = group,
     callback = function(ev)
       local win = tonumber(ev.match)
+      local gen = S.gen
       if win == S.list_win then
         S.list_win = nil
         local p = S.preview_win
         S.preview_win = nil
         -- Scheduled: a window cannot be closed from inside another's WinClosed.
+        -- The preview may be the last window left (the report was the only
+        -- tab): it cannot close then, and is handed back instead of staying
+        -- fixed to the preview buffer.
         vim.schedule(function()
           close_win(p)
+          release(p)
         end)
       elseif win == S.preview_win then
         S.preview_win = nil
         -- Only closing the preview by itself turns it off. When the whole tab
         -- goes (`:tabclose`, `q`), the list window goes right after it: the
-        -- rebuilt tab gets its preview back.
+        -- rebuilt tab gets its preview back -- also when it was rebuilt before
+        -- this ran (`gen` changed).
         vim.schedule(function()
-          if valid_win(S.list_win) and tab_alive() then S.preview_on = false end
+          if gen == S.gen and valid_win(S.list_win) and tab_alive() then S.preview_on = false end
         end)
       end
     end,
@@ -760,7 +801,16 @@ function M.open(m)
     -- The same report opened again keeps its view and sort; the seen marks and
     -- the clones' HEADs are what `m` read just now (another editor may have
     -- marked, a clone may have moved).
-    S.model = vim.tbl_extend("force", {}, S.model, { seen = m.seen, heads = m.heads })
+    local seen = vim.tbl_extend("force", {}, m.seen)
+    for k, on in pairs(S.unsaved or {}) do
+      seen[k] = on or nil
+    end
+    S.model = vim.tbl_extend(
+      "force",
+      {},
+      S.model,
+      { seen = seen, heads = m.heads, ascii = m.ascii }
+    )
   end
   ensure_buffers()
 
@@ -793,6 +843,7 @@ function M.open(m)
     vim.wo[S.list_win].winbar = WINBAR
     vim.t[S.tab].gitsuite_plugins_report = true
     S.preview_win = nil
+    S.gen = (S.gen or 0) + 1
     if S.preview_on then open_preview() end
   end
   M.redraw(S.cursor)
@@ -807,14 +858,8 @@ function M.close()
     vim.cmd("tabclose " .. vim.api.nvim_tabpage_get_number(S.tab))
   else
     close_win(S.preview_win)
-    if valid_win(S.list_win) then
-      -- The window stops being the report's: not fixed, no legend, no cursorline.
-      local win = S.list_win
-      vim.wo[win].winfixbuf = false
-      vim.api.nvim_win_set_buf(win, vim.api.nvim_create_buf(true, false))
-      vim.wo[win].winbar = ""
-      vim.wo[win].cursorline = false
-    end
+    -- The window stops being the report's: not fixed, no legend, no cursorline.
+    release(S.list_win)
     vim.t[S.tab].gitsuite_plugins_report = nil
   end
   S.tab, S.list_win, S.preview_win = nil, nil, nil

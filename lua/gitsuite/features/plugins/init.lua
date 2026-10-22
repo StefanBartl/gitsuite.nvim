@@ -422,6 +422,8 @@ function build(opts, fetched)
       local dropped = queued
       queued = nil
       handle.stop()
+      -- A stopped build never calls back: the progress would stay forever.
+      if progress then progress:finish("plugins report: stopped") end
       if dropped and dropped.on_done then dropped.on_done(nil, "stopped") end
     end,
   }

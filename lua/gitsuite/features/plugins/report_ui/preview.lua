@@ -26,6 +26,9 @@ M.CACHE_MAX = 200
 M.DEBOUNCE_MS = 80
 ---Most files listed for one commit (a vendored dependency can touch thousands).
 M.MAX_FILES = 500
+---A failed answer is kept this long (ms), then asked for again: a timeout or a
+---busy clone may answer later, but the preview must not ask in a loop.
+M.ERROR_TTL_MS = 10000
 
 ---@class GitSuite.ReportUi.File
 ---@field status string   `M`, `A`, `D`, `T` ... (git's raw status letter)
@@ -116,18 +119,34 @@ function M.new(opts)
     return dir .. "@" .. sha
   end
 
-  local function put(k, v)
-    if cache[k] == nil then
-      order[#order + 1] = k
-      if #order > M.CACHE_MAX then cache[table.remove(order, 1)] = nil end
+  ---Move `k` to the newest end of `order`.
+  local function touch(k)
+    for i = #order, 1, -1 do
+      if order[i] == k then
+        table.remove(order, i)
+        break
+      end
     end
+    order[#order + 1] = k
+  end
+
+  local function put(k, v)
+    touch(k)
     cache[k] = v
+    if #order > M.CACHE_MAX then cache[table.remove(order, 1)] = nil end
   end
 
   local L = {}
 
   function L:cached(dir, sha)
-    return cache[key(dir, sha)]
+    local k = key(dir, sha)
+    local v = cache[k]
+    if v and v.error and v.until_ms and vim.uv.now() > v.until_ms then
+      cache[k] = nil
+      return nil
+    end
+    if v ~= nil then touch(k) end
+    return v
   end
 
   function L:stop()
@@ -151,8 +170,9 @@ function M.new(opts)
       if mine ~= token then return end
       local partial = partial_of(dir) == true
       local counts = not partial
-      running = run(M.args(sha, counts), dir, function(res, err)
-        running = nil
+      local handle
+      handle = run(M.args(sha, counts), dir, function(res, err)
+        if running == handle then running = nil end
         local v
         if err or not res or res.code ~= 0 then
           local why = err or (res and vim.trim(tostring(res.stderr or ""))) or ""
@@ -171,10 +191,14 @@ function M.new(opts)
             partial = partial or nil,
           }
         end
+        -- A failure is kept only for a while (ERROR_TTL_MS): a timeout or a
+        -- busy clone may answer the next time the cursor rests here.
+        if v.error then v.until_ms = vim.uv.now() + M.ERROR_TTL_MS end
         put(k, v)
-        -- Cached either way; shown only if nothing newer was asked for since.
+        -- Shown only if nothing newer was asked for since.
         if mine == token then on_done(v) end
       end)
+      running = handle
     end, M.DEBOUNCE_MS)
   end
 

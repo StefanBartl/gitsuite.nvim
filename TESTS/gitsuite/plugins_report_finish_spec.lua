@@ -149,6 +149,8 @@ describe("gitsuite.features.plugins.report_ui finishing", function()
                 { sha = sha("e"), subject = "fix: readable again", author = "x", body = "" },
               },
             },
+            -- another clone read differently now: not this key's business
+            { name = "mason.nvim", dir = "/lazy/mason.nvim", status = "error", reason = "x" },
           },
         }, {})
         return { stop = function() end }
@@ -160,10 +162,14 @@ describe("gitsuite.features.plugins.report_ui finishing", function()
     end)
     assert.is_false(asked.persist, "nothing is stored")
     assert.equals("updated", asked.mode)
-    assert.equals("/lazy/broken.nvim", asked.refs[1].dir)
+    -- The whole report is read (the run window needs every clone), with the
+    -- store as it was before the shown report (its snapshot fallback).
+    assert.is_nil(asked.refs)
+    assert.same({ id = report.id, at = report.at }, asked.before)
     local l = line_of("broken.nvim")
     assert.truthy(l:find("1 commit", 1, true), l)
     assert.is_nil(l:find("error", 1, true), l)
+    assert.is_nil(line_of("mason.nvim"):find("error", 1, true), "only the clone under the cursor")
   end)
 
   it("r on a clone that shows no change now drops its row; one not installed says so", function()

@@ -50,12 +50,14 @@ end
 ---@return boolean
 local function valid_key(k)
   if type(k) ~= "string" or #k > 300 then return false end
-  local name, sha = k:match("^([^@%c]+)@(%x+)$")
-  return name ~= nil and #sha >= 7 and #sha <= 64
+  -- (the SHA is after the LAST `@`: a plugin folder may hold one)
+  local name, sha = k:match("^(.+)@(%x+)$")
+  return name ~= nil and not name:find("%c") and #sha >= 7 and #sha <= 64
 end
 
 ---@class GitSuite.ReportUi.SeenInfo
 ---@field error? string    The file could not be used (it is left where it is until a write moves it aside).
+---@field unreadable? boolean  It could not even be read (not its content): a write leaves it alone.
 ---@field newer? boolean   Written by a newer gitsuite: read only.
 
 ---Read the marks: `name@sha -> time`. Entries that are no mark are skipped.
@@ -65,7 +67,7 @@ end
 function M.load(path)
   path = path or M.path()
   local text, err = read(path)
-  if err then return {}, { error = err } end
+  if err then return {}, { error = err, unreadable = true } end
   if not text then return {}, {} end
   local ok, data = pcall(vim.json.decode, text)
   if not ok or type(data) ~= "table" or type(data.seen) ~= "table" then
@@ -123,10 +125,17 @@ function M.update(changes, opts)
   if info.newer then
     return nil, "the seen marks were written by a newer gitsuite (left as they are)"
   end
+  if info.unreadable then
+    return nil, ("the seen marks cannot be read (%s); left as they are"):format(info.error)
+  end
   if info.error then
     -- Kept, not overwritten: whatever it was, it goes aside before a fresh file.
     local target = path .. ".corrupt"
-    if vim.uv.fs_stat(target) then target = ("%s.%d"):format(target, now) end
+    local n = 0
+    while vim.uv.fs_stat(target) do
+      n = n + 1
+      target = ("%s.corrupt.%d.%d"):format(path, now, n)
+    end
     if not vim.uv.fs_rename(path, target) then
       return nil,
         ("the seen marks cannot be read (%s) and could not be moved aside"):format(info.error)

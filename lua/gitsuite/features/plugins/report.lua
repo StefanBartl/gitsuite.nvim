@@ -105,6 +105,7 @@ M.MAX_BODY = 2048
 ---@field persist? boolean                     Write the report to the store (default true).
 ---@field accept? fun(report: GitSuite.Plugins.Report): boolean  Asked before storing: false = do not store it (`info.discarded` is then set).
 ---@field on_progress? fun(done: integer, total: integer)
+---@field before? { id?: string, at?: integer }  Read the store as it was before this report: newer reports and the report itself are left out (the snapshot fallback of `updated` then sees what that report saw). For re-reading a shown report.
 ---@field fetched? GitSuite.Plugins.FetchRun   `pending` only: the `--fetch` that ran just before (kept in the report; a clone whose fetch failed counts as "no recorded fetch").
 
 ---Fill the fields every entry has, from the plugin and what its clone says.
@@ -615,6 +616,15 @@ function M.build(opts, on_done)
   if mode ~= "updated" and mode ~= "pending" then mode = cfg.mode end
   local now = opts.now or os.time()
   local store, store_info = state.load(opts.store_path)
+  if type(opts.before) == "table" then
+    local kept = {}
+    for _, r in ipairs(store.reports or {}) do
+      local older = type(opts.before.at) ~= "number"
+        or (type(r.at) == "number" and r.at < opts.before.at)
+      if r.id ~= opts.before.id and older then kept[#kept + 1] = r end
+    end
+    store = vim.tbl_extend("force", {}, store, { reports = kept })
+  end
 
   ---@type GitSuite.Plugins.Ref[], string[], string[]
   local refs, used, errors
