@@ -57,7 +57,7 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
   G.install({
     { "gitsuite.util.notify", "notify", "success" },
     { "gitsuite.util.progress", "create" },
-    { "gitsuite.features.dashboard.actions", "fetch", "pull" },
+    { "gitsuite.features.dashboard.actions", "fetch", "pull", "push" },
     { "gitsuite.features.dashboard.status", "dashboard_one" },
     { "ui.kit", "confirm" },
   })
@@ -147,6 +147,9 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
   before_each(function()
     messages, waiting, calls, inflight = {}, {}, {}, {}
     max_same_repo, max_total, total_inflight = 0, 0, 0
+    -- The interleavings below are pinned down for one fetch at a time; the
+    -- parallel fetch has its own cases.
+    require("gitsuite.config").setup({ dashboard = { fetch_jobs = 1 } })
 
     local notify_mod = require("gitsuite.util.notify")
     notify_mod.notify = function(msg)
@@ -275,5 +278,69 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
     wait_for(function()
       return state.bulk_verb() == nil
     end, "bulk finished")
+  end)
+
+  it("gf runs dashboard.fetch_jobs fetches at once, in row order, and settles every row", function()
+    require("gitsuite.config").setup({ dashboard = { fetch_jobs = 2 } })
+    actions.fetch = fake("fetch")
+    view.show({ record("r1"), record("r2"), record("r3"), record("r4") }, { output = "buffer" })
+
+    press("gf")
+    assert.same({ "fetch /fake/r1", "fetch /fake/r2" }, calls)
+    assert.equals("pending", state.phase("/fake/r3"))
+
+    -- r2 finishing first frees a slot for r3 while r1 is still running.
+    release("fetch /fake/r2", true)
+    wait_for(function()
+      return waiting["fetch /fake/r3"] ~= nil
+    end, "r3 fetch to start")
+    assert.equals("fetching", state.phase("/fake/r1"))
+    release("fetch /fake/r1", false)
+    wait_for(function()
+      return waiting["fetch /fake/r4"] ~= nil
+    end, "r4 fetch to start")
+    assert.truthy(view.summary({}):find("fetch 2/4", 1, true), view.summary({}))
+    release("fetch /fake/r3", true)
+    release("fetch /fake/r4", true)
+    wait_for(function()
+      return state.bulk_verb() == nil
+    end, "bulk finished")
+
+    assert.equals(2, max_total, "never more than fetch_jobs at once")
+    assert.equals(1, max_same_repo)
+    local joined = table.concat(messages, "\n")
+    assert.truthy(joined:find("fetch: 1 of 4 failed", 1, true), joined)
+  end)
+
+  it("push stays one at a time whatever fetch_jobs says", function()
+    require("gitsuite.config").setup({ dashboard = { fetch_jobs = 4 } })
+    actions.push = fake("push")
+    view.show({ record("r1"), record("r2"), record("r3") }, { output = "buffer" })
+
+    press("gp")
+    wait_for(function()
+      return #calls > 0
+    end, "first push")
+    assert.equals(1, #calls)
+    assert.equals(1, max_total)
+    for _, key in ipairs(vim.tbl_keys(waiting)) do
+      release(key, true)
+    end
+    wait_for(function()
+      return #calls == 2
+    end, "second push")
+    for _, key in ipairs(vim.tbl_keys(waiting)) do
+      release(key, true)
+    end
+    wait_for(function()
+      return #calls == 3
+    end, "third push")
+    for _, key in ipairs(vim.tbl_keys(waiting)) do
+      release(key, true)
+    end
+    wait_for(function()
+      return state.bulk_verb() == nil
+    end, "bulk finished")
+    assert.equals(1, max_total)
   end)
 end)

@@ -936,12 +936,13 @@ end
 ---Runs `action_fn` against every record named by `indices`, one after another,
 ---then reports a single summary.
 ---
----Sequential, not parallel: `git push` over forty clones at once is a rate
+---One after another for push and pull: `git push` over forty clones at once is a rate
 ---limit, forty credential prompts, or both, and the queue is the same shape
 ---`repo_updater` already uses for a directory-wide update. Cancelling through
 ---the progress handle stops the queue from starting further repositories
 ---rather than killing the one in flight -- interrupting a `pull` mid-write is
----the one outcome worth avoiding.
+---the one outcome worth avoiding. A `fetch` batch is the exception: it only
+---reads the remote, so `dashboard.fetch_jobs` of them run at once.
 ---@param bufnr integer
 ---@param records RepoDashboardRecord[]
 ---@param verb string Human-readable action name, used in notifications
@@ -983,7 +984,12 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
 
   ---@type string[]
   local errors = {}
-  local succeeded, position = 0, 1
+  local succeeded, completed = 0, 0
+  -- Only `fetch` runs several at once: it reads the remote and nothing else, while
+  -- a push or pull over many clones at once is the rate limit / prompt storm
+  -- described above.
+  local limit = verb == "fetch" and require("gitsuite.config").get().dashboard.fetch_jobs or 1
+  local next_pos, running, finished = 1, 0, false
 
   local function finish()
     _bulk_running = nil
@@ -1005,25 +1011,12 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
     end
   end
 
-  local function step()
-    if cancelled or position > total then
-      finish()
-      return
-    end
+  local pump
 
-    local idx = indices[position]
-    local record = records[idx]
-
-    -- Row actions only start on settled rows and this one is still queued, so
-    -- the lock is normally free; should anything else hold it, the queue waits
-    -- for it rather than starting a second `git` on the same repository.
-    if not repo_state.try_lock(record.path, verb) then
-      vim.defer_fn(step, LOCK_RETRY_MS)
-      return
-    end
+  local function launch(record, idx)
     repo_state.set_phase(record.path, "fetching")
     _redraw(bufnr, records)
-    if handle then handle:update({ text = record.name, current = position - 1, total = total }) end
+    if handle then handle:update({ text = record.name, current = completed, total = total }) end
 
     local function on_done(ok, err)
       vim.schedule(function()
@@ -1034,7 +1027,7 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
           errors[#errors + 1] = record.name .. ": " .. vim.trim(err or "unknown error")
         end
 
-        -- The row is re-read *before* the queue moves on, not alongside it:
+        -- The row is re-read *before* its slot is given up, not alongside it:
         -- fired off in parallel, the last repository's re-read would still be
         -- in flight when `finish()` draws the table and announces the batch as
         -- done, leaving that one row showing the state it had before its own
@@ -1045,8 +1038,9 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
             if new_record then records[idx] = new_record end
             repo_state.set_phase(record.path, ok and "done" or "failed")
             _redraw(bufnr, records)
-            position = position + 1
-            step()
+            running = running - 1
+            completed = completed + 1
+            pump()
           end)
         end)
       end)
@@ -1056,7 +1050,31 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
     if not started then on_done(false, tostring(start_err)) end
   end
 
-  step()
+  -- Fills the free slots in row order; also the way the batch ends, once the
+  -- last slot is given back.
+  pump = function()
+    if finished then return end
+    while running < limit and not cancelled and next_pos <= total do
+      local idx = indices[next_pos]
+      local record = records[idx]
+      -- Row actions only start on settled rows and this one is still queued, so
+      -- the lock is normally free; should anything else hold it, the queue waits
+      -- for it rather than starting a second `git` on the same repository.
+      if not repo_state.try_lock(record.path, verb) then
+        vim.defer_fn(pump, LOCK_RETRY_MS)
+        return
+      end
+      next_pos = next_pos + 1
+      running = running + 1
+      launch(record, idx)
+    end
+    if running == 0 and (cancelled or next_pos > total) then
+      finished = true
+      finish()
+    end
+  end
+
+  pump()
 end
 
 ---@private

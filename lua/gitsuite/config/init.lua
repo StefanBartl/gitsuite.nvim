@@ -226,6 +226,7 @@ local KNOWN = {
       expect = "a table (list of { name: non-empty string, paths?: list of strings })",
     },
     pull_scope = { ok = is_pull_scope, expect = '"behind" or "all"' },
+    fetch_jobs = { ok = int_in(16), expect = "a whole number from 1 to 16" },
   },
   plugins = {
     sources = { ok = is_sources, expect = '"auto" or a list of "lazy", "pack", "clones"' },

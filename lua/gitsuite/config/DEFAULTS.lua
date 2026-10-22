@@ -62,6 +62,9 @@ local DEFAULTS = {
     -- focused default. "behind" = only repositories behind their upstream
     -- (as of the last fetch); "all" = every repository on the page.
     pull_scope = "behind",
+    -- `gf` (fetch the whole page) runs this many fetches at once. Fetch only reads
+    -- the remote; push and pull stay one after another.
+    fetch_jobs = 4,
   },
   -- `:Git plugins` -- the history of the clones a plugin manager installed.
   plugins = {

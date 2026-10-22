@@ -182,7 +182,7 @@ marked "no marker convention recognized".
     commands = { git = "Git" },
     keymaps = { blame_full = "<leader>gb", ui_lazygit = "<leader>lg" },
     browse = { hosts = {} },
-    dashboard = { base_dir = "", extra_paths = {}, groups = {}, pull_scope = "behind" },
+    dashboard = { base_dir = "", extra_paths = {}, groups = {}, pull_scope = "behind", fetch_jobs = 4 },
     plugins = { sources = "auto", roots = {}, log_limit = 50, timeout_ms = 30000,
       include_local = false, mode = "updated", max_commits = 1000, parallel = 4,
       fetch_jobs = 2, fetch_timeout_ms = 60000, fetch_confirm = 5,
