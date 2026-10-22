@@ -37,7 +37,8 @@ moved here from
 [reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim), which
 stays scoped to GitHub/GitLab/Codeberg discovery. And `:Git plugins`: after a
 `:Lazy sync`, `:Git plugins report` says which plugins the update changed and
-which commits that brought (or, with `--mode=pending`, what the next update
+which commits that brought, in a report tab of its own (overview, breaking
+digest, detail per plugin, preview; `:Git plugins` opens it again) (or, with `--mode=pending`, what the next update
 would bring) — with a summary per plugin, the releases of the range and the
 commits that are marked breaking, each with its place in the update ("17/86")
 and whether it concerns your setup (a heuristic, and the report says so) — and

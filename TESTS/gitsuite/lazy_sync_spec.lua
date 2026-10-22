@@ -517,6 +517,7 @@ describe("gitsuite.features.plugins.report({ open = false })", function()
   local plugins = require("gitsuite.features.plugins")
   local builder = require("gitsuite.features.plugins.report")
   local view = require("gitsuite.features.plugins.view")
+  local report_ui = require("gitsuite.features.plugins.report_ui")
   local state = require("gitsuite.features.plugins.state")
   local notify = require("gitsuite.util.notify")
   local saved = {}
@@ -529,6 +530,10 @@ describe("gitsuite.features.plugins.report({ open = false })", function()
   before_each(function()
     presented, infos, warns, builds, build_ms, store_info = {}, {}, {}, 0, 0, {}
     saved.build, saved.show_markdown = builder.build, view.show_markdown
+    saved.open_tab = report_ui.open
+    report_ui.open = function()
+      presented[#presented + 1] = { out = "tab" }
+    end
     saved.info, saved.warn, saved.load = notify.info, notify.warn, state.load
     builder.build = function(opts, cb)
       builds = builds + 1
@@ -562,6 +567,7 @@ describe("gitsuite.features.plugins.report({ open = false })", function()
 
   after_each(function()
     builder.build, view.show_markdown = saved.build, saved.show_markdown
+    report_ui.open = saved.open_tab
     notify.info, notify.warn, state.load = saved.info, saved.warn, saved.load
   end)
 
@@ -650,9 +656,11 @@ describe("gitsuite.features.plugins.report({ open = false })", function()
     assert.same({}, infos)
   end)
 
-  it("shows the report by default", function()
+  it("shows the report by default, in the report tab", function()
     run({})
-    assert.equals(1, #presented)
+    assert.same({ { out = "tab" } }, presented)
+    run({ out = "buffer" })
+    assert.same({ out = "buffer" }, presented[2], "--out=buffer stays the Markdown buffer")
   end)
 
   it("open = false still writes an explicit --out=path / --out=clipboard", function()

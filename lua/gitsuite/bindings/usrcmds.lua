@@ -413,6 +413,13 @@ local function build_routes()
     -- single-repository action like `ui lazygit [dir]`; `report` covers every
     -- installed plugin.
     {
+      path = { "plugins" },
+      desc = "Open the report tab: the last one shown in this Neovim, else the newest stored report (never a scan; :Git plugins report builds one)",
+      run = function()
+        require("gitsuite.features.plugins.report_ui").open_last()
+      end,
+    },
+    {
       path = { "plugins", "log" },
       args = {
         {
@@ -468,10 +475,11 @@ local function build_routes()
         {
           name = "out",
           type = "STRING",
-          enum = { "buffer", "clipboard", "path" },
-          desc = "Where the Markdown report goes",
+          enum = { "tab", "buffer", "clipboard", "path" },
+          desc = "Where the report goes",
           enum_desc = {
-            buffer = "Read-only Markdown buffer in a split (default)",
+            tab = "The report tab: overview, breaking digest, detail per plugin, preview (default)",
+            buffer = "Read-only Markdown buffer in a split",
             clipboard = "Copy the report to the clipboard",
             path = "Write the report to a file (see --to)",
           },
@@ -522,9 +530,9 @@ local function build_routes()
           )
           to = nil
         end
-        if ctx.flags["no-open"] == true and out == "buffer" then
+        if ctx.flags["no-open"] == true and (out == "buffer" or out == "tab") then
           require("gitsuite.util.notify").warn(
-            "plugins report: --out=buffer is ignored with --no-open (no buffer is opened)"
+            ("plugins report: --out=%s is ignored with --no-open (nothing is opened)"):format(out)
           )
         end
         require("gitsuite.features.plugins").report({

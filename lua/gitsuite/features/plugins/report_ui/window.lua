@@ -1,0 +1,495 @@
+---@module 'gitsuite.features.plugins.report_ui.window'
+--- The report tab: a list window and a preview window in a tab of their own.
+---
+---   * Two buffers, made once per Neovim and kept (`bufhidden=hide`): the tab
+---     can be closed (`q`, `:tabclose`, `:tabonly`) and `:Git plugins` builds it
+---     again around the same buffers, keymaps and model, the cursor on the same
+---     plugin or commit (found by key, never by line number).
+---   * `winfixbuf` on both windows: `:bnext` or a picker cannot swap another
+---     buffer into them. The tab never swaps its own buffers either; only
+---     `close` in the last tab hands the window back (and unfixes it first).
+---   * Preview to the right from `WIDE` columns on, below otherwise; it follows
+---     the cursor. Closing the list closes the preview; closing only the preview
+---     turns it off until `p`.
+---
+--- Rendering is `render.lua`'s; this module only puts its lines, highlights
+--- and the cursor into the windows.
+
+local keys = require("gitsuite.features.plugins.report_ui.keys")
+local model = require("gitsuite.features.plugins.report_ui.model")
+local render = require("gitsuite.features.plugins.report_ui.render")
+
+local M = {}
+
+---From this many editor columns on the preview is to the right of the list.
+M.WIDE = 140
+
+---Share of the tab the preview takes.
+local PREVIEW_SHARE = 0.55
+
+M.LIST_NAME = "gitsuite://plugins/report"
+M.PREVIEW_NAME = "gitsuite://plugins/preview"
+
+local NS = vim.api.nvim_create_namespace("gitsuite_plugins_report")
+local AUGROUP = "gitsuite_plugins_report"
+
+---@class GitSuite.ReportUi.State
+---@field model? GitSuite.ReportUi.Model
+---@field list_buf? integer
+---@field preview_buf? integer
+---@field tab? integer
+---@field list_win? integer
+---@field preview_win? integer
+---@field preview_on boolean
+---@field origin_tab? integer  The tab the report was opened from (`q` goes back there).
+---@field cursor? GitSuite.ReportUi.Item  The key under the cursor, for the rebuild.
+---@field rendered? GitSuite.ReportUi.Rendered
+
+---@type GitSuite.ReportUi.State
+local S = { preview_on = true }
+
+---For specs: the state, read only.
+---@return GitSuite.ReportUi.State
+function M.state()
+  return S
+end
+
+---@param win integer|nil
+---@return boolean
+local function valid_win(win)
+  return win ~= nil and vim.api.nvim_win_is_valid(win)
+end
+
+---@param buf integer|nil
+---@return boolean
+local function valid_buf(buf)
+  return buf ~= nil and vim.api.nvim_buf_is_valid(buf)
+end
+
+---@param name string
+---@param filetype string
+---@return integer
+local function make_buf(name, filetype)
+  local buf = vim.api.nvim_create_buf(false, true)
+  pcall(vim.api.nvim_buf_set_name, buf, name)
+  local bo = vim.bo[buf]
+  bo.buftype = "nofile"
+  bo.bufhidden = "hide"
+  bo.swapfile = false
+  bo.modifiable = false
+  bo.filetype = filetype
+  return buf
+end
+
+---@param win integer
+local function style_win(win)
+  local wo = vim.wo[win]
+  wo.winfixbuf = true
+  wo.wrap = false
+  wo.number = false
+  wo.relativenumber = false
+  wo.signcolumn = "no"
+  wo.foldcolumn = "0"
+  wo.spell = false
+  wo.list = false
+end
+
+---Write `rendered` into `buf`: lines, then the highlights as extmarks.
+---@param buf integer
+---@param rendered GitSuite.ReportUi.Rendered
+local function paint(buf, rendered)
+  vim.bo[buf].modifiable = true
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, rendered.lines)
+  vim.bo[buf].modifiable = false
+  vim.api.nvim_buf_clear_namespace(buf, NS, 0, -1)
+  for _, mk in ipairs(rendered.marks) do
+    pcall(vim.api.nvim_buf_set_extmark, buf, NS, mk.line, mk.col, {
+      end_col = mk.end_col,
+      hl_group = mk.hl,
+    })
+  end
+end
+
+---The item under the list window's cursor.
+---@return GitSuite.ReportUi.Item|nil
+local function item_at_cursor()
+  if not valid_win(S.list_win) or not S.rendered then return nil end
+  local line = vim.api.nvim_win_get_cursor(S.list_win)[1]
+  return S.rendered.items[line]
+end
+
+---The first line worth putting the cursor on: the first plugin or commit.
+---@param rendered GitSuite.ReportUi.Rendered
+---@return integer
+local function first_item_line(rendered)
+  for i = 1, #rendered.lines do
+    local k = rendered.items[i].kind
+    if k == "plugin" or k == "commit" then return i end
+  end
+  return math.min(3, #rendered.lines)
+end
+
+---Fill the preview from the item under the cursor.
+local function update_preview()
+  if not valid_win(S.preview_win) or not valid_buf(S.preview_buf) or not S.model then return end
+  local it = item_at_cursor()
+  local rendered
+  if it and it.kind == "commit" then
+    -- The file list comes with the preview's own loader (stage 3); nothing is
+    -- promised until then.
+    rendered = render.render_preview(S.model, it.name, it.sha, false)
+  else
+    rendered = {
+      lines = { "Move to a commit to see its message here" },
+      marks = { { line = 0, col = 0, end_col = 41, hl = "GitSuitePluginsDim" } },
+      items = { { kind = "blank" } },
+    }
+  end
+  paint(S.preview_buf, rendered)
+end
+
+---Render the model into the list and put the cursor on `key` (or keep it on
+---what it was on).
+---@param key? GitSuite.ReportUi.Item
+function M.redraw(key)
+  if not valid_buf(S.list_buf) or not S.model then return end
+  key = key or item_at_cursor() or S.cursor
+  local rendered = render.render(S.model)
+  S.rendered = rendered
+  paint(S.list_buf, rendered)
+  if valid_win(S.list_win) then
+    local line = key and render.find(rendered, { name = key.name, sha = key.sha }) or nil
+    line = line or first_item_line(rendered)
+    pcall(vim.api.nvim_win_set_cursor, S.list_win, { line, 0 })
+    S.cursor = rendered.items[line]
+    vim.cmd.redrawstatus()
+  end
+  update_preview()
+end
+
+---The winbar legend of the list window (called by the `winbar` expression).
+---@return string
+function M.legend()
+  local view = S.model and S.model.view.kind or "overview"
+  local width = valid_win(S.list_win) and vim.api.nvim_win_get_width(S.list_win) or vim.o.columns
+  return "%#GitSuitePluginsDim#" .. keys.legend(view, width):gsub("%%", "%%%%")
+end
+
+local WINBAR = "%!v:lua.require'gitsuite.features.plugins.report_ui.window'.legend()"
+
+---Open the preview window next to the list, right or below by the width.
+local function open_preview()
+  if valid_win(S.preview_win) or not valid_win(S.list_win) then return end
+  local wide = vim.o.columns >= M.WIDE
+  local cfg = { split = wide and "right" or "below", win = S.list_win }
+  if wide then
+    cfg.width = math.floor(vim.api.nvim_win_get_width(S.list_win) * PREVIEW_SHARE)
+  else
+    cfg.height = math.floor(vim.api.nvim_win_get_height(S.list_win) * PREVIEW_SHARE)
+  end
+  local ok, win = pcall(vim.api.nvim_open_win, S.preview_buf, false, cfg)
+  if not ok then return end
+  S.preview_win = win
+  style_win(win)
+  vim.wo[win].wrap = true
+  vim.wo[win].cursorline = false
+  update_preview()
+end
+
+---@param win integer|nil
+local function close_win(win)
+  if valid_win(win) then pcall(vim.api.nvim_win_close, win, true) end
+end
+
+---Whether the report tab still exists.
+---@return boolean
+local function tab_alive()
+  return S.tab ~= nil and vim.api.nvim_tabpage_is_valid(S.tab)
+end
+
+---@type table<string, fun(lhs: string)>
+local ACTIONS = {}
+
+---@param fn fun(m: GitSuite.ReportUi.Model): GitSuite.ReportUi.Model
+---@param key? GitSuite.ReportUi.Item
+local function step(fn, key)
+  S.model = fn(S.model)
+  M.redraw(key)
+end
+
+ACTIONS.open = function()
+  local it = item_at_cursor()
+  if not it or not it.name then return end
+  if it.kind == "plugin" and S.model.view.kind ~= "detail" then
+    step(function(m)
+      return model.show(m, { kind = "detail", name = it.name })
+    end, { kind = "plugin", name = it.name })
+  elseif it.kind == "commit" and S.model.view.kind == "digest" then
+    step(function(m)
+      return model.show(m, { kind = "detail", name = it.name })
+    end, it)
+  end
+end
+
+ACTIONS.back = function()
+  local name = S.model.view.kind == "detail" and S.model.view.name or nil
+  local it = item_at_cursor()
+  step(function(m)
+    return model.show(m, { kind = "overview" })
+  end, { kind = "plugin", name = name or (it and it.name) })
+end
+
+ACTIONS.digest = function()
+  step(function(m)
+    return model.show(m, { kind = "digest" })
+  end, item_at_cursor())
+end
+
+ACTIONS.sort = function()
+  step(model.next_sort)
+end
+
+ACTIONS.all = function()
+  step(model.toggle_all)
+end
+
+ACTIONS.plugin = function(lhs)
+  step(function(m)
+    return model.step_plugin(m, lhs == "[[" and -1 or 1)
+  end, nil)
+  -- A new plugin: start at its top, not at a commit of the last one.
+  if S.rendered and valid_win(S.list_win) then
+    pcall(vim.api.nvim_win_set_cursor, S.list_win, { first_item_line(S.rendered), 0 })
+    update_preview()
+  end
+end
+
+ACTIONS.breaking = function(lhs)
+  if not S.rendered or not valid_win(S.list_win) then return end
+  local n = #S.rendered.lines
+  local here = vim.api.nvim_win_get_cursor(S.list_win)[1]
+  local dir = lhs == "[b" and -1 or 1
+  for k = 1, n do
+    local i = (here - 1 + dir * k) % n + 1
+    local it = S.rendered.items[i]
+    if
+      it.kind == "commit"
+      and (it.tier == "sure" or it.tier == "probable")
+      and not model.is_seen(S.model, it.name, it.sha)
+    then
+      vim.api.nvim_win_set_cursor(S.list_win, { i, 0 })
+      S.cursor = it
+      update_preview()
+      return
+    end
+  end
+  require("gitsuite.util.notify").info("plugins report: no unseen breaking commit in this view")
+end
+
+ACTIONS.preview = function()
+  if valid_win(S.preview_win) then
+    S.preview_on = false
+    close_win(S.preview_win)
+    S.preview_win = nil
+  else
+    S.preview_on = true
+    open_preview()
+  end
+end
+
+ACTIONS.close = function()
+  M.close()
+end
+
+ACTIONS.help = function()
+  require("ui.kit").viewer({
+    lines = keys.help_lines(),
+    title = "GitSuite Plugins Report Keys",
+    filetype = "gitsuite-help",
+  })
+end
+
+---Bind the keys of `keys.KEYS` on the list buffer.
+---@param buf integer
+local function bind(buf)
+  for _, k in ipairs(keys.KEYS) do
+    for _, lhs in ipairs(k.keys) do
+      vim.keymap.set("n", lhs, function()
+        if not S.model then return end
+        if not keys.applies(k, S.model.view.kind) then
+          require("gitsuite.util.notify").info(
+            ("plugins report: %s does nothing in the %s"):format(lhs, S.model.view.kind)
+          )
+          return
+        end
+        ACTIONS[k.action](lhs)
+      end, { buffer = buf, nowait = true, desc = "[gitsuite] plugins report: " .. k.desc })
+    end
+  end
+
+  -- The AI summary is a key only with a `plugins.summarize` hook, and its lhs
+  -- is configurable (`plugins.summarize_key`), so it is not in `keys.KEYS`.
+  local ai = require("gitsuite.features.plugins.ai_summary")
+  if ai.hook() then
+    vim.keymap.set("n", ai.key(), function()
+      local it = item_at_cursor()
+      if not S.model or not it or not it.name or not model.entry(S.model, it.name) then
+        require("gitsuite.util.notify").info("plugins summarize: put the cursor on a plugin")
+        return
+      end
+      ai.request(S.model.report, it.name, {
+        ctx = S.model.ctx,
+        on_done = function(summary)
+          if summary then M.redraw() end
+        end,
+      })
+    end, {
+      buffer = buf,
+      nowait = true,
+      desc = "[gitsuite] plugins report: AI summary of this plugin's update (plugins.summarize)",
+    })
+  end
+end
+
+---Autocmds of the list buffer: preview follows the cursor, the preview goes
+---with the list, the layout follows the editor's width.
+local function autocmds()
+  local group = vim.api.nvim_create_augroup(AUGROUP, { clear = true })
+  vim.api.nvim_create_autocmd("CursorMoved", {
+    group = group,
+    buffer = S.list_buf,
+    callback = function()
+      S.cursor = item_at_cursor() or S.cursor
+      update_preview()
+    end,
+  })
+  vim.api.nvim_create_autocmd("WinClosed", {
+    group = group,
+    callback = function(ev)
+      local win = tonumber(ev.match)
+      if win == S.list_win then
+        S.list_win = nil
+        local p = S.preview_win
+        S.preview_win = nil
+        -- Scheduled: a window cannot be closed from inside another's WinClosed.
+        vim.schedule(function()
+          close_win(p)
+        end)
+      elseif win == S.preview_win then
+        S.preview_win = nil
+        -- Only closing the preview by itself turns it off. When the whole tab
+        -- goes (`:tabclose`, `q`), the list window goes right after it: the
+        -- rebuilt tab gets its preview back.
+        vim.schedule(function()
+          if valid_win(S.list_win) and tab_alive() then S.preview_on = false end
+        end)
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd("VimResized", {
+    group = group,
+    callback = function()
+      if not valid_win(S.preview_win) then return end
+      close_win(S.preview_win)
+      S.preview_win = nil
+      open_preview()
+    end,
+  })
+end
+
+---Make the two buffers once.
+local function ensure_buffers()
+  if not valid_buf(S.list_buf) then
+    S.list_buf = make_buf(M.LIST_NAME, "gitsuite-plugins-report")
+    bind(S.list_buf)
+  end
+  if not valid_buf(S.preview_buf) then
+    S.preview_buf = make_buf(M.PREVIEW_NAME, "gitsuite-plugins-preview")
+  end
+  autocmds()
+end
+
+---Show `m` in the report tab: the tab is made (or found again) around the
+---kept buffers, and the cursor goes back to what it was on.
+---@param m GitSuite.ReportUi.Model
+function M.open(m)
+  local same_report = S.model and S.model.report.id == m.report.id
+  -- The same report opened again keeps its view, sort and marks.
+  if not same_report then
+    S.model = m
+    S.cursor = nil
+  end
+  ensure_buffers()
+
+  -- `q` goes back to where the report was opened from, the last time.
+  local current = vim.api.nvim_get_current_tabpage()
+  if current ~= S.tab then S.origin_tab = current end
+
+  if tab_alive() and valid_win(S.list_win) then
+    vim.api.nvim_set_current_tabpage(S.tab)
+    vim.api.nvim_set_current_win(S.list_win)
+  else
+    if tab_alive() then
+      -- The tab is there but its list window is gone (`:q` in it): reuse it.
+      vim.api.nvim_set_current_tabpage(S.tab)
+      vim.cmd("silent! only")
+      local cur = vim.api.nvim_get_current_win()
+      if vim.wo[cur].winfixbuf then vim.wo[cur].winfixbuf = false end
+    else
+      vim.cmd("tabnew")
+      S.tab = vim.api.nvim_get_current_tabpage()
+    end
+    local scratch = vim.api.nvim_get_current_buf()
+    S.list_win = vim.api.nvim_get_current_win()
+    vim.api.nvim_win_set_buf(S.list_win, S.list_buf)
+    if scratch ~= S.list_buf and vim.api.nvim_buf_get_name(scratch) == "" then
+      pcall(vim.api.nvim_buf_delete, scratch, {})
+    end
+    style_win(S.list_win)
+    vim.wo[S.list_win].cursorline = true
+    vim.wo[S.list_win].winbar = WINBAR
+    vim.t[S.tab].gitsuite_plugins_report = true
+    S.preview_win = nil
+    if S.preview_on then open_preview() end
+  end
+  M.redraw(S.cursor)
+end
+
+---Close the report tab (the buffers and the model stay). The last tab cannot
+---be closed: then the list window shows an empty buffer instead.
+function M.close()
+  if not tab_alive() then return end
+  local origin = S.origin_tab
+  if #vim.api.nvim_list_tabpages() > 1 then
+    vim.cmd("tabclose " .. vim.api.nvim_tabpage_get_number(S.tab))
+  else
+    close_win(S.preview_win)
+    if valid_win(S.list_win) then
+      -- The window stops being the report's: not fixed, no legend, no cursorline.
+      local win = S.list_win
+      vim.wo[win].winfixbuf = false
+      vim.api.nvim_win_set_buf(win, vim.api.nvim_create_buf(true, false))
+      vim.wo[win].winbar = ""
+      vim.wo[win].cursorline = false
+    end
+    vim.t[S.tab].gitsuite_plugins_report = nil
+  end
+  S.tab, S.list_win, S.preview_win = nil, nil, nil
+  if origin and vim.api.nvim_tabpage_is_valid(origin) then
+    vim.api.nvim_set_current_tabpage(origin)
+  end
+end
+
+---For specs: forget everything (buffers are wiped).
+function M.reset()
+  if tab_alive() and #vim.api.nvim_list_tabpages() > 1 then
+    pcall(vim.cmd, "tabclose " .. vim.api.nvim_tabpage_get_number(S.tab))
+  end
+  for _, b in ipairs({ S.list_buf, S.preview_buf }) do
+    if valid_buf(b) then pcall(vim.api.nvim_buf_delete, b, { force = true }) end
+  end
+  pcall(vim.api.nvim_del_augroup_by_name, AUGROUP)
+  S = { preview_on = true }
+end
+
+return M

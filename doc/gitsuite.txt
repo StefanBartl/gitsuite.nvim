@@ -131,7 +131,7 @@ plugin names of lazy.nvim, `vim.pack` or your plugin folders without starting a
 process. It only reads -- one `git log`, never a fetch -- and works offline in a
 blobless clone. See docs/commands.md and docs/configuration.md (`plugins.*`).
 
-`:Git plugins report [--mode=updated|pending] [--all] [--last] [--out=buffer|clipboard|path]
+`:Git plugins report [--mode=updated|pending] [--all] [--last] [--out=tab|buffer|clipboard|path]
 [--to=path] [--no-open] [--fetch [--yes]]` says what changed across ALL installed plugins: `updated` (default) is what
 the last update changed -- each clone's own HEAD reflog, so it survives a restart --
 and `pending` what the next update would bring, against the target lazy.nvim itself
@@ -142,7 +142,12 @@ clone -- the one network access of gitsuite, never a default: it asks from
 at a time without any credential prompt, kills each fetch and its child
 processes after `plugins.fetch_timeout_ms`, and names every failed or skipped
 clone in the report (a failed one never counts as fetched).
-The output is Markdown (a buffer, the clipboard or a file); a rollback, a diverged
+By default the report opens in a tab of its own (`--out=tab`): an overview of the
+changed plugins, a breaking digest (`D`), a detail per plugin (`<CR>`) and a preview
+of the commit under the cursor (keys: docs/BINDINGS.md, "Plugins report keys"). `q`
+closes it; `:Git plugins` opens it again where it was, or after a restart the newest
+stored report, without a scan. The other outputs are Markdown (a buffer, the
+clipboard or a file); a rollback, a diverged
 branch and a force-pushed-away old state are named as such. Reports are kept in
 `stdpath("state")/gitsuite/plugins_reports.json` and `User GitsuitePluginsReported`
 fires after each. It reads local state only -- no install, update, pin or clean.

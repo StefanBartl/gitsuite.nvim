@@ -45,6 +45,7 @@ end
 ---@field kind "summary"|"plugin"|"commit"|"group"|"unchanged"|"section"|"blank"
 ---@field name? string
 ---@field sha? string
+---@field tier? "sure"|"probable"|"hints"  A commit line in a breaking section (for `]b`/`[b`).
 
 ---@class GitSuite.ReportUi.Mark
 ---@field line integer     0-based
@@ -262,7 +263,7 @@ end
 ---@param r table builder
 ---@param name string
 ---@param c table commit
----@param opts { indent?: string, name_width?: integer, tag?: string, removed?: boolean }
+---@param opts { indent?: string, name_width?: integer, tag?: string, removed?: boolean, tier?: string }
 local function commit_row(m, r, name, c, opts)
   -- A removed commit is not something new to read: it carries no seen state.
   local seen = opts.removed or model.is_seen(m, name, c.sha)
@@ -280,7 +281,7 @@ local function commit_row(m, r, name, c, opts)
     parts[#parts + 1] = " "
   end
   parts[#parts + 1] = text.one_line(c.subject or "")
-  r.add({ kind = "commit", name = name, sha = c.sha }, parts)
+  r.add({ kind = "commit", name = name, sha = c.sha, tier = opts.tier }, parts)
 end
 
 ---@param m GitSuite.ReportUi.Model
@@ -317,7 +318,7 @@ function M.render_digest(m)
         { { ("%s (%d)"):format(t.title, #list), "GitSuitePluginsSection" } }
       )
       for _, row in ipairs(list) do
-        commit_row(m, r, row.name, row.commit, { name_width = width })
+        commit_row(m, r, row.name, row.commit, { name_width = width, tier = t.key })
       end
     end
   end
@@ -381,18 +382,38 @@ function M.render_detail(m)
     )
   end
 
+  -- An AI summary asked for earlier (`plugins.summarize`), labelled as what it
+  -- is, the same way the Markdown report labels it.
+  local ai = entry.ai_summary
+  if type(ai) == "table" and type(ai.text) == "string" and ai.text ~= "" then
+    r.blank()
+    local item = { kind = "plugin", name = entry.name }
+    r.add(item, {
+      {
+        ("AI SUMMARY (%s, %s) -- generated from commit messages, not verified"):format(
+          text.one_line(ai.provider or "unknown"),
+          day(ai.at)
+        ),
+        "GitSuitePluginsSection",
+      },
+    })
+    for _, l in ipairs((text.lines(ai.text, 200))) do
+      r.add(item, { "  ", l })
+    end
+  end
+
   local breaking = {}
   for _, i in ipairs(d.sure) do
-    breaking[#breaking + 1] = { i = i, tag = "[sure]" }
+    breaking[#breaking + 1] = { i = i, tag = "[sure]", tier = "sure" }
   end
   for _, i in ipairs(d.probable) do
-    breaking[#breaking + 1] = { i = i, tag = "[probable]" }
+    breaking[#breaking + 1] = { i = i, tag = "[probable]", tier = "probable" }
   end
   if #breaking > 0 then
     section("BREAKING", #breaking)
     for _, b in ipairs(breaking) do
       shown[b.i] = true
-      commit_row(m, r, entry.name, s.commits[b.i], { tag = b.tag })
+      commit_row(m, r, entry.name, s.commits[b.i], { tag = b.tag, tier = b.tier })
     end
   end
 
@@ -452,7 +473,7 @@ end
 ---@param m GitSuite.ReportUi.Model
 ---@param name string
 ---@param sha string
----@param files? "loading"|{ status: string, path: string }[]|{ error: string }
+---@param files? false|"loading"|{ status: string, path: string }[]|{ error: string }  false: no file section at all
 ---@return GitSuite.ReportUi.Rendered
 function M.render_preview(m, name, sha, files)
   local r = builder()
@@ -501,6 +522,7 @@ function M.render_preview(m, name, sha, files)
     end
   end
 
+  if files == false then return r end
   r.blank()
   if files == nil or files == "loading" then
     r.add(item, { { "Files: loading...", "GitSuitePluginsDim" } })

@@ -135,7 +135,7 @@ end
 ---@field mode? "updated"|"pending"           What to compare (default `plugins.mode`).
 ---@field all? boolean                        Take `dir`-mode plugins too.
 ---@field last? boolean                       Show the newest stored report instead of building one.
----@field out? "buffer"|"clipboard"|"path"    Where to put the Markdown (default "buffer").
+---@field out? "tab"|"buffer"|"clipboard"|"path"  Where the report goes: the report tab (default) or the Markdown forms.
 ---@field to? string                          The file for `out = "path"`.
 ---@field open? boolean                      false = do not open a buffer (default true). An explicit `out = "clipboard"|"path"` is still honoured: copying or writing a file is not opening.
 ---@field quiet? boolean                      No info messages ("reading the clones", the `open = false` summary); warnings and errors still show.
@@ -145,19 +145,23 @@ end
 ---@field yes? boolean                        With `fetch`: do not ask.
 ---@field on_done? fun(report: GitSuite.Plugins.Report|nil, err: string|nil)  Called once (for scripts and tests).
 
----Show a report as Markdown.
+---Show a report: in the report tab (the default), or as Markdown.
 ---@param report GitSuite.Plugins.Report
 ---@param opts GitSuite.Plugins.ReportCmdOpts
 local function present(report, opts)
   local ok, ctx = pcall(require("gitsuite.features.plugins.report").context)
   ctx = ok and ctx or nil
+  if opts.out == nil or opts.out == "tab" then
+    require("gitsuite.features.plugins.report_ui").open(report, { ctx = ctx })
+    return
+  end
   local markdown = require("gitsuite.features.plugins.markdown")
   local lines = markdown.render(report, nil, ctx)
   view.show_markdown(lines, report.id, opts.out, opts.to)
 
   -- The report buffer is the current one now: with a `plugins.summarize` hook
   -- it gets the key that asks for the AI summary of the plugin under the cursor.
-  if (opts.out or "buffer") == "buffer" then
+  if opts.out == "buffer" then
     local buf = vim.api.nvim_get_current_buf()
     require("gitsuite.features.plugins.ai_summary").attach(buf, report, function()
       if not vim.api.nvim_buf_is_valid(buf) then return end
@@ -182,7 +186,7 @@ end
 
 ---Show a report that was already built (e.g. by the `:Lazy sync` hook).
 ---@param report GitSuite.Plugins.Report
----@param opts? { out?: "buffer"|"clipboard"|"path", to?: string }
+---@param opts? { out?: "tab"|"buffer"|"clipboard"|"path", to?: string }
 ---@return nil
 function M.show(report, opts)
   present(report, opts or {})

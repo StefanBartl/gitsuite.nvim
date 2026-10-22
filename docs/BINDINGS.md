@@ -68,8 +68,9 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 | `:Git hunk stage` | Stage the hunk under the cursor |
 | `:Git hunk stage-buffer` | Stage every hunk in the current buffer |
 | `:Git hunk toggle-deleted` | Toggle showing deleted lines inline |
+| `:Git plugins` | Open the report tab: the last one shown in this Neovim, else the newest stored report (never a scan; :Git plugins report builds one) |
 | `:Git plugins log [{target:GITSUITE_PLUGIN_OR_REPO}] [{n:INT}] [--out=<picker\|buffer\|clipboard>] [--count=<value>]` | Show the newest commits of an installed plugin (or any clone): picker with preview, --count=<n>, --out=buffer\|clipboard |
-| `:Git plugins report [--mode=<updated\|pending>] [--out=<buffer\|clipboard\|path>] [--to=<value>] [--all] [--last] [--no-open]` | Report what changed in the installed plugins: the last update (--mode=updated) or what is pending (--mode=pending); reads local state only |
+| `:Git plugins report [--mode=<updated\|pending>] [--out=<tab\|buffer\|clipboard\|path>] [--to=<value>] [--all] [--last] [--no-open] [--fetch] [--yes]` | Report what changed in the installed plugins: the last update (--mode=updated) or what is pending (--mode=pending); reads local state only, unless --fetch |
 | `:Git status lint` | Pre-commit gate: LSP diagnostics for the changed files that already have a loaded buffer |
 | `:Git status quickfix` | Export repo status to the quickfix list |
 | `:Git status relink` | Fix references (Markdown links, etc.) to files git status reports as renamed |
@@ -82,9 +83,9 @@ see `lua/gitsuite/bindings/keymaps.lua`):
 | `:Git ui neogit` | Open neogit |
 
 `--mode` ∈ `updated | pending`  
-`--out` ∈ `buffer | clipboard | path`  
 `--out` ∈ `picker | buffer | clipboard`  
 `--out` ∈ `popup | buffer | split | vsplit | clipboard | path`  
+`--out` ∈ `tab | buffer | clipboard | path`  
 
 ## Dashboard keys (component-local)
 
@@ -128,6 +129,32 @@ right away, in parallel with the rest of the batch; a queued or in-flight row
 refuses with a message. A lock per repository keeps two writing `git`
 processes off the same repository. Sorting, re-scanning, page switches and a
 second batch still wait for the running one.
+
+## Plugins report keys (component-local)
+
+The report tab of `:Git plugins` and `:Git plugins report` (`--out=tab`, the
+default). Set on the report's list buffer only, declared in one table in
+[`features/plugins/report_ui/keys.lua`](../lua/gitsuite/features/plugins/report_ui/keys.lua),
+which also makes the `winbar` legend and the `?` list; a spec compares this
+table with it, row by row. Some letters mean something else here than on the
+dashboard (`p` is the preview, not push).
+
+| Key | Mode | Action |
+| --- | --- | --- |
+| `<CR>` | n | On a plugin: its detail. On a commit in the digest: its plugin's detail, cursor on the commit |
+| `<BS>` | n | Back to the overview |
+| `D` | n | Breaking digest: the breaking commits of every plugin in one list |
+| `s` | n | Cycle the sort: breaking first, name, number of commits, time of the update |
+| `A` | n | List the unchanged plugins too, or count them again |
+| `]]` / `[[` | n | Next / previous plugin's detail (in the overview's order) |
+| `]b` / `[b` | n | Next / previous breaking commit not marked as seen |
+| `p` | n | Show or hide the preview (follows the cursor) |
+| `q` | n | Close the report tab; the report stays, `:Git plugins` opens it again |
+| `?` | n | List every one of these keys |
+
+With a `plugins.summarize` hook, `plugins.summarize_key` (default `gS`) asks
+for the AI summary of the plugin under the cursor; the plugin's detail shows
+it, labelled as generated and not verified.
 
 ## Internal (not typed by hand)
 

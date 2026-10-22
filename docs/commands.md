@@ -75,12 +75,20 @@ that is not installed (`owner/repo` naming something you never installed) is
 refused with that reason: gitsuite does not clone or look anything up.
 
 ```vim
-:Git plugins report [--mode=updated|pending] [--all] [--last] [--out=buffer|clipboard|path] [--to=<path>] [--no-open] [--fetch [--yes]]
+:Git plugins report [--mode=updated|pending] [--all] [--last] [--out=tab|buffer|clipboard|path] [--to=<path>] [--no-open] [--fetch [--yes]]
+:Git plugins
 ```
 
 The question behind `:Lazy sync`: *which plugins changed, and what did they
 bring?* It looks at **every** installed plugin and lists the ones that changed,
-each with its commits, as a Markdown report (a read-only buffer by default).
+each with its commits. By default the report opens in a tab of its own
+(`--out=tab`): an overview of the changed plugins (breaking ones first), a
+breaking digest over all of them (`D`), a detail per plugin (`<CR>`) and a
+preview of the commit under the cursor. The tab can be closed and comes back
+as it was, cursor included: `:Git plugins` opens it again, or after a restart
+the newest stored report, without a scan. Its keys are in
+[BINDINGS.md](BINDINGS.md#plugins-report-keys-component-local). `--out=buffer`
+is the same report as a read-only Markdown buffer.
 
 - `--mode=updated` (default, `plugins.mode`): what the **last update** changed.
   The state before the update comes from each clone's own HEAD reflog, which
@@ -123,7 +131,7 @@ each with its commits, as a Markdown report (a read-only buffer by default).
 - `--no-open` opens no buffer: it builds and stores the report and fires the
   event, and shows only a one-line summary; `--last` opens it later. An explicit
   `--out=clipboard` or `--out=path` (also implied by `--to=<file>`) still
-  copies or writes the report; `--out=buffer` is ignored with a warning. With
+  copies or writes the report; `--out=tab` and `--out=buffer` are ignored with a warning. With
   `--last`, `--no-open` shows only the stored report's summary. Meant for
   scripts and hooks; to run it automatically after every `:Lazy sync`, see
   `plugins.after_sync` ([integrations.md](integrations.md#lazy-sync-hook)).
