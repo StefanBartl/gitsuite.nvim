@@ -83,7 +83,8 @@ The question behind `:Lazy sync`: *which plugins changed, and what did they
 bring?* It looks at **every** installed plugin and lists the ones that changed,
 each with its commits. By default the report opens in a tab of its own
 (`--out=tab`): an overview of the changed plugins (breaking ones first), a
-breaking digest over all of them (`D`), a detail per plugin (`<CR>`) and a
+breaking digest over all of them (`D`), a detail per plugin (`<CR>`, with the
+place of the commit under the cursor in the update, `c 17/86`) and a
 preview of the commit under the cursor: its message and the files it changed,
 from one `git diff-tree` (cached, and only once the cursor rests). A full clone
 also shows the lines added and removed per file; lazy.nvim's clones are

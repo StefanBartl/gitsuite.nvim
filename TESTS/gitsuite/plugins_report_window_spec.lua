@@ -333,6 +333,32 @@ describe("gitsuite.features.plugins.report_ui window", function()
     end
   )
 
+  it("a plugin's detail shows where the commit under the cursor stands (c i/n)", function()
+    local render = require("gitsuite.features.plugins.report_ui.render")
+    local model = require("gitsuite.features.plugins.report_ui.model")
+    local m = model.new(report)
+    -- telescope's list is the whole update in topological order: 1 is the oldest
+    assert.same({ 3, 3 }, { render.position(m, "telescope.nvim", sha("a")) })
+    assert.same({ 1, 3 }, { render.position(m, "telescope.nvim", sha("c")) })
+    -- mason's order is not known: no position rather than a guess
+    assert.is_nil((render.position(m, "mason.nvim", sha("d"))))
+    assert.is_nil((render.position(m, "telescope.nvim", sha("f"))))
+
+    ui.open(report)
+    press("<CR>")
+    goto_key({ name = "telescope.nvim", sha = sha("a") })
+    assert.truthy(window.legend():find("%=%#GitSuitePluginsSha#c 3/3", 1, true), window.legend())
+    goto_key({ name = "telescope.nvim", sha = sha("c") })
+    assert.truthy(window.legend():find("c 1/3", 1, true), window.legend())
+    goto_key({ name = "telescope.nvim" })
+    assert.is_nil(window.legend():find("%=", 1, true), "no position on the plugin line")
+    press("<BS>")
+    goto_key({ name = "mason.nvim" })
+    press("<CR>")
+    goto_key({ name = "mason.nvim", sha = sha("d") })
+    assert.is_nil(window.legend():find("%=", 1, true), "none where the order is not known")
+  end)
+
   it("docs/BINDINGS.md lists the key table row by row", function()
     local doc = io.open(dir_of_spec .. "../../docs/BINDINGS.md", "r")
     assert.is_not_nil(doc)

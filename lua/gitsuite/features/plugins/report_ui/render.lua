@@ -585,6 +585,28 @@ function M.render(m)
   return M.render_overview(m)
 end
 
+---Where the commit `sha` of plugin `name` stands in its update: `i` of `n`,
+---1 the oldest (what the analysis sketched as `c i/n` in the plugin's detail,
+---and what the Markdown report prints as "17/86"). Only when that is known for
+---sure -- the commit list is the whole update in topological order; otherwise
+---nil rather than a guess.
+---@param m GitSuite.ReportUi.Model
+---@param name string
+---@param sha string
+---@return integer|nil i
+---@return integer|nil n
+function M.position(m, name, sha)
+  local entry = model.entry(m, name)
+  if not entry then return nil, nil end
+  local s = model.summary(m, entry)
+  local positions = s.digest.positions
+  if not positions then return nil, nil end
+  for i, c in ipairs(s.commits) do
+    if c.sha == sha then return positions[i], s.digest.total end
+  end
+  return nil, nil
+end
+
 ---The line of `key` in `rendered` (`{ name, sha? }`): the commit line when
 ---`sha` is given, else the first line of that plugin. For the cursor restore
 ---after a render.

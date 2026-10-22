@@ -167,6 +167,10 @@ of thing, for the clone under the cursor).
 | `q` | n | Close the report tab; the report stays, `:Git plugins` opens it again |
 | `?` | n | List every one of these keys |
 
+In a plugin's detail the right end of the legend says where the commit under
+the cursor stands in the update, `c 17/86` (1 is the oldest) -- only when the
+commit list is the whole update in order.
+
 With a `plugins.summarize` hook, `plugins.summarize_key` (default `gS`) asks
 for the AI summary of the plugin under the cursor; the plugin's detail shows
 it, labelled as generated and not verified.

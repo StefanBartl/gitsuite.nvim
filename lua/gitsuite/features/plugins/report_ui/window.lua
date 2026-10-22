@@ -207,7 +207,17 @@ end
 function M.legend()
   local view = S.model and S.model.view.kind or "overview"
   local width = valid_win(S.list_win) and vim.api.nvim_win_get_width(S.list_win) or vim.o.columns
-  return "%#GitSuitePluginsDim#" .. keys.legend(view, width):gsub("%%", "%%%%")
+  -- In a plugin's detail the right end says where the commit under the cursor
+  -- stands in the update (`c 17/86`); the legend gets what is left.
+  local pos = ""
+  local it = view == "detail" and item_at_cursor() or nil
+  if it and it.kind == "commit" then
+    local i, n = render.position(S.model, it.name, it.sha)
+    if i then pos = ("c %d/%d "):format(i, n) end
+  end
+  local legend = keys.legend(view, width - #pos - 1):gsub("%%", "%%%%")
+  if pos == "" then return "%#GitSuitePluginsDim#" .. legend end
+  return "%#GitSuitePluginsDim#" .. legend .. "%=%#GitSuitePluginsSha#" .. pos
 end
 
 local WINBAR = "%!v:lua.require'gitsuite.features.plugins.report_ui.window'.legend()"
@@ -734,6 +744,8 @@ local function autocmds()
     callback = function()
       S.cursor = item_at_cursor() or S.cursor
       update_preview()
+      -- the position in the legend (`c i/n`) follows the cursor
+      if S.model and S.model.view.kind == "detail" then vim.cmd.redrawstatus() end
     end,
   })
   vim.api.nvim_create_autocmd("WinClosed", {
