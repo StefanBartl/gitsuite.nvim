@@ -177,53 +177,22 @@ end
 ---@param repo_dir string repo root
 ---@return nil
 local function open_own_float(repo_dir)
-  local width = math.floor(vim.o.columns * 0.9)
-  local height = math.floor(vim.o.lines * 0.9)
-  local row = math.floor((vim.o.lines - height) / 2 - 1)
-  local col = math.floor((vim.o.columns - width) / 2)
-
-  local bufnr = vim.api.nvim_create_buf(false, true)
-  local ok_win, winid = pcall(vim.api.nvim_open_win, bufnr, true, {
-    relative = "editor",
-    width = width,
-    height = height,
-    row = row,
-    col = col,
-    border = "rounded",
-    style = "minimal",
-    title = " lazygit ",
-    title_pos = "center",
-  })
-  if not ok_win then
-    notify.error("ui lazygit: failed to open the float")
-    pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
-    return
-  end
-
-  local job_id = vim.fn.jobstart(build_argv(repo_dir), {
-    term = true,
+  -- lib.nvim.terminal.spawn closes the float when lazygit exits (the window
+  -- may be gone by then) and leaves no float around a dead terminal when the
+  -- process does not start.
+  local term, err = require("lib.nvim.terminal").spawn({
+    argv = build_argv(repo_dir),
     cwd = repo_dir,
-    on_exit = function()
-      vim.schedule(function()
-        -- LUA-13: the window may already be gone (closed by hand) by the
-        -- time this runs.
-        if vim.api.nvim_win_is_valid(winid) then vim.api.nvim_win_close(winid, true) end
-      end)
+    layout = "float",
+    title = " lazygit ",
+    close_on_exit = "always",
+    on_open = function(bufnr)
+      setup_terminal_keymaps(bufnr)
     end,
   })
-  -- jobstart() returns 0 (invalid arguments) or -1 (not executable) on a
-  -- SYNCHRONOUS failure -- on_exit above never fires for either, so without
-  -- this check the float is left open around a dead terminal with no error
-  -- and no way to close it via the terminal-mode keymaps below (they are
-  -- still bound, but there is no shell to send <Esc> to).
-  if job_id <= 0 then
-    notify.error("ui lazygit: failed to start the lazygit process")
-    pcall(vim.api.nvim_win_close, winid, true)
-    return
+  if not term then
+    notify.error("ui lazygit: " .. (err or "failed to start the lazygit process"))
   end
-
-  setup_terminal_keymaps(bufnr)
-  vim.cmd("startinsert")
 end
 
 ---Open lazygit in a floating terminal. Without `repo_dir` it is rooted at the
