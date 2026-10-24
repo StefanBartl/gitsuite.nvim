@@ -12,7 +12,7 @@
 --- This file is the impure shell (buffer/cursor reads, the actual git
 --- calls, opening the browser) around `lib.nvim.git.remote`'s pure
 --- parsing/building (GS-16: moved there once github_stats.nvim and
---- documentation.nvim needed the same remote-URL grammar this module used
+--- docmap.nvim needed the same remote-URL grammar this module used
 --- to own alone as `features/browse/url.lua`).
 
 local git = require("lib.nvim.git")

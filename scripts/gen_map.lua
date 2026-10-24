@@ -6,15 +6,15 @@
 ---   nvim --headless -l scripts/gen_map.lua --check --lenient  # fail on staleness only
 ---   nvim --headless -l scripts/gen_map.lua --full             # + LuaLS enrichment
 ---
---- Copied from documentation.nvim's own scripts/gen_map.lua per docs/reuse.md
+--- Copied from docmap.nvim's own scripts/gen_map.lua per docs/reuse.md
 --- ("copy verbatim, change only the options table") -- everything above the
 --- options table below is generic dependency resolution, not gitsuite-specific.
 ---
 --- `docs/map/` is deliberately NOT committed (see .gitignore): a committed
 --- copy is stale the moment anything it describes changes, and no CI gate
---- here compares it -- see documentation.nvim's own NEW-20 addendum about why
+--- here compares it -- see docmap.nvim's own NEW-20 addendum about why
 --- a `--check` gate only belongs where the map IS committed. This script is
---- for local/editor use (`:DocMap` once documentation.nvim is installed, or
+--- for local/editor use (`:DocMap` once docmap.nvim is installed, or
 --- this headless entry point without it).
 
 local root = vim.uv.cwd():gsub("\\", "/"):gsub("/+$", "")
@@ -47,7 +47,7 @@ local function ensure(modname, dirname)
 end
 
 ensure("lib.nvim.fs.read", "lib.nvim")
-ensure("documentation.core.cli", "documentation.nvim")
+ensure("docmap.core.cli", "docmap.nvim")
 
 --- Where `config.build`'s degradation warnings go in this host (stderr, not
 --- stdout: stdout carries the run's own report).
@@ -57,7 +57,7 @@ local notify = {
   end,
 }
 
-local opts = require("documentation.config").build(root, {
+local opts = require("docmap.config").build(root, {
   source = "lua/gitsuite",
   title = "gitsuite.nvim",
   out_dir = "docs/map",
@@ -65,6 +65,6 @@ local opts = require("documentation.config").build(root, {
   branch = "main",
 }, notify)
 
-local code = require("documentation.core.cli").run(opts, _G.arg or {})
+local code = require("docmap.core.cli").run(opts, _G.arg or {})
 
 vim.cmd("cq " .. code)
