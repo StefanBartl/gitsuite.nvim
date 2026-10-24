@@ -57,7 +57,7 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
   G.install({
     { "gitsuite.util.notify", "notify", "success" },
     { "gitsuite.util.progress", "create" },
-    { "gitsuite.features.dashboard.actions", "fetch", "pull", "push" },
+    { "gitsuite.features.dashboard.actions", "fetch", "pull", "push", "sync" },
     { "gitsuite.features.dashboard.status", "dashboard_one" },
     { "ui.kit", "confirm" },
   })
@@ -310,6 +310,65 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
     assert.equals(1, max_same_repo)
     local joined = table.concat(messages, "\n")
     assert.truthy(joined:find("fetch: 1 of 4 failed", 1, true), joined)
+  end)
+
+  it(
+    "gS syncs every repository, dashboard.fetch_jobs at once, and lists the one that failed",
+    function()
+      require("gitsuite.config").setup({ dashboard = { fetch_jobs = 2 } })
+      actions.sync = fake("sync")
+      -- Marks are ignored, as with the other g-forms: nothing is marked here, and all four are synced.
+      view.show({ record("r1"), record("r2"), record("r3"), record("r4") }, { output = "buffer" })
+
+      press("gS")
+      assert.same({ "sync /fake/r1", "sync /fake/r2" }, calls)
+      assert.equals("pending", state.phase("/fake/r3"))
+      assert.equals("sync", state.bulk_verb())
+
+      release("sync /fake/r2", true)
+      wait_for(function()
+        return waiting["sync /fake/r3"] ~= nil
+      end, "r3 sync to start")
+      release("sync /fake/r1", false)
+      wait_for(function()
+        return waiting["sync /fake/r4"] ~= nil
+      end, "r4 sync to start")
+      release("sync /fake/r3", true)
+      release("sync /fake/r4", true)
+      wait_for(function()
+        return state.bulk_verb() == nil
+      end, "bulk finished")
+
+      assert.equals(2, max_total, "never more than fetch_jobs at once")
+      assert.equals(1, max_same_repo)
+      local joined = table.concat(messages, "\n")
+      assert.truthy(joined:find("sync: 1 of 4 failed", 1, true), joined)
+      assert.truthy(joined:find("r1: sync exploded", 1, true), joined)
+    end
+  )
+
+  it("gS asks before it starts, and an answer of no starts nothing", function()
+    actions.sync = fake("sync")
+    local question
+    require("ui.kit").confirm = function(o)
+      question = o.question
+      o.on_answer(false)
+    end
+    view.show({ record("r1"), record("r2") }, { output = "buffer" })
+
+    press("gS")
+    assert.truthy(question and question:find("Sync 2 repositories", 1, true), question)
+    assert.same({}, calls)
+    assert.is_nil(state.bulk_verb())
+  end)
+
+  it("gS has a description, which is what the ? help lists", function()
+    view.show({ record("r1") }, { output = "buffer" })
+    local desc
+    for _, m in ipairs(vim.api.nvim_buf_get_keymap(bufnr(), "n")) do
+      if m.lhs == "gS" then desc = m.desc end
+    end
+    assert.truthy(desc and desc:find("Sync every repository", 1, true), tostring(desc))
   end)
 
   it("push stays one at a time whatever fetch_jobs says", function()

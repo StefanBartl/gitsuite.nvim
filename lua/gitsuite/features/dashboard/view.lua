@@ -37,13 +37,17 @@
 --- mark that followed the row index would quietly end up on a different
 --- repository.
 ---
---- `gp`/`gP`/`gf`/`gu` are the whole-directory forms, ignoring marks: push,
---- pull, fetch, or update (fetch + ff-only pull, the same pair
---- `:Git dashboard update` runs) every repository in the dashboard. Batches run
+--- `gp`/`gP`/`gf`/`gu`/`gS` are the whole-directory forms, ignoring marks: push,
+--- pull, fetch, update (fetch + ff-only pull, the same pair
+--- `:Git dashboard update` runs), or sync (fetch, then pull what is behind and
+--- push what is ahead) every repository in the dashboard. Batches run
 --- sequentially and report through `utils.progress` -- these are network
 --- calls, and forty simultaneous pushes are a rate limit or an auth-prompt
---- storm -- and every batch is confirmed first, because unlike a single row
---- there is nothing on screen that says what is about to be touched.
+--- storm -- except fetch and sync, which run `dashboard.fetch_jobs` at once:
+--- a sync is mostly its fetch, and a repository that needs a pull or a push
+--- does it at once after its own fetch -- and every batch is confirmed first,
+--- because unlike a single row there is nothing on screen that says what is
+--- about to be touched.
 ---
 --- A running batch does not freeze the table: every repository carries its own
 --- phase (`features.dashboard.repo_state`: pending -> fetching -> done/failed),
@@ -985,10 +989,14 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
   ---@type string[]
   local errors = {}
   local succeeded, completed = 0, 0
-  -- Only `fetch` runs several at once: it reads the remote and nothing else, while
-  -- a push or pull over many clones at once is the rate limit / prompt storm
-  -- described above.
-  local limit = verb == "fetch" and require("gitsuite.config").get().dashboard.fetch_jobs or 1
+  -- Only `fetch` and `sync` run several at once: a fetch reads the remote and
+  -- nothing else, and a sync is a fetch first (a pull or push follows only for
+  -- the repositories that are behind or ahead, and `dashboard.fetch_jobs` bounds
+  -- those too), while a push or pull over many clones at once is the rate limit /
+  -- prompt storm described above.
+  local limit = (verb == "fetch" or verb == "sync")
+      and require("gitsuite.config").get().dashboard.fetch_jobs
+    or 1
   local next_pos, running, finished = 1, 0, false
 
   local function finish()
@@ -1506,6 +1514,13 @@ local ROW_KEYMAPS = {
     desc = "Update every repository in the dashboard: fetch + ff-only pull (marks ignored)",
     run = function(ctx)
       _run_all(ctx, "update", repo_actions.update)
+    end,
+  },
+  {
+    keys = { "gS" },
+    desc = "Sync every repository in the dashboard: fetch, then pull those behind and push those ahead; diverged ones are only reported (marks ignored)",
+    run = function(ctx)
+      _run_all(ctx, "sync", repo_actions.sync)
     end,
   },
   {

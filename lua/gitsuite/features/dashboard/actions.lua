@@ -53,4 +53,83 @@ function M.update(repo, on_done)
   git.update_async({ dir = repo }, on_done)
 end
 
+---Environment for the one `git` call below whose error text is read: the same wording on every machine,
+---whatever language git is set to.
+local C_LOCALE = { LC_ALL = "C", LANGUAGE = "C" }
+
+---How far the current branch of `repo` is from its upstream, as the last fetch left it.
+---
+---`on_done(ahead, behind)` with the two commit counts; `on_done(nil, nil, nil)` for a repository with nothing
+---to compare with (no upstream configured, or a detached HEAD): there is nothing to bring level, which is not
+---an error; `on_done(nil, nil, err)` when git could not tell.
+---@param repo string Absolute path to the repository
+---@param on_done fun(ahead: integer|nil, behind: integer|nil, err: string|nil): nil
+---@return nil
+local function ahead_behind(repo, on_done)
+  git.run_async(
+    { "rev-list", "--left-right", "--count", "HEAD...@{u}" },
+    { dir = repo, read_only = true, env = C_LOCALE },
+    function(res)
+      if res.ok then
+        local ahead, behind = (res.stdout or ""):match("^%s*(%d+)%s+(%d+)%s*$")
+        if ahead and behind then
+          on_done(tonumber(ahead), tonumber(behind), nil)
+        else
+          on_done(nil, nil, "unexpected output of git rev-list: " .. vim.trim(res.stdout or ""))
+        end
+        return
+      end
+      local text = vim.trim(res.stderr or "")
+      if text:find("no upstream", 1, true) or text:find("does not point to a branch", 1, true) then
+        on_done(nil, nil, nil)
+      else
+        on_done(
+          nil,
+          nil,
+          text ~= "" and text or ("git rev-list failed (exit code %d)"):format(res.code)
+        )
+      end
+    end
+  )
+end
+
+---Brings `repo` level with its upstream in whichever direction it is off, in one go: fetch every remote, then
+---
+---  * behind only  -> `git pull --ff-only`
+---  * ahead only   -> `git push`
+---  * level, or no upstream to compare with -> nothing more (the fetch is all)
+---  * both ahead and behind (diverged) -> **neither**: fast-forward is impossible and a push would be refused
+---    or, forced, would throw the upstream's commits away. It is reported as a failure that names the counts,
+---    so the repository shows up in the batch's list of what needs a person.
+---
+---The counts are read after the fetch, so they are the remote's state now, not the dashboard's of a moment
+---ago.
+---@param repo string Absolute path to the repository
+---@param on_done fun(ok: boolean, err: string|nil): nil
+---@return nil
+function M.sync(repo, on_done)
+  git.fetch_async({ dir = repo }, function(fetched, ferr)
+    if not fetched then
+      on_done(false, ferr)
+      return
+    end
+    ahead_behind(repo, function(ahead, behind, err)
+      if err then
+        on_done(false, err)
+      elseif ahead == nil or (ahead == 0 and behind == 0) then
+        on_done(true, nil)
+      elseif behind == 0 then
+        git.push_async({ dir = repo }, on_done)
+      elseif ahead == 0 then
+        git.pull_async({ dir = repo }, on_done)
+      else
+        on_done(
+          false,
+          ("diverged: %d ahead, %d behind - neither pulled nor pushed"):format(ahead, behind)
+        )
+      end
+    end)
+  end)
+end
+
 return M
