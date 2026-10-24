@@ -312,6 +312,33 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
     assert.truthy(joined:find("fetch: 1 of 4 failed", 1, true), joined)
   end)
 
+  it("gS runs dashboard.fetch_jobs syncs at once, like gf", function()
+    require("gitsuite.config").setup({ dashboard = { fetch_jobs = 2 } })
+    actions.sync = fake("sync")
+    view.show({ record("r1"), record("r2"), record("r3"), record("r4") }, { output = "buffer" })
+
+    press("gS")
+    assert.same({ "sync /fake/r1", "sync /fake/r2" }, calls)
+    assert.equals("pending", state.phase("/fake/r3"))
+
+    release("sync /fake/r1", true)
+    wait_for(function()
+      return waiting["sync /fake/r3"] ~= nil
+    end, "r3 sync to start")
+    release("sync /fake/r2", true)
+    wait_for(function()
+      return waiting["sync /fake/r4"] ~= nil
+    end, "r4 sync to start")
+    release("sync /fake/r3", true)
+    release("sync /fake/r4", true)
+    wait_for(function()
+      return state.bulk_verb() == nil
+    end, "bulk finished")
+
+    assert.equals(2, max_total, "never more than fetch_jobs at once")
+    assert.equals(1, max_same_repo)
+  end)
+
   it("push stays one at a time whatever fetch_jobs says", function()
     require("gitsuite.config").setup({ dashboard = { fetch_jobs = 4 } })
     actions.push = fake("push")

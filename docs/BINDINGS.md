@@ -105,6 +105,7 @@ former `:Reposcope dashboard`.
 | `gp` / `gf` | n | Push / fetch **every** repository on the current page, marks ignored; `gf` fetches `dashboard.fetch_jobs` (default 4) at once, push stays one by one |
 | `gP` | n | Pull the page, marks ignored: asks "Only behind" (repos behind their upstream) or "All"; repos with unknown behind state (no upstream, never fetched) are named. Default focus: `dashboard.pull_scope` |
 | `gu` | n | Update every repository on the current page: `fetch --all --prune` + `pull --ff-only` |
+| `gS` | n | Sync every repository on the current page, marks ignored: fetch (at `dashboard.fetch_jobs` concurrency, like `gf`), then pull if that left it behind or push if it is ahead |
 | `S` | n | Full `git status --short` plus the last five commits, in a nested popup |
 | `L` | n | Open `:Git ui lazygit` for the repository under the cursor |
 | `s` | n | Cycle sort order: discovery → name → state (worst first) → last-commit age → discovery |

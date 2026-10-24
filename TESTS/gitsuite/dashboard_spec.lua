@@ -297,6 +297,78 @@ describe("gitsuite.features.dashboard", function()
     end)
   end)
 
+  describe("actions.sync: fetch, then pull if behind or push if ahead", function()
+    local bare, clone
+
+    before_each(function()
+      bare = tmpdir("-gitsuite-dashboard-sync-bare")
+      git(bare, { "init", "-q", "--bare", "-b", "main" })
+      clone = tmpdir("-gitsuite-dashboard-sync-clone")
+      local res = vim.system({ "git", "clone", "-q", bare, clone }):wait()
+      assert.equals(0, res.code)
+      vim.fn.writefile({ "x" }, clone .. "/f.txt")
+      git(clone, { "add", "-A" })
+      git(clone, { "commit", "-q", "-m", "first" })
+      git(clone, { "push", "-q", "origin", "main" })
+    end)
+
+    after_each(function()
+      pcall(vim.fn.delete, bare, "rf")
+      pcall(vim.fn.delete, clone, "rf")
+    end)
+
+    ---Runs `actions.sync(repo, ...)` and waits for it to settle.
+    ---@param repo string
+    ---@return boolean|nil ok
+    ---@return string|nil err
+    local function sync(repo)
+      local ok, err
+      actions.sync(repo, function(ok_, err_)
+        ok, err = ok_, err_
+      end)
+      vim.wait(8000, function()
+        return ok ~= nil
+      end)
+      return ok, err
+    end
+
+    it("pulls when the fetch left it behind", function()
+      local behind = tmpdir("-gitsuite-dashboard-sync-behind")
+      local res = vim.system({ "git", "clone", "-q", bare, behind }):wait()
+      assert.equals(0, res.code)
+
+      vim.fn.writefile({ "y" }, clone .. "/second.txt")
+      git(clone, { "add", "-A" })
+      git(clone, { "commit", "-q", "-m", "second" })
+      git(clone, { "push", "-q", "origin", "main" })
+
+      local ok, err = sync(behind)
+      assert.is_true(ok, err)
+      assert.equals(1, vim.fn.filereadable(behind .. "/second.txt"))
+      pcall(vim.fn.delete, behind, "rf")
+    end)
+
+    it("pushes when it is ahead with nothing new to pull", function()
+      vim.fn.writefile({ "y" }, clone .. "/second.txt")
+      git(clone, { "add", "-A" })
+      git(clone, { "commit", "-q", "-m", "second" })
+
+      local ok, err = sync(clone)
+      assert.is_true(ok, err)
+
+      local other = tmpdir("-gitsuite-dashboard-sync-check")
+      local clone_res = vim.system({ "git", "clone", "-q", bare, other }):wait()
+      assert.equals(0, clone_res.code)
+      assert.equals(1, vim.fn.filereadable(other .. "/second.txt"), "pushed to the bare remote")
+      pcall(vim.fn.delete, other, "rf")
+    end)
+
+    it("does nothing when already level with its upstream", function()
+      local ok, err = sync(clone)
+      assert.is_true(ok, err)
+    end)
+  end)
+
   describe("pull_scope: what gP offers to pull", function()
     local pull_scope
 

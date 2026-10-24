@@ -37,13 +37,17 @@
 --- mark that followed the row index would quietly end up on a different
 --- repository.
 ---
---- `gp`/`gP`/`gf`/`gu` are the whole-directory forms, ignoring marks: push,
---- pull, fetch, or update (fetch + ff-only pull, the same pair
---- `:Git dashboard update` runs) every repository in the dashboard. Batches run
---- sequentially and report through `utils.progress` -- these are network
---- calls, and forty simultaneous pushes are a rate limit or an auth-prompt
---- storm -- and every batch is confirmed first, because unlike a single row
---- there is nothing on screen that says what is about to be touched.
+--- `gp`/`gP`/`gf`/`gu`/`gS` are the whole-directory forms, ignoring marks: push,
+--- pull, fetch, update (fetch + ff-only pull, the same pair
+--- `:Git dashboard update` runs), or sync every repository in the dashboard.
+--- Batches run sequentially and report through `utils.progress` -- these are
+--- network calls, and forty simultaneous pushes are a rate limit or an
+--- auth-prompt storm -- and every batch is confirmed first, because unlike a
+--- single row there is nothing on screen that says what is about to be
+--- touched. `gS` ("sync") is the exception to "sequentially": each
+--- repository's own fetch is read-only, so it runs at `dashboard.fetch_jobs`
+--- concurrency same as `gf`, and only the pull/push that fetch turns out to
+--- need for that one repository runs afterward.
 ---
 --- A running batch does not freeze the table: every repository carries its own
 --- phase (`features.dashboard.repo_state`: pending -> fetching -> done/failed),
@@ -985,10 +989,14 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
   ---@type string[]
   local errors = {}
   local succeeded, completed = 0, 0
-  -- Only `fetch` runs several at once: it reads the remote and nothing else, while
-  -- a push or pull over many clones at once is the rate limit / prompt storm
-  -- described above.
-  local limit = verb == "fetch" and require("gitsuite.config").get().dashboard.fetch_jobs or 1
+  -- `fetch` and `sync` run several at once: a plain fetch only reads the
+  -- remote, and `sync`'s own fetch is the part that dominates its time --
+  -- the pull/push it may run afterward is scoped to one repository, not the
+  -- rate limit / prompt storm a push or pull over many clones at once would be.
+  local limit = 1
+  if verb == "fetch" or verb == "sync" then
+    limit = require("gitsuite.config").get().dashboard.fetch_jobs
+  end
   local next_pos, running, finished = 1, 0, false
 
   local function finish()
@@ -1506,6 +1514,13 @@ local ROW_KEYMAPS = {
     desc = "Update every repository in the dashboard: fetch + ff-only pull (marks ignored)",
     run = function(ctx)
       _run_all(ctx, "update", repo_actions.update)
+    end,
+  },
+  {
+    keys = { "gS" },
+    desc = "Sync every repository: fetch, then pull if behind or push if ahead (marks ignored)",
+    run = function(ctx)
+      _run_all(ctx, "sync", repo_actions.sync)
     end,
   },
   {
