@@ -369,6 +369,101 @@ describe("gitsuite.features.dashboard", function()
     end)
   end)
 
+  describe("actions.sync: write serialization and live status lookup (mocked)", function()
+    it("looks up status.status_only live, not bound when the module first loaded", function()
+      local status_mod = require("gitsuite.features.dashboard.status")
+      local git_mod = require("lib.nvim.git")
+      local original_status_only = status_mod.status_only
+      local original_fetch = git_mod.fetch_async
+
+      git_mod.fetch_async = function(_, on_done)
+        on_done(true, nil)
+      end
+      -- Reassigned here, well after `actions` (this file's before_each) was
+      -- required with the real `status_only` -- a bound local captured at
+      -- that require would miss this and run a real `git status` on a path
+      -- that does not exist.
+      status_mod.status_only = function(_, on_done)
+        on_done({ ahead = 0, behind = 0 }, nil)
+      end
+
+      local ok, err
+      actions.sync("/does/not/exist", function(ok_, err_)
+        ok, err = ok_, err_
+      end)
+      vim.wait(2000, function()
+        return ok ~= nil
+      end)
+
+      git_mod.fetch_async = original_fetch
+      status_mod.status_only = original_status_only
+      assert.is_true(ok, err)
+    end)
+
+    it("never runs more than one pull/push at once across concurrent sync calls", function()
+      local git_mod = require("lib.nvim.git")
+      local status_mod = require("gitsuite.features.dashboard.status")
+      local original = {
+        fetch = git_mod.fetch_async,
+        pull = git_mod.pull_async,
+        push = git_mod.push_async,
+        status_only = status_mod.status_only,
+      }
+
+      local fetch_inflight, fetch_peak = 0, 0
+      git_mod.fetch_async = function(_, on_done)
+        fetch_inflight = fetch_inflight + 1
+        fetch_peak = math.max(fetch_peak, fetch_inflight)
+        vim.defer_fn(function()
+          fetch_inflight = fetch_inflight - 1
+          on_done(true, nil)
+        end, 10)
+      end
+
+      -- r2 comes back behind (pull), r1 and r3 ahead (push): three writes
+      -- that, without the mutex, all end up in flight at the same time.
+      status_mod.status_only = function(repo, on_done)
+        if repo == "/fake/r2" then
+          on_done({ ahead = 0, behind = 1 }, nil)
+        else
+          on_done({ ahead = 1, behind = 0 }, nil)
+        end
+      end
+
+      local write_inflight, write_peak = 0, 0
+      local function fake_write()
+        return function(_, on_done)
+          write_inflight = write_inflight + 1
+          write_peak = math.max(write_peak, write_inflight)
+          vim.defer_fn(function()
+            write_inflight = write_inflight - 1
+            on_done(true, nil)
+          end, 20)
+        end
+      end
+      git_mod.pull_async = fake_write()
+      git_mod.push_async = fake_write()
+
+      local done = {}
+      for _, repo in ipairs({ "/fake/r1", "/fake/r2", "/fake/r3" }) do
+        actions.sync(repo, function(ok)
+          done[repo] = ok
+        end)
+      end
+      vim.wait(2000, function()
+        return done["/fake/r1"] ~= nil and done["/fake/r2"] ~= nil and done["/fake/r3"] ~= nil
+      end)
+
+      git_mod.fetch_async, git_mod.pull_async, git_mod.push_async =
+        original.fetch, original.pull, original.push
+      status_mod.status_only = original.status_only
+
+      assert.equals(3, fetch_peak, "the three fetches ran concurrently")
+      assert.equals(1, write_peak, "pull/push never ran more than one at a time")
+      assert.is_true(done["/fake/r1"] and done["/fake/r2"] and done["/fake/r3"])
+    end)
+  end)
+
   describe("pull_scope: what gP offers to pull", function()
     local pull_scope
 

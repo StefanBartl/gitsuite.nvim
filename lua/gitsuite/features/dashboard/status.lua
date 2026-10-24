@@ -238,6 +238,24 @@ function M.dashboard_one(repo, on_done)
   status_repo(repo, on_done)
 end
 
+---Queries just the git status of a single repository: `dashboard_one`
+---without the second, independent `git log` call it also makes for
+---`last_commit` -- a caller that only needs the ahead/behind counts
+---(`actions.sync` picking between a pull and a push after its own fetch)
+---would otherwise pay for a timestamp it never reads.
+---@param repo string Absolute path to the repository
+---@param on_done fun(record: RepoDashboardRecord|nil, err: string|nil): nil
+---@return nil
+function M.status_only(repo, on_done)
+  git_read(repo, { "status", "--porcelain=v2", "--branch" }, function(res)
+    if res.code ~= 0 then
+      on_done(nil, failure_text(res, "git status"))
+      return
+    end
+    on_done(parse_status(repo, res.stdout or ""), nil)
+  end)
+end
+
 ---Collects a human-readable detail view of one repository: the porcelain
 ---short status plus the last few commits. Unlike `dashboard_one` this is not
 ---parsed into a record — it is meant to be shown verbatim, the way `git

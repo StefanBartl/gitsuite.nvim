@@ -46,8 +46,10 @@
 --- single row there is nothing on screen that says what is about to be
 --- touched. `gS` ("sync") is the exception to "sequentially": each
 --- repository's own fetch is read-only, so it runs at `dashboard.fetch_jobs`
---- concurrency same as `gf`, and only the pull/push that fetch turns out to
---- need for that one repository runs afterward.
+--- concurrency same as `gf`; the pull or push that fetch turns out to need
+--- is a write, though, so `actions.sync` serializes those itself across
+--- every repository the running `gS` touches, the same one-at-a-time rule
+--- `gp`/`gP` already apply, rather than inheriting the fetch's concurrency.
 ---
 --- A running batch does not freeze the table: every repository carries its own
 --- phase (`features.dashboard.repo_state`: pending -> fetching -> done/failed),
@@ -990,9 +992,11 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
   local errors = {}
   local succeeded, completed = 0, 0
   -- `fetch` and `sync` run several at once: a plain fetch only reads the
-  -- remote, and `sync`'s own fetch is the part that dominates its time --
-  -- the pull/push it may run afterward is scoped to one repository, not the
-  -- rate limit / prompt storm a push or pull over many clones at once would be.
+  -- remote, and `sync`'s own fetch is the part that dominates its time. The
+  -- pull/push it may run afterward is a write, so the rate limit / prompt
+  -- storm a push or pull over many clones at once would otherwise be is
+  -- avoided in `actions.sync` itself (it serializes those across every
+  -- repository this limit lets run concurrently), not by this limit here.
   local limit = 1
   if verb == "fetch" or verb == "sync" then
     limit = require("gitsuite.config").get().dashboard.fetch_jobs
