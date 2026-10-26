@@ -1,7 +1,7 @@
 # Contributing to gitsuite.nvim
 
 Thank you for your interest! Bugs, ideas and questions are welcome in the
-[issue tracker](https://github.com/StefanBartl/gitsuite.nvim/issues); pull
+[issue tracker](https://github.com/WKDSteve/gitsuite.nvim/issues); pull
 requests very welcome.
 
 ## Getting the repository into a session
@@ -86,7 +86,7 @@ on first `resolve()`/`resolve_first()` call) and add it to
 ## Tests
 
 `TESTS/` is a busted-style suite (`describe` / `it`, luassert) run by
-[testing.nvim](https://github.com/StefanBartl/testing.nvim), configured in
+[testing.nvim](https://github.com/WKDSteve/testing.nvim), configured in
 [`.testing.lua`](../.testing.lua). testing.nvim, lib.nvim, diff.nvim and ui.nvim are
 looked up in `$<NAME>_DIR`, `.deps/<name>`, `../<name>` and
 `stdpath("data")/lazy/<name>`, in this order; a missing one stops the run with

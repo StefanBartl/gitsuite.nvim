@@ -74,7 +74,7 @@ function M.todos()
   local ok_req, insights_todos = pcall(require, "insights.todos")
   if not ok_req then
     notify.error(
-      'status: todos: insights.nvim is not installed -- install "StefanBartl/insights.nvim" to use :Git status todos'
+      'status: todos: insights.nvim is not installed -- install "WKDSteve/insights.nvim" to use :Git status todos'
     )
     return
   end

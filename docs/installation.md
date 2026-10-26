@@ -8,13 +8,13 @@ everything else in this page is optional.
 
 ```lua
 {
-  "StefanBartl/gitsuite.nvim",
+  "WKDSteve/gitsuite.nvim",
   cmd = "Git",
   -- Conflict markers live in a buffer's text, so there is nothing to
   -- detect before one is read -- this trigger sets up conflict scanning/
   -- highlighting/keymaps without waiting for :Git to be typed first.
   event = { "BufReadPost", "BufNewFile" },
-  dependencies = { "StefanBartl/lib.nvim", "StefanBartl/diff.nvim", "StefanBartl/ui.nvim" },
+  dependencies = { "WKDSteve/lib.nvim", "WKDSteve/diff.nvim", "WKDSteve/ui.nvim" },
   keys = {
     { "<leader>gb", "<cmd>Git blame full<cr>", desc = "[gitsuite.nvim] Blame (full)" },
     { "<leader>lg", "<cmd>Git ui lazygit<cr>", desc = "[gitsuite.nvim] Open lazygit" },
@@ -37,8 +37,8 @@ gitsuite.nvim notice it.
 
 ```lua
 use({
-  "StefanBartl/gitsuite.nvim",
-  requires = { "StefanBartl/lib.nvim", "StefanBartl/diff.nvim", "StefanBartl/ui.nvim" },
+  "WKDSteve/gitsuite.nvim",
+  requires = { "WKDSteve/lib.nvim", "WKDSteve/diff.nvim", "WKDSteve/ui.nvim" },
   config = function()
     require("gitsuite").setup({})
   end,
@@ -48,10 +48,10 @@ use({
 ## vim-plug
 
 ```vim
-Plug 'StefanBartl/lib.nvim'
-Plug 'StefanBartl/diff.nvim'
-Plug 'StefanBartl/ui.nvim'
-Plug 'StefanBartl/gitsuite.nvim'
+Plug 'WKDSteve/lib.nvim'
+Plug 'WKDSteve/diff.nvim'
+Plug 'WKDSteve/ui.nvim'
+Plug 'WKDSteve/gitsuite.nvim'
 ```
 
 ```lua
@@ -63,8 +63,8 @@ require("gitsuite").setup({})
 ```lua
 local add, now = MiniDeps.add, MiniDeps.now
 add({
-  source = "StefanBartl/gitsuite.nvim",
-  depends = { "StefanBartl/lib.nvim", "StefanBartl/diff.nvim", "StefanBartl/ui.nvim" },
+  source = "WKDSteve/gitsuite.nvim",
+  depends = { "WKDSteve/lib.nvim", "WKDSteve/diff.nvim", "WKDSteve/ui.nvim" },
 })
 now(function()
   require("gitsuite").setup({})

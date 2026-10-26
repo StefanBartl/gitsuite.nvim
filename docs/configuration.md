@@ -271,7 +271,7 @@ Indicator style for `:Git dashboard`/`:Git dashboard update` over many
 repositories — both walk a whole directory and run `git` once or twice per
 repository, which adds up to a wait long enough to look like a hang without
 one. Backed by
-[`lib.nvim.progress`](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/progress/README.md);
+[`lib.nvim.progress`](https://github.com/WKDSteve/lib.nvim/blob/main/lua/lib/nvim/progress/README.md);
 `lib.nvim` is a hard dependency of gitsuite.nvim already, so this is never a
 no-op in practice.
 

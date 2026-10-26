@@ -15,17 +15,17 @@
                                                .nvim
 ```
 
-> Sister plugin: [diff.nvim](https://github.com/StefanBartl/diff.nvim) (a
+> Sister plugin: [diff.nvim](https://github.com/WKDSteve/diff.nvim) (a
 > hard dependency here for `:Git diff *`).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Neovim](https://img.shields.io/badge/Neovim-0.10%2B-57A143?logo=neovim&logoColor=white)](https://neovim.io)
 [![Lua](https://img.shields.io/badge/Lua-5.1%2FLuaJIT-2C2D72?logo=lua&logoColor=white)](https://www.lua.org)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
-[![CI](https://github.com/StefanBartl/gitsuite.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/StefanBartl/gitsuite.nvim/actions/workflows/ci.yml)
-[![wkd](https://img.shields.io/badge/wkd-family-c6ff3d)](https://stefanbartl.github.io/wkd/p/gitsuite/)
+[![CI](https://github.com/WKDSteve/gitsuite.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/WKDSteve/gitsuite.nvim/actions/workflows/ci.yml)
+[![wkd](https://img.shields.io/badge/wkd-family-c6ff3d)](https://wkdsteve.github.io/wkd/p/gitsuite/)
 
-> Part of the [wkd](https://stefanbartl.github.io/wkd/) family — see this plugin's [page](https://stefanbartl.github.io/wkd/p/gitsuite/) on the site.
+> Part of the [wkd](https://wkdsteve.github.io/wkd/) family — see this plugin's [page](https://wkdsteve.github.io/wkd/p/gitsuite/) on the site.
 
 One `:Git <scope> <action>` command tree for everything git in Neovim — own
 implementation where that pays off (merge-conflict resolution, blame,
@@ -34,7 +34,7 @@ staging UI, diffview, the real `lazygit` TUI in a float). Plus `:Git
 dashboard`, a multi-repo git-status panel across a whole folder of clones,
 with push/pull/fetch per row, per marked set, or for the whole folder —
 moved here from
-[reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim), which
+[reposcope.nvim](https://github.com/WKDSteve/reposcope.nvim), which
 stays scoped to GitHub/GitLab/Codeberg discovery. And `:Git plugins`: after a
 `:Lazy sync`, `:Git plugins report` says which plugins the update changed and
 which commits that brought, in a report tab of its own (overview, breaking
@@ -74,7 +74,7 @@ question each page answers.
 - [Health check](docs/health.md) — what `:checkhealth gitsuite` reports, line by line.
 - [Cross-platform notes](docs/cross-platform.md)
 - [Contributing](docs/CONTRIBUTING.md)
-- [Feedback](https://github.com/StefanBartl/gitsuite.nvim/issues)
+- [Feedback](https://github.com/WKDSteve/gitsuite.nvim/issues)
 
 `:help gitsuite` is the same reference inside the editor.
 

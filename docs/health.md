@@ -7,11 +7,11 @@
 | Line | Means |
 | --- | --- |
 | ✅ `lib.nvim detected (:Git command layer available)` | `lib.nvim.bindings.usercmd.composer` resolved — the `:Git` command itself can register |
-| ❌ `lib.nvim not found -- :Git will fail to register` | A hard dependency is missing; install `StefanBartl/lib.nvim` |
+| ❌ `lib.nvim not found -- :Git will fail to register` | A hard dependency is missing; install `WKDSteve/lib.nvim` |
 | ✅ `diff.nvim detected (:Git diff * available)` | `diff.nvim` resolved |
-| ❌ `diff.nvim not found -- :Git diff * will fail` | Another hard dependency is missing; install `StefanBartl/diff.nvim` |
+| ❌ `diff.nvim not found -- :Git diff * will fail` | Another hard dependency is missing; install `WKDSteve/diff.nvim` |
 | ✅ `ui.nvim detected (:Git dashboard and :Git plugins log available)` | `ui.kit` resolved — the dashboard's dialogs and the log picker can open |
-| ❌ `ui.nvim not found -- :Git dashboard and :Git plugins log will fail` | The third hard dependency is missing; install `StefanBartl/ui.nvim` |
+| ❌ `ui.nvim not found -- :Git dashboard and :Git plugins log will fail` | The third hard dependency is missing; install `WKDSteve/ui.nvim` |
 | ✅ `git executable on PATH` | `vim.fn.executable("git") == 1` |
 | ❌ `git executable not on PATH -- gitsuite.nvim needs it for everything` | Nothing in this plugin works without a real `git` binary |
 

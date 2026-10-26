@@ -74,7 +74,7 @@ function M.check()
   else
     vim.health.error(
       "lib.nvim not found -- :Git will fail to register",
-      { 'Install "StefanBartl/lib.nvim" as a dependency' }
+      { 'Install "WKDSteve/lib.nvim" as a dependency' }
     )
   end
 
@@ -83,7 +83,7 @@ function M.check()
   else
     vim.health.error(
       "diff.nvim not found -- :Git diff * will fail",
-      { 'Install "StefanBartl/diff.nvim" as a dependency' }
+      { 'Install "WKDSteve/diff.nvim" as a dependency' }
     )
   end
 
@@ -92,7 +92,7 @@ function M.check()
   else
     vim.health.error(
       "ui.nvim not found -- :Git dashboard and :Git plugins log will fail",
-      { 'Install "StefanBartl/ui.nvim" as a dependency' }
+      { 'Install "WKDSteve/ui.nvim" as a dependency' }
     )
   end
 

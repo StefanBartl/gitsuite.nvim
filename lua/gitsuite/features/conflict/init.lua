@@ -335,7 +335,7 @@ function M.list(on_done)
   local ok_req, insights_conflicts = pcall(require, "insights.conflicts")
   if not ok_req then
     notify.error(
-      'conflict: insights.nvim is not installed -- install "StefanBartl/insights.nvim" to use :Git conflict list'
+      'conflict: insights.nvim is not installed -- install "WKDSteve/insights.nvim" to use :Git conflict list'
     )
     if on_done then on_done(0) end
     return

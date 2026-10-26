@@ -27,7 +27,7 @@ The handful of things worth knowing before reading anything else.
 
 - **`:Git browse *` needs no git-hosting plugin** — GitHub, GitLab,
   Codeberg and any self-hosted instance you add to `browse.hosts` are all
-  handled by [lib.nvim.git.remote](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/git/README.md)'s
+  handled by [lib.nvim.git.remote](https://github.com/WKDSteve/lib.nvim/blob/main/lua/lib/nvim/git/README.md)'s
   pure URL grammar, not a per-host API client.
 
 - **Every feature works with zero adapter plugins installed.** gitsigns,

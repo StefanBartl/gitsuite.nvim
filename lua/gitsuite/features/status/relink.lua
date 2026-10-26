@@ -55,7 +55,7 @@ function M.relink()
   local ok_req, refs = pcall(require, "filetree.refs")
   if not ok_req then
     notify.error(
-      'status: filetree.nvim is not installed -- install "StefanBartl/filetree.nvim" to use :Git status relink'
+      'status: filetree.nvim is not installed -- install "WKDSteve/filetree.nvim" to use :Git status relink'
     )
     return
   end

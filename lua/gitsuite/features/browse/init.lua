@@ -71,7 +71,7 @@ local function open_url(web_url)
   local ok_req, open_registry = pcall(require, "open.registry")
   if not ok_req then
     notify.error(
-      'browse: open.nvim is not installed -- install "StefanBartl/open.nvim" to use :Git browse'
+      'browse: open.nvim is not installed -- install "WKDSteve/open.nvim" to use :Git browse'
     )
     return
   end

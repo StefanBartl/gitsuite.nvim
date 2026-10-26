@@ -36,9 +36,9 @@ frozen yet: breaking changes are still possible.
 
 - Neovim >= 0.10
 - `git` on `$PATH`
-- StefanBartl/lib.nvim (hard dependency)
-- StefanBartl/diff.nvim (hard dependency, used by `:Git diff *`/`:Git hunk *`)
-- StefanBartl/ui.nvim (hard dependency, used by `:Git dashboard` and the picker of
+- WKDSteve/lib.nvim (hard dependency)
+- WKDSteve/diff.nvim (hard dependency, used by `:Git diff *`/`:Git hunk *`)
+- WKDSteve/ui.nvim (hard dependency, used by `:Git dashboard` and the picker of
   `:Git plugins log`)
 
 See docs/requirements.md for the optional tools (gitsigns, diffview,
@@ -49,8 +49,8 @@ backs versus what falls back without it.
 3. INSTALLATION                                          *gitsuite-installation*
 >lua
   {
-    "StefanBartl/gitsuite.nvim",
-    dependencies = { "StefanBartl/lib.nvim", "StefanBartl/diff.nvim", "StefanBartl/ui.nvim" },
+    "WKDSteve/gitsuite.nvim",
+    dependencies = { "WKDSteve/lib.nvim", "WKDSteve/diff.nvim", "WKDSteve/ui.nvim" },
     cmd = "Git",
     config = function(_, opts)
       require("gitsuite").setup(opts)

@@ -26,7 +26,7 @@ gitsigns being loaded. Blame and diff stay offered either way.
 
 ## `pickers_nvim.lua` — branch-switch picker bridge
 
-The one module that knows [pickers.nvim](https://github.com/StefanBartl/pickers.nvim)
+The one module that knows [pickers.nvim](https://github.com/WKDSteve/pickers.nvim)
 exists. `gitsuite.features.branch.switch()` asks it for a real picker
 (whichever engine — snacks, telescope, fzf-lua — pickers.nvim resolves)
 over `git_branches`, and degrades to a bare `vim.ui.select` when
@@ -116,7 +116,7 @@ would miss that first sync; `setup()` therefore notices that it runs inside
 
 ```lua
 {
-  "StefanBartl/gitsuite.nvim",
+  "WKDSteve/gitsuite.nvim",
   cmd = "Git",
   event = { "BufReadPost", "BufNewFile", "User LazySync" },
   opts = { plugins = { after_sync = "toast" } },
