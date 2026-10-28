@@ -1827,25 +1827,54 @@ end
 
 ---@private
 ---@internal
----Resizes a floating window's height in place. A no-op on a window that
----isn't a float (or isn't valid any more) rather than an error, since the
----live popup's window may have been closed by the user while its scan was
----still running.
----@param winid integer
----@param height integer
----@return nil
-local function _resize_float(winid, height)
-  if not vim.api.nvim_win_is_valid(winid) then return end
-  local ok, cfg = pcall(vim.api.nvim_win_get_config, winid)
-  if ok and cfg and cfg.relative and cfg.relative ~= "" then
-    cfg.height = math.max(height, 1)
-    pcall(vim.api.nvim_win_set_config, winid, cfg)
+---Widest display cell any of `lines` needs, plus the two-cell margin
+---`lib.nvim.window.make_scratch` itself gives a float whose width was never
+---given explicitly -- mirrored here so a *resize* ends up exactly as wide as
+---an `M.open` with these same `lines` would have opened.
+---@param lines string[]
+---@return integer
+local function _content_width(lines)
+  local w = 0
+  for _, line in ipairs(lines) do
+    w = math.max(w, vim.fn.strdisplaywidth(line))
   end
+  return w + 2
 end
 
 ---@private
 ---@internal
----Re-renders `_live`'s rows, in discovery order, into its popup. A no-op once
+---Resizes a floating window to fit `lines` and re-centers it, exactly as
+---`lib.nvim.window.make_scratch` sizes and centers one at open -- a resize
+---has to redo that math itself, since changing `width`/`height` alone would
+---leave the window's top-left corner fixed and the float drifting off-centre
+---as it grows or shrinks. A no-op on a window that isn't a float (or isn't
+---valid any more) rather than an error, since the live popup's window may
+---have been closed by the user while its scan was still running.
+---@param winid integer
+---@param lines string[]
+---@return nil
+local function _resize_float(winid, lines)
+  if not vim.api.nvim_win_is_valid(winid) then return end
+  local ok, cfg = pcall(vim.api.nvim_win_get_config, winid)
+  if not (ok and cfg and cfg.relative and cfg.relative ~= "") then return end
+  local width = _content_width(lines)
+  -- +1 accounts for the winbar legend, which otherwise eats one row of
+  -- content out of a height sized exactly to the number of dashboard lines
+  -- (see `show_popup`'s own fresh-open height, which this mirrors).
+  local height = #lines + 1
+  cfg.width = width
+  cfg.height = height
+  cfg.row = math.max(0, math.floor((vim.o.lines - height) / 2 - 1))
+  cfg.col = math.max(0, math.floor((vim.o.columns - width) / 2))
+  pcall(vim.api.nvim_win_set_config, winid, cfg)
+end
+
+---@private
+---@internal
+---Re-renders `_live`'s rows, in discovery order, into its popup -- resizing
+---it to fit every time, since a row's rendered width (a branch name, a sync
+---count) is only known once that repository's own read comes back, unlike
+---the row count itself (already fixed at `M.live_discover`). A no-op once
 ---the popup is gone (the user closed it mid-scan -- the scan itself is not
 ---cancelled by this, it simply has nowhere left to report into until it
 ---finishes and `show_popup` opens a fresh window for the final table).
@@ -1856,7 +1885,9 @@ local function _live_redraw()
   for _, path in ipairs(_live.order) do
     records[#records + 1] = _live.rows[path]
   end
-  _set_buffer_lines(_live.surf.bufnr, M.render(records))
+  local lines, hls = M.render(records)
+  _resize_float(_live.surf.winid, lines)
+  _set_buffer_lines(_live.surf.bufnr, lines, hls)
   local done = 0
   for _, r in ipairs(records) do
     if not r.unscanned then done = done + 1 end
@@ -1892,10 +1923,9 @@ end
 
 ---Replaces the placeholder line with one row per repository -- called once,
 ---synchronously, as soon as the full repository list is known, before any of
----their statuses are read. The window is sized for this final row count
----right away and never resized again while the scan runs: every name is
----already known from its path, so nothing left to come back still grows the
----table sideways or lengthwise.
+---their statuses are read. The row count is fixed from here on (every name
+---is already known from its path); the window's width still grows and
+---shrinks as branches and sync counts come in -- see `_live_redraw`.
 ---@param paths string[]
 ---@return nil
 function M.live_discover(paths)
@@ -1904,7 +1934,6 @@ function M.live_discover(paths)
   for _, path in ipairs(paths) do
     _live.rows[path] = _placeholder_record(path)
   end
-  _resize_float(_live.surf.winid, #paths + 1)
   _live_redraw()
 end
 
@@ -1950,7 +1979,7 @@ local function show_popup(lines, hls, records)
   if _live and _live.surf:is_valid() then
     local surf = _live.surf
     _live = nil
-    _resize_float(surf.winid, #lines)
+    _resize_float(surf.winid, lines)
     _set_buffer_lines(surf.bufnr, lines, hls)
     surf:set_title(M.summary(records))
     _attach_row_keymaps(surf.bufnr, records, function()

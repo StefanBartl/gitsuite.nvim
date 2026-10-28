@@ -472,21 +472,61 @@ describe("gitsuite.features.dashboard.view: live popup", function()
       end
 
       assert.is_nil(text():find("r1", 1, true), "nothing is known yet: " .. text())
+      local narrow_width = vim.api.nvim_win_get_config(winid).width
 
       view.live_discover({ "/fake/r1", "/fake/r2" })
       assert.truthy(text():find("r1", 1, true), text())
       assert.truthy(text():find("r2", 1, true), text())
       assert.truthy(text():find("scanning", 1, true), text())
-      -- Sized for the final row count right away (header + 2 rows): nothing
-      -- still unread can grow the table lengthwise once it does come back.
-      assert.equals(3, vim.api.nvim_win_get_config(winid).height)
+      -- Sized for the final row count right away (header + 2 rows, +1 for
+      -- the winbar legend): nothing still unread can grow the table
+      -- lengthwise once it does come back.
+      assert.equals(4, vim.api.nvim_win_get_config(winid).height)
+      -- Regression: the window used to stay sized for its one-line
+      -- "Scanning repositories ..." placeholder forever -- wide enough for
+      -- that short line, but not for the table, which goes on growing while
+      -- every row stayed clipped to a sliver of the real table.
+      local discover_width = vim.api.nvim_win_get_config(winid).width
+      assert.is_true(
+        discover_width > narrow_width,
+        ("table (width %d) must be wider than the placeholder (width %d)"):format(
+          discover_width,
+          narrow_width
+        )
+      )
+      for _, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
+        assert.is_true(
+          vim.fn.strdisplaywidth(line) <= discover_width - 2,
+          ("line clipped by the window: %q wider than width %d"):format(line, discover_width)
+        )
+      end
 
       view.live_record("/fake/r1", rec("r1"), nil)
       assert.is_nil(text():match("r1[^\n]*scanning"), "r1's placeholder is gone: " .. text())
       assert.truthy(text():match("r2[^\n]*scanning"), "r2 is still unresolved: " .. text())
 
-      view.live_record("/fake/r2", nil, "boom")
-      assert.truthy(text():match("r2[^\n]*error"), text())
+      -- A long branch name on a resolved row must widen the window again --
+      -- the row count was fixed at discovery, but no single row's own width
+      -- was, since that depends on data read AFTER discovery.
+      local long_branch = "claude/" .. ("x"):rep(40)
+      view.live_record("/fake/r2", rec("r2", { branch = long_branch }), nil)
+      -- `_elide_middle` keeps the head and cuts the middle, so only a short
+      -- head prefix is guaranteed to survive verbatim.
+      assert.truthy(text():find(long_branch:sub(1, 10), 1, true), text())
+      local widened = vim.api.nvim_win_get_config(winid).width
+      assert.is_true(
+        widened > discover_width,
+        ("window (width %d) must widen for the long branch (was %d)"):format(
+          widened,
+          discover_width
+        )
+      )
+      for _, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
+        assert.is_true(
+          vim.fn.strdisplaywidth(line) <= widened - 2,
+          ("line clipped by the window: %q wider than width %d"):format(line, widened)
+        )
+      end
 
       local win_count = #vim.api.nvim_list_wins()
       view.show({ rec("r1"), rec("r2") }, { output = "popup" })
