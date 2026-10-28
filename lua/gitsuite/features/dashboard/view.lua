@@ -324,6 +324,7 @@ end
 ---@param r RepoDashboardRecord
 ---@return string
 local function _sync_cell(r)
+  if r.unscanned then return "" end
   if not r.has_upstream then return "no upstream" end
   local parts = {}
   if r.ahead > 0 then parts[#parts + 1] = ("↑%d"):format(r.ahead) end
@@ -465,8 +466,10 @@ function M.render(records)
       state_hl = HL.pending
     elseif phase == "pending" then
       state_hl = HL.muted
-    elseif phase == "failed" then
+    elseif phase == "failed" or r.state == "error" then
       state_hl = HL.diverged
+    elseif r.unscanned then
+      state_hl = HL.muted
     else
       state_hl = HL[r.state] or HL.muted
     end
@@ -1790,14 +1793,173 @@ local function _attach_row_keymaps(bufnr, records, before_open)
   end
 end
 
+---The live-scan popup `M.live_begin` opens, kept so `M.live_discover`/
+---`M.live_record` can keep filling it and `show_popup` can hand its window
+---over to the finished table instead of opening a second one on top of it.
+---`nil` while no scan is live.
+---@type { surf: Lib.UI.Kit.Surface, order: string[], rows: table<string, RepoDashboardRecord> }|nil
+local _live
+
+---@private
+---@internal
+---The placeholder a not-yet-read repository is shown as. Its name is already
+---known from the path alone (directory discovery, not a git call); every
+---other column is unknown, which is what `unscanned` tells `_sync_cell` (so
+---it reads blank rather than the misleading "no upstream") and `M.render`'s
+---own highlight pick (so it reads muted rather than whatever `HL[r.state]`
+---would otherwise resolve to).
+---@param path string
+---@return RepoDashboardRecord
+local function _placeholder_record(path)
+  return {
+    name = vim.fn.fnamemodify(path, ":t"),
+    path = path,
+    branch = "",
+    ahead = 0,
+    behind = 0,
+    has_upstream = false,
+    dirty = 0,
+    state = "scanning",
+    last_commit = nil,
+    unscanned = true,
+  }
+end
+
+---@private
+---@internal
+---Resizes a floating window's height in place. A no-op on a window that
+---isn't a float (or isn't valid any more) rather than an error, since the
+---live popup's window may have been closed by the user while its scan was
+---still running.
+---@param winid integer
+---@param height integer
+---@return nil
+local function _resize_float(winid, height)
+  if not vim.api.nvim_win_is_valid(winid) then return end
+  local ok, cfg = pcall(vim.api.nvim_win_get_config, winid)
+  if ok and cfg and cfg.relative and cfg.relative ~= "" then
+    cfg.height = math.max(height, 1)
+    pcall(vim.api.nvim_win_set_config, winid, cfg)
+  end
+end
+
+---@private
+---@internal
+---Re-renders `_live`'s rows, in discovery order, into its popup. A no-op once
+---the popup is gone (the user closed it mid-scan -- the scan itself is not
+---cancelled by this, it simply has nowhere left to report into until it
+---finishes and `show_popup` opens a fresh window for the final table).
+---@return nil
+local function _live_redraw()
+  if not (_live and _live.surf:is_valid()) then return end
+  local records = {}
+  for _, path in ipairs(_live.order) do
+    records[#records + 1] = _live.rows[path]
+  end
+  _set_buffer_lines(_live.surf.bufnr, M.render(records))
+  local done = 0
+  for _, r in ipairs(records) do
+    if not r.unscanned then done = done + 1 end
+  end
+  _live.surf:set_title(("GitSuite Dashboard — scanning %d/%d"):format(done, #records))
+end
+
+---Opens the live popup immediately, before anything about the scan it is
+---about to show is known yet -- `:Git dashboard` used to read every
+---repository before opening any window at all, which on a directory of a
+---few dozen clones was a noticeable wait staring at nothing. A no-op (and
+---`false`) for every output mode but "popup": `show_buffer`/`show_split`
+---already reuse their window/buffer across calls, so the wait this closes
+---was never theirs to begin with.
+---@param mode GitSuiteDashboardOutputMode
+---@return boolean started
+function M.live_begin(mode)
+  if mode ~= "popup" then return false end
+  local surf = kit.surface.open({
+    lines = { "Scanning repositories ..." },
+    title = "GitSuite Dashboard",
+    filetype = "gitsuite-dashboard",
+    nice_quit = true,
+    enter = true,
+    focusable = true,
+    height = 2,
+    wo = { wrap = false, cursorline = true, winbar = WINBAR },
+  })
+  if not surf then return false end
+  _live = { surf = surf, order = {}, rows = {} }
+  return true
+end
+
+---Replaces the placeholder line with one row per repository -- called once,
+---synchronously, as soon as the full repository list is known, before any of
+---their statuses are read. The window is sized for this final row count
+---right away and never resized again while the scan runs: every name is
+---already known from its path, so nothing left to come back still grows the
+---table sideways or lengthwise.
+---@param paths string[]
+---@return nil
+function M.live_discover(paths)
+  if not (_live and _live.surf:is_valid()) then return end
+  _live.order = paths
+  for _, path in ipairs(paths) do
+    _live.rows[path] = _placeholder_record(path)
+  end
+  _resize_float(_live.surf.winid, #paths + 1)
+  _live_redraw()
+end
+
+---Fills in one repository's row once its status read settles -- called once
+---per repository, in whatever order the reads happen to finish.
+---@param path string
+---@param record RepoDashboardRecord|nil
+---@param _err string|nil Unused: the per-repository failure is also collected into `M.scan`'s own `errors` list, which `features.dashboard.init` already reports.
+---@return nil
+function M.live_record(path, record, _err)
+  if not (_live and _live.surf:is_valid()) then return end
+  if record then
+    _live.rows[path] = record
+  else
+    local r = _placeholder_record(path)
+    r.state, r.unscanned = "error", false
+    _live.rows[path] = r
+  end
+  _live_redraw()
+end
+
+---Tears the live popup down without handing it to `show_popup` -- the scan
+---came back with nothing to show at all (an inaccessible directory, an empty
+---one), so `features.dashboard.init` reports that by notification instead,
+---exactly as it did before the live popup existed.
+---@return nil
+function M.live_abort()
+  if _live then _live.surf:close() end
+  _live = nil
+end
+
 ---@private
 ---@internal
 ---Opens the dashboard in a scrollable floating window (default output).
+---Reuses `M.live_begin`'s window in place when a live scan opened one for
+---this same `:Git dashboard` invocation, rather than opening a second
+---floating window on top of it.
 ---@param lines string[]
 ---@param hls DashboardHighlight[]
 ---@param records RepoDashboardRecord[]
 ---@return nil
 local function show_popup(lines, hls, records)
+  if _live and _live.surf:is_valid() then
+    local surf = _live.surf
+    _live = nil
+    _resize_float(surf.winid, #lines)
+    _set_buffer_lines(surf.bufnr, lines, hls)
+    surf:set_title(M.summary(records))
+    _attach_row_keymaps(surf.bufnr, records, function()
+      surf:close()
+    end)
+    return
+  end
+  _live = nil
+
   local surf = kit.surface.open({
     lines = lines,
     title = M.summary(records),

@@ -403,3 +403,100 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
     assert.equals(1, max_total)
   end)
 end)
+
+-- GS: gitsuite.nvim/git-dashboard-startablauf-optimieren -- the popup used to
+-- open only once every repository had been read; now it opens first and
+-- fills in as each one resolves.
+describe("gitsuite.features.dashboard.view: live popup", function()
+  local view
+
+  before_each(function()
+    package.loaded["gitsuite.features.dashboard.view"] = nil
+    package.loaded["gitsuite.features.dashboard.repo_state"] = nil
+    view = require("gitsuite.features.dashboard.view")
+    require("gitsuite.features.dashboard.repo_state").reset()
+  end)
+
+  after_each(function()
+    pcall(view.live_abort)
+  end)
+
+  ---@param name string
+  ---@param overrides table|nil
+  local function rec(name, overrides)
+    return vim.tbl_extend("force", {
+      name = name,
+      path = "/fake/" .. name,
+      branch = "main",
+      ahead = 0,
+      behind = 0,
+      has_upstream = true,
+      dirty = 0,
+      state = "clean",
+      last_commit = nil,
+    }, overrides or {})
+  end
+
+  ---The live popup's window, found by its filetype rather than by whatever
+  ---happens to be the current window -- the same lookup `show_popup`'s reuse
+  ---path has to survive, since nothing here pins the window as "current".
+  ---@return integer|nil
+  local function dashboard_win()
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      local buf = vim.api.nvim_win_get_buf(win)
+      if vim.bo[buf].filetype == "gitsuite-dashboard" then return win end
+    end
+    return nil
+  end
+
+  it("is a no-op for every output mode but popup", function()
+    assert.is_false(view.live_begin("buffer"))
+    assert.is_false(view.live_begin("split"))
+    assert.is_false(view.live_begin("clipboard"))
+    assert.is_nil(dashboard_win())
+    -- Nowhere to write to, must not raise.
+    view.live_discover({ "/fake/r1" })
+    view.live_record("/fake/r1", rec("r1"), nil)
+  end)
+
+  it(
+    "opens before any repository is known, fills in as each one resolves, "
+      .. "and show() reuses its window for the final table",
+    function()
+      assert.is_true(view.live_begin("popup"))
+      local winid = dashboard_win()
+      assert.is_not_nil(winid, "the live popup opened a window")
+      local bufnr = vim.api.nvim_win_get_buf(winid)
+      local function text()
+        return table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
+      end
+
+      assert.is_nil(text():find("r1", 1, true), "nothing is known yet: " .. text())
+
+      view.live_discover({ "/fake/r1", "/fake/r2" })
+      assert.truthy(text():find("r1", 1, true), text())
+      assert.truthy(text():find("r2", 1, true), text())
+      assert.truthy(text():find("scanning", 1, true), text())
+      -- Sized for the final row count right away (header + 2 rows): nothing
+      -- still unread can grow the table lengthwise once it does come back.
+      assert.equals(3, vim.api.nvim_win_get_config(winid).height)
+
+      view.live_record("/fake/r1", rec("r1"), nil)
+      assert.is_nil(text():match("r1[^\n]*scanning"), "r1's placeholder is gone: " .. text())
+      assert.truthy(text():match("r2[^\n]*scanning"), "r2 is still unresolved: " .. text())
+
+      view.live_record("/fake/r2", nil, "boom")
+      assert.truthy(text():match("r2[^\n]*error"), text())
+
+      local win_count = #vim.api.nvim_list_wins()
+      view.show({ rec("r1"), rec("r2") }, { output = "popup" })
+
+      assert.equals(winid, dashboard_win(), "the live window is reused, not replaced")
+      assert.equals(win_count, #vim.api.nvim_list_wins(), "no second popup was stacked on top")
+      assert.is_nil(text():find("scanning", 1, true), "the final table replaced the placeholders")
+      assert.truthy(text():find("r1", 1, true), text())
+
+      vim.api.nvim_win_close(winid, true)
+    end
+  )
+end)

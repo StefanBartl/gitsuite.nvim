@@ -43,8 +43,16 @@
 ---@field behind integer Commits behind the upstream (0 when no upstream)
 ---@field has_upstream boolean Whether the current branch tracks an upstream
 ---@field dirty integer Number of changed/untracked entries in the working tree
----@field state "clean"|"dirty"|"ahead"|"behind"|"diverged" Derived summary state
+---@field state "clean"|"dirty"|"ahead"|"behind"|"diverged"|"scanning"|"error" Derived summary state; "scanning"/"error" only ever appear on an `unscanned` placeholder, never on one `status.lua` itself produced
 ---@field last_commit integer|nil Unix timestamp of HEAD's commit date (nil on an empty repo)
+---@field unscanned? boolean True for a `features.dashboard.view` live-popup placeholder whose status has not been read yet (or failed to read); never set by `status.lua` itself
+
+---Lets a caller follow `M.scan`/`M.scan_group` as the read happens, rather
+---than only once every repository is through. `features.dashboard.init`
+---threads this to `features.dashboard.view`'s live popup.
+---@class GitSuiteDashboardScanStream
+---@field on_discover? fun(repos: string[]): nil Fires once, synchronously, before any repository is read -- the full list is already known from directory discovery.
+---@field on_record? fun(repo: string, record: RepoDashboardRecord|nil, err: string|nil): nil Fires once per repository, as soon as its own read settles.
 
 ---@class GitSuiteDashboardStatus
 local M = {}
@@ -352,11 +360,24 @@ end
 ---the compacted record list back via `on_complete`. Both the default page
 ---(`M.scan`) and a configured group (`M.scan_group`) resolve their own
 ---repository list and then call this with it.
+---
+---`stream`, when given, lets a caller follow the scan as it happens rather
+---than only once it is through -- `features.dashboard.init` threads it to
+---`features.dashboard.view`'s live popup, so `:Git dashboard` shows something
+---on screen before the whole directory has been read:
+---  - `on_discover(repos)` fires once, synchronously, before any repository
+---    is read -- the full list is already known from directory discovery.
+---  - `on_record(repo, record, err)` fires once per repository, as soon as
+---    its own read settles (the same moment the progress indicator advances).
 ---@param repos string[]
 ---@param progress_text string Shown while reading, e.g. "reading git state of 12 repositories"
 ---@param on_complete fun(records: RepoDashboardRecord[], errors: string[]): nil
+---@param stream? GitSuiteDashboardScanStream
 ---@return nil
-local function read_statuses(repos, progress_text, on_complete)
+local function read_statuses(repos, progress_text, on_complete, stream)
+  stream = stream or {}
+  if stream.on_discover then stream.on_discover(repos) end
+
   if #repos == 0 then
     on_complete({}, {})
     return
@@ -390,7 +411,7 @@ local function read_statuses(repos, progress_text, on_complete)
     if handle then handle:finish(("read %d of %d repositories"):format(total - #errors, total)) end
     on_complete(records, errors)
   end, {
-    on_progress = function(finished)
+    on_progress = function(finished, _total, index, result, err)
       if handle then
         handle:update({
           text = ("%d of %d read"):format(finished, total),
@@ -398,6 +419,7 @@ local function read_statuses(repos, progress_text, on_complete)
           total = total,
         })
       end
+      if stream.on_record then stream.on_record(repos[index], result, err) end
     end,
   })
 end
@@ -421,8 +443,9 @@ end
 ---callback sees no behavior change.
 ---@param path string|nil Optional directory or single-repo override (defaults to `dashboard.base_dir`)
 ---@param on_complete fun(records: RepoDashboardRecord[], errors: string[]): nil|nil Always called exactly once
+---@param stream? GitSuiteDashboardScanStream See `read_statuses`
 ---@return nil
-function M.scan(path, on_complete)
+function M.scan(path, on_complete, stream)
   ---@param msg string
   ---@param level integer
   local function fail(msg, level)
@@ -464,7 +487,8 @@ function M.scan(path, on_complete)
     ("reading git state of %d repositories"):format(#repos),
     function(records, errors)
       if on_complete then on_complete(records, errors) end
-    end
+    end,
+    stream
   )
 end
 
@@ -474,8 +498,9 @@ end
 ---exactly like `M.scan`'s repositories.
 ---@param paths string[] A group's configured paths
 ---@param on_complete fun(records: RepoDashboardRecord[], errors: string[]): nil
+---@param stream? GitSuiteDashboardScanStream See `read_statuses`
 ---@return nil
-function M.scan_group(paths, on_complete)
+function M.scan_group(paths, on_complete, stream)
   if vim.fn.executable("git") ~= 1 then
     notify("Cannot read repository status: 'git' is not available in PATH", 4)
     on_complete({}, {})
@@ -490,7 +515,7 @@ function M.scan_group(paths, on_complete)
   end
 
   notify(("Reading git state of %d repositories ..."):format(#repos), 2)
-  read_statuses(repos, ("reading git state of %d repositories"):format(#repos), on_complete)
+  read_statuses(repos, ("reading git state of %d repositories"):format(#repos), on_complete, stream)
 end
 
 return M

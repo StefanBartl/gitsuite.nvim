@@ -218,6 +218,47 @@ describe("gitsuite.features.dashboard", function()
       assert.is_not_nil(result, "scan_group calls on_complete synchronously when nothing resolves")
       assert.equals(0, #result.records)
     end)
+
+    it(
+      "stream.on_discover fires synchronously with the full list, before any stream.on_record",
+      function()
+        vim.fn.mkdir(root .. "/repo2", "p")
+        git(root .. "/repo2", { "init", "-q", "-b", "main" })
+        vim.fn.writefile({ "y" }, root .. "/repo2/f.txt")
+        git(root .. "/repo2", { "add", "-A" })
+        git(root .. "/repo2", { "commit", "-q", "-m", "first" })
+
+        local discovered
+        local seen = {}
+        local completed = false
+        status.scan_group({ root .. "/repo1", root .. "/repo2" }, function()
+          completed = true
+        end, {
+          on_discover = function(found)
+            discovered = found
+          end,
+          on_record = function(repo, record, err)
+            seen[#seen + 1] = { repo = repo, record = record, err = err }
+          end,
+        })
+
+        -- Documented to fire synchronously, before any repository is read --
+        -- so both must already be true by the time scan_group returns, not
+        -- just eventually.
+        assert.is_not_nil(discovered)
+        assert.equals(2, #discovered)
+        assert.equals(0, #seen, "no repository has been read yet")
+
+        vim.wait(5000, function()
+          return completed
+        end)
+        assert.equals(2, #seen)
+        for _, entry in ipairs(seen) do
+          assert.is_not_nil(entry.record, entry.repo .. ": " .. tostring(entry.err))
+          assert.is_nil(entry.err)
+        end
+      end
+    )
   end)
 
   describe("status.scan: on_complete always fires, even on a validation failure", function()

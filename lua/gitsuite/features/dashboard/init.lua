@@ -47,16 +47,24 @@ end
 ---@param page GitSuiteDashboardPage
 ---@param dir string|nil Explicit directory override; only meaningful for the default page
 ---@param on_done fun(records: RepoDashboardRecord[], errors: string[]): nil
-local function scan_page(page, dir, on_done)
+---@param stream? GitSuiteDashboardScanStream Forwarded to `status.scan`/`status.scan_group`; see there
+local function scan_page(page, dir, on_done, stream)
   if not page.name then
-    status.scan(dir, on_done)
+    status.scan(dir, on_done, stream)
     return
   end
   local paths = pages_state.apply(page.name, page.paths or {})
-  status.scan_group(paths, on_done)
+  status.scan_group(paths, on_done, stream)
 end
 
 ---Opens `:Git dashboard [dir] [--out] [--to]`.
+---
+---A popup output opens its float right away, before the first page's
+---repositories are even discovered on disk, and fills it in as each one's
+---status comes back (`view.live_begin`/`live_discover`/`live_record`): the
+---directory-wide read this used to wait on in full before showing anything
+---at all can run to several seconds on a few dozen clones. Every other
+---output mode is unaffected -- `view.live_begin` is itself a no-op for them.
 ---@param dir string|nil
 ---@param output GitSuiteDashboardOutputMode|nil
 ---@param out_path string|nil
@@ -64,6 +72,7 @@ end
 function M.show(dir, output, out_path)
   local pages = build_pages()
   local view = require("gitsuite.features.dashboard.view")
+  local live = view.live_begin(output or "popup")
 
   scan_page(pages[1], dir, function(records, errors)
     if #records > 0 or #pages > 1 then
@@ -77,6 +86,8 @@ function M.show(dir, output, out_path)
           scan_page(page, dir, on_switched)
         end,
       })
+    elseif live then
+      view.live_abort()
     end
     if #errors > 0 then
       notify(
@@ -88,7 +99,7 @@ function M.show(dir, output, out_path)
         vim.log.levels.WARN
       )
     end
-  end)
+  end, live and { on_discover = view.live_discover, on_record = view.live_record } or nil)
 end
 
 ---Updates every repository found in the resolved base directory: fetch,
