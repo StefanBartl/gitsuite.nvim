@@ -41,6 +41,7 @@
 ---@field groups      GitSuite.Config.Dashboard.Group[]  Additional named pages, see `GitSuite.Config.Dashboard.Group`.
 ---@field fetch_jobs  integer  Fetches `gf` runs at once (push and pull stay sequential).
 ---@field pull_scope  "behind"|"all"  Focused default of `gP`'s prompt: only repositories behind their upstream, or all.
+---@field context_menu boolean `<RightMouse>` opens the dashboard's own menu (lib.nvim.contextmenu.bind_buffer) instead of ui.nvim's global one.
 
 --- `:Git plugins` -- reading the history of the clones a plugin manager installed.
 ---@class GitSuite.Config.Plugins

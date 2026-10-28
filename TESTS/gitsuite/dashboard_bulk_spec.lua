@@ -540,3 +540,191 @@ describe("gitsuite.features.dashboard.view: live popup", function()
     end
   )
 end)
+
+-- GS: gitsuite.nvim/dashboard-kontextmenue -- <RightMouse> on the dashboard
+-- opens a menu built from the same ROW_KEYMAPS entries the keys run, acting
+-- on the marked set when one exists, otherwise the row under the mouse
+-- pointer (not wherever the cursor happened to be).
+describe("gitsuite.features.dashboard.view: context menu", function()
+  local G = dofile(dir_of_spec .. "spec_guard.lua")()
+  G.install({
+    { "lib.nvim.contextmenu", "bind_buffer" },
+    { vim.fn, "getmousepos", "mode", "line" },
+  })
+
+  local view, state, config
+  local captured_get_items
+
+  local function rec(name, overrides)
+    return vim.tbl_extend("force", {
+      name = name,
+      path = "/fake/" .. name,
+      branch = "main",
+      ahead = 0,
+      behind = 0,
+      has_upstream = true,
+      dirty = 0,
+      state = "clean",
+      last_commit = nil,
+    }, overrides or {})
+  end
+
+  local function bufnr()
+    return vim.fn.bufnr("gitsuite://dashboard")
+  end
+
+  ---Names of every non-heading, non-separator item, in order.
+  ---@param items table[]
+  local function item_names(items)
+    local names = {}
+    for _, item in ipairs(items) do
+      if not item.__heading and not item.separator then names[#names + 1] = item.name end
+    end
+    return names
+  end
+
+  ---The item named `name`, or nil.
+  local function find_item(items, name)
+    for _, item in ipairs(items) do
+      if item.name == name then return item end
+    end
+    return nil
+  end
+
+  before_each(function()
+    captured_get_items = nil
+    require("lib.nvim.contextmenu").bind_buffer = function(_, get_items, _opts)
+      captured_get_items = get_items
+    end
+
+    package.loaded["gitsuite.features.dashboard.view"] = nil
+    package.loaded["gitsuite.features.dashboard.repo_state"] = nil
+    state = require("gitsuite.features.dashboard.repo_state")
+    state.reset()
+    view = require("gitsuite.features.dashboard.view")
+    config = require("gitsuite.config")
+    config.setup({})
+  end)
+
+  after_each(function()
+    state.reset()
+    local buf = bufnr()
+    if buf ~= -1 then pcall(vim.api.nvim_buf_delete, buf, { force = true }) end
+    config.setup({})
+  end)
+
+  it("binds a get_items provider by default", function()
+    view.show({ rec("r1") }, { output = "buffer" })
+    assert.is_function(captured_get_items)
+  end)
+
+  it("does not bind at all when dashboard.context_menu = false", function()
+    config.setup({ dashboard = { context_menu = false } })
+    view.show({ rec("r1") }, { output = "buffer" })
+    assert.is_nil(captured_get_items)
+  end)
+
+  it("a click on a row moves the cursor there and offers that repository's own actions", function()
+    view.show({ rec("r1"), rec("r2") }, { output = "buffer" })
+    -- Line 1 is the header, so line 3 is r2's row (see `_mark_rows`'s own doc).
+    vim.fn.getmousepos = function()
+      return { winid = vim.api.nvim_get_current_win(), line = 3, column = 1 }
+    end
+    vim.fn.mode = function()
+      return "n"
+    end
+
+    local items = captured_get_items()
+
+    assert.equals(3, vim.api.nvim_win_get_cursor(0)[1], "cursor moved to the clicked row")
+    local names = item_names(items)
+    for _, expected in ipairs({ "Open", "Push", "Pull", "Fetch", "Status", "Mark" }) do
+      assert.truthy(
+        vim.tbl_contains(names, expected),
+        expected .. " missing: " .. vim.inspect(names)
+      )
+    end
+    assert.is_nil(find_item(items, "Clear marks"), "no marks: nothing to clear")
+    -- The heading names the target.
+    assert.equals("r2", items[1].name)
+    assert.truthy(vim.tbl_contains(names, "Fetch all"), "whole-dashboard group is always offered")
+  end)
+
+  it("a locked/running repository's row actions name the reason instead of the key hint", function()
+    view.show({ rec("r1") }, { output = "buffer" })
+    state.begin_bulk("fetch", { "/fake/r1" })
+    state.set_phase("/fake/r1", "fetching")
+
+    vim.fn.getmousepos = function()
+      return { winid = vim.api.nvim_get_current_win(), line = 2, column = 1 }
+    end
+    vim.fn.mode = function()
+      return "n"
+    end
+
+    local items = captured_get_items()
+    local fetch_item = find_item(items, "Fetch")
+    assert.is_not_nil(fetch_item)
+    assert.truthy(fetch_item.rtxt:find("running", 1, true), fetch_item.rtxt)
+    assert.is_not_nil(fetch_item.hl, "a busy row's action is visually muted")
+  end)
+
+  it("marked repositories: bulk actions only, heading names the count", function()
+    view.show({ rec("r1"), rec("r2"), rec("r3") }, { output = "buffer" })
+    -- Mark r1 and r2 through the real `m` key, exactly as a user would.
+    for _, m in ipairs(vim.api.nvim_buf_get_keymap(bufnr(), "n")) do
+      if m.lhs == "m" then
+        vim.api.nvim_win_set_cursor(0, { 2, 0 })
+        m.callback()
+        vim.api.nvim_win_set_cursor(0, { 3, 0 })
+        m.callback()
+      end
+    end
+
+    vim.fn.getmousepos = function()
+      return { winid = vim.api.nvim_get_current_win(), line = 4, column = 1 }
+    end
+    vim.fn.mode = function()
+      return "n"
+    end
+
+    local items = captured_get_items()
+    assert.equals("2 marked repositories", items[1].name)
+    local names = item_names(items)
+    assert.same({
+      "Push",
+      "Pull",
+      "Fetch",
+      "Clear marks",
+      "Fetch all",
+      "Pull all…",
+      "Push all",
+      "Update all",
+      "Sync all",
+    }, names)
+  end)
+
+  it("a Visual selection at click time is converted to marks first", function()
+    view.show({ rec("r1"), rec("r2"), rec("r3") }, { output = "buffer" })
+    vim.fn.mode = function()
+      return "v"
+    end
+    vim.fn.line = function(what)
+      return what == "v" and 2 or 3 -- lines 2..3: r1 and r2
+    end
+
+    local items = captured_get_items()
+    assert.equals("2 marked repositories", items[1].name)
+
+    -- The marks it produced persist like any other mark: a later click in
+    -- Normal mode still sees them, regardless of where it lands.
+    vim.fn.mode = function()
+      return "n"
+    end
+    vim.fn.getmousepos = function()
+      return { winid = vim.api.nvim_get_current_win(), line = 4, column = 1 }
+    end
+    local later = captured_get_items()
+    assert.equals("2 marked repositories", later[1].name)
+  end)
+end)

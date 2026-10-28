@@ -108,6 +108,7 @@ dashboard = {
   groups = {},       -- additional named pages, see below
   pull_scope = "behind", -- gP's focused default: "behind" (only repos behind upstream) or "all"
   fetch_jobs = 4,    -- gf fetches this many repositories at once (1 to 16); push and pull stay one by one
+  context_menu = true, -- <RightMouse> opens the dashboard's own menu; false disables the binding only
 },
 ```
 
@@ -150,6 +151,13 @@ fetch recorded yet (no non-empty `FETCH_HEAD`), has no trustworthy behind
 count: the prompt names it, and "Only behind" skips it — fetch first (`gf`)
 or pick "All". A repository that already shows commits behind is pulled by
 "Only behind" either way.
+
+`context_menu` controls `<RightMouse>` on the dashboard buffer: on by
+default, it opens a menu of the same row/batch actions the keys already run
+(`lib.nvim.contextmenu.bind_buffer`), acting on whatever is marked (or the
+Visual selection) when either is non-empty, otherwise the row under the
+mouse pointer — see [BINDINGS.md](BINDINGS.md#dashboard-keys-component-local).
+`false` disables the binding only; every key still works.
 
 ## `plugins`
 

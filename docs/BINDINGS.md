@@ -114,6 +114,7 @@ former `:Reposcope dashboard`.
 | `x` | n | Remove the repository under the cursor from the current page — never touches disk |
 | `y` | n | Yank the repository's path |
 | `?` | n | List every one of these keys |
+| `<RightMouse>` | n, x | Context menu of the same actions as the table above — the marked repositories (or the Visual selection) when any, otherwise the row under the **mouse pointer**. Disable with `dashboard.context_menu = false` (see [configuration.md](configuration.md#dashboard)) |
 
 Every batch (`p`/`P`/`f` with marks set, the `g` forms, and switching to a
 page with no repositories yet) is confirmed or reported before it runs;

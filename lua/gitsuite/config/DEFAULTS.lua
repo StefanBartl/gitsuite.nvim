@@ -65,6 +65,11 @@ local DEFAULTS = {
     -- `gf` (fetch the whole page) runs this many fetches at once. Fetch only reads
     -- the remote; push and pull stay one after another.
     fetch_jobs = 4,
+    -- `<RightMouse>` on the dashboard opens a menu of the same row/whole-page
+    -- actions the keys already run (lib.nvim.contextmenu.bind_buffer),
+    -- instead of ui.nvim's global one. Off disables the binding only --
+    -- every key still works.
+    context_menu = true,
   },
   -- `:Git plugins` -- the history of the clones a plugin manager installed.
   plugins = {

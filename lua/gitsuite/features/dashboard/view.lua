@@ -72,6 +72,7 @@
 local M = {}
 
 local kit = require("ui.kit")
+local contextmenu = require("lib.nvim.contextmenu")
 local map = require("lib.nvim.bindings.keymap")
 local open_named_scratch = require("lib.nvim.window.open_named_scratch")
 local copy_to_clipboard = require("lib.nvim.cross.copy_to_clipboard")
@@ -1766,6 +1767,166 @@ end
 ---The `winbar` value installed on every interactive dashboard window.
 local WINBAR = "%!v:lua.require'gitsuite.features.dashboard.view'.legend()"
 
+-- ── Context menu (<RightMouse>) ──────────────────────────────────────────
+-- Right-click opens a menu built entirely from `ROW_KEYMAPS` itself (via
+-- `_keymap_entry` below): every item calls the exact same `entry.run(ctx)`
+-- a key already does, so there is no second implementation of fetch/pull/
+-- push/mark/open/... to keep in sync with the keys. "Owns its buffer" shape
+-- (see `lib.nvim.contextmenu`'s README) -- this lives beside the keymaps it
+-- mirrors rather than in `gitsuite.integrations.menu` (a "contributes only"
+-- module for OTHER plugins' buffers), the same split filetree.nvim draws
+-- between its own `features/ui/context_menu` and `integrations/menu.lua`.
+
+---@private
+---@internal
+---Finds the `ROW_KEYMAPS` entry bound on `key` (its first lhs is enough --
+---every entry's lhs set names one logical action). A lookup rather than a
+---positional index into `ROW_KEYMAPS`, so reordering that table can never
+---silently point a menu item at the wrong action.
+---@param key string
+---@return DashboardRowKeymap
+local function _keymap_entry(key)
+  for _, entry in ipairs(ROW_KEYMAPS) do
+    if entry.keys[1] == key then return entry end
+  end
+  error("gitsuite dashboard context menu: no ROW_KEYMAPS entry for " .. key, 2)
+end
+
+---@private
+---@internal
+---One repository's lock/bulk-phase state, as a short phrase for a menu
+---item's `rtxt` -- nil when nothing is holding it. Reads the exact same
+---state `M.render`'s STATE column already shows (`repo_state.phase`/
+---`.holder`), not a second "is this busy" policy: `repo_state.acquire` is
+---still the one place that actually decides and refuses, reached the normal
+---way once the item itself is clicked (`_run_row_action`).
+---@param path string
+---@return string|nil
+local function _busy_reason(path)
+  local phase = repo_state.phase(path)
+  if phase == "pending" then return ("%s queued"):format(repo_state.bulk_verb()) end
+  if phase == "fetching" then return ("%s running"):format(repo_state.bulk_verb()) end
+  local holder = repo_state.holder(path)
+  if holder then return holder .. " running" end
+  return nil
+end
+
+---@private
+---@internal
+---The menu's items: with repositories marked, the bulk-capable actions
+---(push/pull/fetch already switch to the marked set on their own -- see
+---`_run_marked_or_row`) under a heading naming the count; otherwise the
+---single-row actions for the repository under the cursor (moved there by
+---`_dashboard_context_menu` below), headed by its name. The whole-dashboard
+---group (marks ignored, same as `g`-prefixed keys) is always offered.
+---@param ctx DashboardRowContext
+---@return Lib.ContextMenu.Item[]
+local function _context_menu_items(ctx)
+  local out = {}
+
+  ---@param key string
+  ---@return fun(): nil
+  local function call(key)
+    local entry = _keymap_entry(key)
+    return function()
+      entry.run(ctx)
+    end
+  end
+
+  local marked = _marked_indices(ctx.records)
+  if #marked > 0 then
+    contextmenu.group(
+      out,
+      contextmenu.heading(("%d marked repositories"):format(#marked)),
+      contextmenu.entry(true, "Push", call("p"), "p"),
+      contextmenu.entry(true, "Pull", call("P"), "P"),
+      contextmenu.entry(true, "Fetch", call("f"), "f"),
+      contextmenu.entry(true, "Clear marks", call("M"), "M")
+    )
+  else
+    local record = _record_at_cursor(ctx.records)
+    if record then
+      local busy = _busy_reason(record.path)
+      local busy_opts = busy and { hl = HL.muted } or nil
+      contextmenu.group(
+        out,
+        contextmenu.heading(record.name),
+        contextmenu.entry(true, "Open", call("<CR>"), "<CR>"),
+        contextmenu.entry(true, "Push", call("p"), busy or "p", busy_opts),
+        contextmenu.entry(true, "Pull", call("P"), busy or "P", busy_opts),
+        contextmenu.entry(true, "Fetch", call("f"), busy or "f", busy_opts),
+        contextmenu.entry(true, "Status", call("S"), "S"),
+        contextmenu.entry(true, "Lazygit", call("L"), "L"),
+        contextmenu.entry(true, "Re-read", call("r"), "r"),
+        contextmenu.entry(true, _marks[record.path] and "Unmark" or "Mark", call("m"), "m"),
+        contextmenu.entry(true, "Yank path", call("y"), "y"),
+        contextmenu.entry(true, "Remove from page", call("x"), "x")
+      )
+    end
+  end
+
+  contextmenu.group(
+    out,
+    contextmenu.heading("Whole dashboard"),
+    contextmenu.entry(#ctx.records > 0, "Fetch all", call("gf"), "gf"),
+    contextmenu.entry(#ctx.records > 0, "Pull all…", call("gP"), "gP"),
+    contextmenu.entry(#ctx.records > 0, "Push all", call("gp"), "gp"),
+    contextmenu.entry(#ctx.records > 0, "Update all", call("gu"), "gu"),
+    contextmenu.entry(#ctx.records > 0, "Sync all", call("gS"), "gS")
+  )
+
+  return out
+end
+
+---@private
+---@internal
+---Whether the current mode is some flavor of Visual (`v`/`V`/CTRL-V) -- the
+---mode `<RightMouse>` fires in when a selection was left open by a previous
+---drag/`m` and nothing has closed it since (the same condition `m`'s own
+---Visual-mode handler is implicitly bound on, by mode `"x"`).
+---@return boolean
+local function _in_visual_mode()
+  return vim.fn.mode():match("^[vV\22]") ~= nil
+end
+
+---@private
+---@internal
+---`get_items` for `contextmenu.bind_buffer`, called synchronously on
+---`<RightMouse>`.
+---
+---A Visual selection is converted to marks first -- the exact same step
+---`m`'s own Visual-mode handler takes (`_mark_rows`), so a selection and
+---marks are one input to the items below, not two that could disagree.
+---Otherwise the cursor moves to the row under the mouse pointer: every item
+---`_context_menu_items` returns is borrowed from `ROW_KEYMAPS`, which acts
+---on "the row under the cursor", so this is what makes that end up being
+---the row the user actually pointed at rather than wherever the cursor was
+---left standing.
+---@param ctx DashboardRowContext
+---@return Lib.ContextMenu.Item[]
+local function _dashboard_context_menu(ctx)
+  if _in_visual_mode() then
+    local first, last = vim.fn.line("v"), vim.fn.line(".")
+    if first > last then
+      first, last = last, first
+    end
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
+    local changed = _mark_rows(ctx.records, first, last, true)
+    _redraw(ctx.bufnr, ctx.records)
+    if changed > 0 then
+      notify(("Marked %d repositor%s"):format(changed, changed == 1 and "y" or "ies"), 3)
+    end
+  else
+    local ok, pos = pcall(vim.fn.getmousepos)
+    if ok and type(pos) == "table" and pos.winid == vim.api.nvim_get_current_win() then
+      local idx = pos.line - 1
+      if ctx.records[idx] then pcall(vim.api.nvim_win_set_cursor, pos.winid, { pos.line, 0 }) end
+    end
+  end
+
+  return _context_menu_items(ctx)
+end
+
 ---@private
 ---@internal
 ---Wires every binding in `ROW_KEYMAPS` onto a dashboard buffer, all acting on the
@@ -1778,6 +1939,12 @@ local WINBAR = "%!v:lua.require'gitsuite.features.dashboard.view'.legend()"
 local function _attach_row_keymaps(bufnr, records, before_open)
   local ctx = { bufnr = bufnr, records = records, before_open = before_open }
   local mo = { buffer = bufnr, nowait = true }
+
+  if require("gitsuite.config").get().dashboard.context_menu then
+    contextmenu.bind_buffer(bufnr, function()
+      return _dashboard_context_menu(ctx)
+    end, { desc = "GitSuite dashboard: right-click context menu" })
+  end
 
   for _, entry in ipairs(ROW_KEYMAPS) do
     for _, lhs in ipairs(entry.keys) do
