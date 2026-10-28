@@ -218,6 +218,7 @@ describe("gitsuite.features.plugins report --fetch", function()
       confirm = function(o)
         asked = o.question
         o.on_answer(false)
+        return {} -- a dialog that opened (nil would mean the float could not be created)
       end,
     }, function()
       local r, err = report({ mode = "pending", fetch = true })
@@ -236,6 +237,7 @@ describe("gitsuite.features.plugins report --fetch", function()
       confirm = function(o)
         asked = o.question
         o.on_answer(false)
+        return {} -- a dialog that opened (nil would mean the float could not be created)
       end,
     }, function()
       local r = report({ mode = "pending", fetch = true })
@@ -363,6 +365,7 @@ describe("gitsuite.features.plugins report --fetch", function()
         -- lazy.nvim starts an update while the question is open
         package.loaded["lazy.core.config"] = busy_lazy
         o.on_answer(true)
+        return {} -- a dialog that opened
       end,
     }, function()
       with_module("lazy.core.config", nil, function()

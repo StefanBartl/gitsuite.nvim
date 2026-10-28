@@ -447,14 +447,7 @@ local function confirm_fetch(n, cfg, go, cancel)
       cancel()
     end
   end
-  local ok, kit = pcall(require, "ui.kit")
-  if ok and type(kit) == "table" and type(kit.confirm) == "function" then
-    kit.confirm({ question = question, on_answer = answer })
-    return
-  end
-  vim.ui.select({ "Yes", "No" }, { prompt = question:gsub("\n", " ") }, function(choice)
-    answer(choice == "Yes")
-  end)
+  require("lib.nvim.ui.dialog").yesno(question, "fetch", answer)
 end
 
 ---`--fetch`: fetch every clone the report will look at (asking first from

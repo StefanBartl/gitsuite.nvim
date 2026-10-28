@@ -221,7 +221,7 @@ local function resolve_concrete(bufnr, region, keep)
   if #remaining == 0 then require("gitsuite.events").conflicts_resolved(bufnr) end
 end
 
----Seam for the question (`nil`: `ui.kit.confirm`, `vim.ui.select` as the fallback); specs replace it.
+---Seam for the question (`nil`: `lib.nvim.ui.dialog.yesno`); specs replace it.
 ---@type (fun(question: string, yes_label: string, cb: fun(accepted: boolean)))|nil
 M.confirm = nil
 
@@ -230,19 +230,7 @@ M.confirm = nil
 ---@param cb fun(accepted: boolean)
 function M.ask(question, yes_label, cb)
   if M.confirm then return M.confirm(question, yes_label, cb) end
-  local ok, kit = pcall(require, "ui.kit")
-  if ok and type(kit) == "table" and type(kit.confirm) == "function" then
-    local shown = pcall(kit.confirm, {
-      question = question,
-      on_answer = function(yes)
-        cb(yes == true)
-      end,
-    })
-    if shown then return end
-  end
-  vim.ui.select({ "No", "Yes, " .. yes_label }, { prompt = question }, function(_, index)
-    cb(index == 2)
-  end)
+  require("lib.nvim.ui.dialog").yesno(question, yes_label, cb)
 end
 
 ---Resolve the conflict region under the cursor by keeping `keep`.
