@@ -879,7 +879,7 @@ end
 ---@param bufnr integer
 ---@param records RepoDashboardRecord[]
 ---@param verb string Human-readable action name, used in notifications
----@param action_fn fun(repo: string, on_done: fun(ok: boolean, err: string|nil): nil): nil One of `repo_actions.push/pull/fetch`
+---@param action_fn fun(repo: string, on_done: GitSuiteDashboardActionDone): nil One of `repo_actions.push/pull/fetch`
 ---@return nil
 local function _run_row_action(bufnr, records, verb, action_fn)
   local line = vim.api.nvim_win_get_cursor(0)[1]
@@ -1110,7 +1110,7 @@ end
 ---@param bufnr integer
 ---@param records RepoDashboardRecord[]
 ---@param verb string
----@param action_fn fun(repo: string, on_done: fun(ok: boolean, err: string|nil): nil): nil
+---@param action_fn fun(repo: string, on_done: GitSuiteDashboardActionDone): nil
 ---@param indices integer[]
 ---@param what string Noun phrase describing the target set, e.g. "marked repositories"
 ---@return nil
@@ -1134,7 +1134,7 @@ end
 ---with none set, act on the row under the cursor exactly as before.
 ---@param ctx DashboardRowContext
 ---@param verb string
----@param action_fn fun(repo: string, on_done: fun(ok: boolean, err: string|nil): nil): nil
+---@param action_fn fun(repo: string, on_done: GitSuiteDashboardActionDone): nil
 ---@return nil
 local function _run_marked_or_row(ctx, verb, action_fn)
   local marked = _marked_indices(ctx.records)
@@ -1157,7 +1157,7 @@ end
 ---The `g`-prefixed forms: every repository in the dashboard, marks ignored.
 ---@param ctx DashboardRowContext
 ---@param verb string
----@param action_fn fun(repo: string, on_done: fun(ok: boolean, err: string|nil): nil): nil
+---@param action_fn fun(repo: string, on_done: GitSuiteDashboardActionDone): nil
 ---@return nil
 local function _run_all(ctx, verb, action_fn)
   local indices = {}
