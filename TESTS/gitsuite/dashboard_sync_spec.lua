@@ -47,10 +47,12 @@ describe("gitsuite.features.dashboard.actions.sync (real git, local remote)", fu
   ---@param dir string
   ---@return boolean ok
   ---@return string|nil err
+  ---@return string|nil detail What the batch summary lists as changed
+  ---@return string|nil skipped Why there was nothing to work on
   local function sync(dir)
-    local done, ok, err = false, nil, nil
-    actions.sync(dir, function(o, e)
-      done, ok, err = true, o, e
+    local done, ok, err, detail, skipped = false, nil, nil, nil, nil
+    actions.sync(dir, function(o, e, d, s)
+      done, ok, err, detail, skipped = true, o, e, d, s
     end)
     assert.is_true(
       vim.wait(20000, function()
@@ -58,7 +60,7 @@ describe("gitsuite.features.dashboard.actions.sync (real git, local remote)", fu
       end, 20),
       "sync did not answer"
     )
-    return ok, err
+    return ok, err, detail, skipped
   end
 
   before_each(function()
@@ -80,25 +82,30 @@ describe("gitsuite.features.dashboard.actions.sync (real git, local remote)", fu
 
   it("does nothing more than the fetch for a repository that is level", function()
     local before = git(a, "rev-parse", "HEAD")
-    local ok, err = sync(a)
+    local ok, err, detail, skipped = sync(a)
     assert.is_true(ok, err)
+    assert.is_nil(detail, "a level repository is reported as unchanged")
+    assert.is_nil(skipped)
     assert.equals(before, git(a, "rev-parse", "HEAD"))
     assert.equals(before, git(remote, "rev-parse", "main"))
   end)
 
   it("pulls a repository that is behind", function()
     commit(b, "from-b")
+    commit(b, "from-b2")
     git(b, "push", "-q")
-    local ok, err = sync(a)
+    local ok, err, detail = sync(a)
     assert.is_true(ok, err)
+    assert.equals("pulled 2 commits", detail)
     assert.equals(git(remote, "rev-parse", "main"), git(a, "rev-parse", "HEAD"))
     assert.equals(1, vim.fn.filereadable(a .. "/from-b"), "the file arrived in the working tree")
   end)
 
   it("pushes a repository that is ahead", function()
     commit(a, "from-a")
-    local ok, err = sync(a)
+    local ok, err, detail = sync(a)
     assert.is_true(ok, err)
+    assert.equals("pushed 1 commit", detail)
     assert.equals(git(a, "rev-parse", "HEAD"), git(remote, "rev-parse", "main"))
   end)
 
@@ -119,8 +126,10 @@ describe("gitsuite.features.dashboard.actions.sync (real git, local remote)", fu
     local lone = root .. "/lone"
     git(root, "init", "-q", "-b", "main", "lone")
     commit(lone, "only")
-    local ok, err = sync(lone)
+    local ok, err, detail, skipped = sync(lone)
     assert.is_true(ok, err)
+    assert.is_nil(detail)
+    assert.equals("no upstream or detached HEAD", skipped, "the summary lists it as skipped")
   end)
 
   it("counts a detached HEAD as nothing to bring level", function()
@@ -137,6 +146,33 @@ describe("gitsuite.features.dashboard.actions.sync (real git, local remote)", fu
     assert.is_false(ok)
     assert.truthy(err and err ~= "", "the reason is given")
     assert.equals(ahead, git(a, "rev-parse", "HEAD"))
+  end)
+
+  it("push (p/gp) reports how many commits it pushed, and nothing for a level branch", function()
+    ---@param dir string
+    ---@return boolean|nil ok
+    ---@return string|nil err
+    ---@return string|nil detail
+    local function push(dir)
+      local done, ok, err, detail = false, nil, nil, nil
+      actions.push(dir, function(o, e, d)
+        done, ok, err, detail = true, o, e, d
+      end)
+      assert.is_true(vim.wait(20000, function()
+        return done
+      end, 20))
+      return ok, err, detail
+    end
+
+    local ok, err, detail = push(a)
+    assert.is_true(ok, err)
+    assert.is_nil(detail, "nothing to push is unchanged")
+    commit(a, "p1")
+    commit(a, "p2")
+    ok, err, detail = push(a)
+    assert.is_true(ok, err)
+    assert.equals("pushed 2 commits", detail)
+    assert.equals(git(a, "rev-parse", "HEAD"), git(remote, "rev-parse", "main"))
   end)
 
   it("reads the counts after the fetch, not from the last time", function()

@@ -105,6 +105,7 @@ former `:Reposcope dashboard`.
 | `gp` / `gf` | n | Push / fetch **every** repository on the current page, marks ignored; `gf` fetches `dashboard.fetch_jobs` (default 4) at once, push stays one by one |
 | `gP` | n | Pull the page, marks ignored: asks "Only behind" (repos behind their upstream) or "All"; repos with unknown behind state (no upstream, never fetched) are named. Default focus: `dashboard.pull_scope` |
 | `gu` | n | Update every repository on the current page: `fetch --all --prune` + `pull --ff-only` |
+| `gS` | n | Sync every repository on the current page: fetch, then pull what is behind or push what is ahead; a diverged one is left alone and reported as failed. `dashboard.fetch_jobs` at once |
 | `S` | n | Full `git status --short` plus the last five commits, in a nested popup |
 | `L` | n | Open `:Git ui lazygit` for the repository under the cursor |
 | `s` | n | Cycle sort order: discovery → name → state (worst first) → last-commit age → discovery |
@@ -130,6 +131,25 @@ right away, in parallel with the rest of the batch; a queued or in-flight row
 refuses with a message. A lock per repository keeps two writing `git`
 processes off the same repository. Sorting, re-scanning, page switches and a
 second batch still wait for the running one.
+
+When a batch is through, one notification sums it up: the counts in the first
+line, then per repository what failed (and why), what changed (`pulled 3
+commits`, `pushed 1 commit`, `fetched new refs`, `fast-forwarded`) and what was
+skipped (a sync without an upstream). Repositories where nothing happened are
+only counted (`6 unchanged`), never listed; a cancelled batch names how many
+were not started.
+
+```
+sync: 1 of 9 failed, 2 changed, 1 skipped, 5 unchanged
+
+Failed:
+  beta: diverged: 1 ahead, 1 behind - neither pulled nor pushed
+Changed:
+  alpha: pulled 3 commits
+  gamma: pushed 1 commit
+Skipped:
+  scratch: no upstream or detached HEAD
+```
 
 ## Plugins report keys (component-local)
 

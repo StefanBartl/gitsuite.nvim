@@ -82,6 +82,7 @@ local repo_actions = require("gitsuite.features.dashboard.actions")
 local repos = require("gitsuite.features.dashboard.repos")
 local dashboard_one = require("gitsuite.features.dashboard.status").dashboard_one
 local repo_state = require("gitsuite.features.dashboard.repo_state")
+local bulk_report = require("gitsuite.features.dashboard.bulk_report")
 local progress = require("gitsuite.util.progress")
 local notify = require("gitsuite.util.notify").notify
 local notify_success = require("gitsuite.util.notify").success
@@ -942,7 +943,9 @@ end
 ---@private
 ---@internal
 ---Runs `action_fn` against every record named by `indices`, one after another,
----then reports a single summary.
+---then reports a single summary: per repository what changed, what failed and
+---why, what was skipped, and a count of the rest
+---(`gitsuite.features.dashboard.bulk_report`).
 ---
 ---One after another for push and pull: `git push` over forty clones at once is a rate
 ---limit, forty credential prompts, or both, and the queue is the same shape
@@ -954,7 +957,7 @@ end
 ---@param bufnr integer
 ---@param records RepoDashboardRecord[]
 ---@param verb string Human-readable action name, used in notifications
----@param action_fn fun(repo: string, on_done: fun(ok: boolean, err: string|nil): nil): nil
+---@param action_fn fun(repo: string, on_done: GitSuiteDashboardActionDone): nil
 ---@param indices integer[] Record indices to act on, in row order
 ---@return nil
 local function _run_bulk(bufnr, records, verb, action_fn, indices)
@@ -990,8 +993,10 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
     cancelled = true
   end) end
 
-  ---@type string[]
-  local errors = {}
+  -- Filled per position in `indices`, so the summary lists repositories in
+  -- row order whichever of the parallel ones finished first.
+  ---@type table<integer, GitSuiteBulkResult>
+  local results = {}
   local succeeded, completed = 0, 0
   -- Only `fetch` and `sync` run several at once: a fetch reads the remote and
   -- nothing else, and a sync is a fetch first (a pull or push follows only for
@@ -1011,33 +1016,37 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
     _redraw(bufnr, records)
 
     if handle then handle:finish(("%s: %d of %d repositories"):format(verb, succeeded, total)) end
-    if #errors > 0 then
-      notify(
-        ("%s: %d of %d failed:\n\n%s"):format(verb, #errors, total, table.concat(errors, "\n")),
-        vim.log.levels.WARN
-      )
+    ---@type GitSuiteBulkResult[]
+    local ordered = {}
+    for pos = 1, total do
+      if results[pos] then ordered[#ordered + 1] = results[pos] end
+    end
+    local message, any_failed = bulk_report.format(verb, ordered, total)
+    if any_failed then
+      notify(message, vim.log.levels.WARN)
     else
-      notify_success(
-        ("%s: %d repositor%s done"):format(verb, succeeded, succeeded == 1 and "y" or "ies")
-      )
+      notify_success(message)
     end
   end
 
   local pump
 
-  local function launch(record, idx)
+  local function launch(record, idx, pos)
     repo_state.set_phase(record.path, "fetching")
     _redraw(bufnr, records)
     if handle then handle:update({ text = record.name, current = completed, total = total }) end
 
-    local function on_done(ok, err)
+    local function on_done(ok, err, detail, skipped)
       vim.schedule(function()
         repo_state.unlock(record.path)
-        if ok then
-          succeeded = succeeded + 1
-        else
-          errors[#errors + 1] = record.name .. ": " .. vim.trim(err or "unknown error")
-        end
+        if ok then succeeded = succeeded + 1 end
+        results[pos] = {
+          name = record.name,
+          ok = ok and true or false,
+          err = (not ok) and (err or "unknown error") or nil,
+          detail = ok and detail or nil,
+          skipped = ok and skipped or nil,
+        }
 
         -- The row is re-read *before* its slot is given up, not alongside it:
         -- fired off in parallel, the last repository's re-read would still be
@@ -1076,9 +1085,10 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
         vim.defer_fn(pump, LOCK_RETRY_MS)
         return
       end
+      local pos = next_pos
       next_pos = next_pos + 1
       running = running + 1
-      launch(record, idx)
+      launch(record, idx, pos)
     end
     if running == 0 and (cancelled or next_pos > total) then
       finished = true

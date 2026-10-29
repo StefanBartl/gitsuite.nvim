@@ -347,6 +347,51 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
     end
   )
 
+  it("gS ends with a summary: per repository what happened, unchanged ones counted", function()
+    require("gitsuite.config").setup({ dashboard = { fetch_jobs = 4 } })
+    -- What each fake sync reports; r2 and r5 are level and must only be counted.
+    local outcome = {
+      r1 = { true, nil, "pulled 3 commits" },
+      r2 = { true },
+      r3 = { false, "diverged: 1 ahead, 2 behind - neither pulled nor pushed" },
+      r4 = { true, nil, nil, "no upstream or detached HEAD" },
+      r5 = { true },
+      r6 = { true, nil, "pushed 1 commit" },
+    }
+    actions.sync = function(path, on_done)
+      local o = outcome[vim.fn.fnamemodify(path, ":t")]
+      -- Finishing in reverse order must not reorder the summary.
+      vim.defer_fn(function()
+        on_done(o[1], o[2], o[3], o[4])
+      end, path:find("r1", 1, true) and 60 or 5)
+    end
+    local list = {}
+    for i = 1, 6 do
+      list[i] = record("r" .. i)
+    end
+    view.show(list, { output = "buffer" })
+
+    press("gS")
+    wait_for(function()
+      return state.bulk_verb() == nil
+    end, "bulk finished")
+
+    local msg = last_message()
+    assert.truthy(msg:find("sync: 1 of 6 failed, 2 changed, 1 skipped, 2 unchanged", 1, true), msg)
+    local want = table.concat({
+      "Failed:",
+      "  r3: diverged: 1 ahead, 2 behind - neither pulled nor pushed",
+      "Changed:",
+      "  r1: pulled 3 commits",
+      "  r6: pushed 1 commit",
+      "Skipped:",
+      "  r4: no upstream or detached HEAD",
+    }, "\n")
+    assert.truthy(msg:find(want, 1, true), msg)
+    assert.is_nil(msg:find("r2", 1, true), "unchanged repositories are only counted")
+    assert.is_nil(msg:find("r5", 1, true), "unchanged repositories are only counted")
+  end)
+
   it("gS asks before it starts, and an answer of no starts nothing", function()
     actions.sync = fake("sync")
     local question
