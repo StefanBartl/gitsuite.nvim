@@ -38,6 +38,31 @@ local function count(n, one, many)
   return ("%d %s"):format(n, n == 1 and one or many)
 end
 
+---Lines of git's stderr that say what went wrong, as opposed to "To <url>" or "hint: ..." around them.
+---@type string[]
+local REASON_PATTERNS = { "^!", "^error:", "^fatal:" }
+
+---One line for a failure reason: a single-line `err` as it is; of a multi-line one (git's raw stderr,
+---say of a refused push) the first line that names the reason (`! [rejected] ...`, `error:`, `fatal:`),
+---else its first non-empty line, so every line of the Failed section belongs to the repository it names.
+---@param err string|nil
+---@return string
+local function reason(err)
+  ---@type string[]
+  local lines = {}
+  for line in (err or ""):gmatch("[^\r\n]+") do
+    line = vim.trim(line)
+    if line ~= "" then lines[#lines + 1] = line end
+  end
+  if #lines == 0 then return "unknown error" end
+  for _, line in ipairs(lines) do
+    for _, pat in ipairs(REASON_PATTERNS) do
+      if line:find(pat) then return line end
+    end
+  end
+  return lines[1]
+end
+
 ---Builds the closing message of a batch.
 ---@param verb string The batch's verb ("sync", "fetch", ...)
 ---@param results GitSuiteBulkResult[] One per repository that ran, in row order
@@ -45,12 +70,12 @@ end
 ---@return string message
 ---@return boolean failed Whether any repository failed
 function M.format(verb, results, total)
-  ---@type string[], string[]
+  ---@type string[], string[], string[]
   local failed, changed, skipped = {}, {}, {}
   local unchanged = 0
   for _, r in ipairs(results) do
     if not r.ok then
-      failed[#failed + 1] = ("  %s: %s"):format(r.name, vim.trim(r.err or "unknown error"))
+      failed[#failed + 1] = ("  %s: %s"):format(r.name, reason(r.err))
     elseif r.skipped then
       skipped[#skipped + 1] = ("  %s: %s"):format(r.name, r.skipped)
     elseif r.detail then

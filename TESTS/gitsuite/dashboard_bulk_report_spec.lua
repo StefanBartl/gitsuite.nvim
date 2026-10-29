@@ -50,6 +50,33 @@ describe("gitsuite.features.dashboard.bulk_report.format", function()
     )
   end)
 
+  it("keeps a multi-line git error on its repository's one line", function()
+    local rejected = table.concat({
+      "To /tmp/remote.git",
+      " ! [rejected]        main -> main (fetch first)",
+      "error: failed to push some refs to '/tmp/remote.git'",
+      "hint: Updates were rejected because the remote contains work that you do not",
+      "hint: have locally.",
+      "",
+    }, "\n")
+    local msg = report.format("push", {
+      { name = "a", ok = false, err = rejected },
+      { name = "b", ok = false, err = "Some text\nfatal: unable to access 'x'\n" },
+      { name = "c", ok = false, err = "\n  first\nsecond\n" },
+    }, 3)
+    assert.equals(
+      table.concat({
+        "push: 3 of 3 failed, 0 changed, 0 unchanged",
+        "",
+        "Failed:",
+        "  a: ! [rejected]        main -> main (fetch first)",
+        "  b: fatal: unable to access 'x'",
+        "  c: first",
+      }, "\n"),
+      msg
+    )
+  end)
+
   it("names a cancelled tail and agrees in number for one repository", function()
     local msg = report.format("sync", { { name = "a", ok = true, detail = "pushed 1 commit" } }, 3)
     assert.truthy(

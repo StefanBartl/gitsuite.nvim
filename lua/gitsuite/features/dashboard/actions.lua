@@ -7,13 +7,15 @@
 --- `gitsuite.features.dashboard.view`'s row/bulk actions already call,
 --- ported unchanged from reposcope.nvim's own `utils.repo_actions`.
 ---
---- Every action answers `on_done(ok, err, detail)`. `detail` is a short phrase
---- for the batch's closing summary (`gitsuite.features.dashboard.bulk_report`)
---- saying what changed ("pulled 3 commits", "fetched new refs"); `nil` on
---- success means nothing did. `skipped` is the reason a successful action had
---- nothing to work on (a sync without an upstream). It is built from the `changed` flag
---- `lib.nvim.git`'s functions report; where that flag is unknown, the action
---- is reported as having done its work rather than as a no-op.
+--- Every action answers `on_done(ok, err, detail, skipped)`
+--- (`GitSuiteDashboardActionDone`). `detail` is a short phrase for the batch's
+--- closing summary (`gitsuite.features.dashboard.bulk_report`) saying what
+--- changed ("pulled 3 commits", "fetched new refs"); `nil` on success means
+--- nothing did. `skipped` is the reason a successful action had nothing to work
+--- on (a sync without an upstream). fetch/pull/update build `detail` from the
+--- `changed` flag `lib.nvim.git`'s functions report (where that flag is unknown,
+--- the action is reported as having done its work rather than as a no-op);
+--- push and sync build it from commit counts read with `git rev-list`.
 
 local git = require("lib.nvim.git")
 local commits = require("gitsuite.features.dashboard.bulk_report").commits
@@ -106,23 +108,96 @@ local function ahead_behind(repo, on_done)
   )
 end
 
----Pushes the current branch of `repo` to its upstream.
+---The remote-tracking refs of `repo` and where they point, `nil` when git could not list them.
+---@param repo string Absolute path to the repository
+---@param on_done fun(refs: table<string, string>|nil): nil
+---@return nil
+local function tracking_refs(repo, on_done)
+  git.run_async(
+    { "for-each-ref", "--format=%(refname) %(objectname)", "refs/remotes" },
+    { dir = repo, read_only = true, env = C_LOCALE },
+    function(res)
+      if not res.ok then
+        on_done(nil)
+        return
+      end
+      ---@type table<string, string>
+      local refs = {}
+      for name, sha in (res.stdout or ""):gmatch("(%S+) (%x+)") do
+        refs[name] = sha
+      end
+      on_done(refs)
+    end
+  )
+end
+
+---How many commits a finished push sent, from the remote-tracking refs before and after it (`git push`
+---moves the ones of the refs it updated). That is what the push really did, whatever its destination: in a
+---triangular workflow (`remote.pushDefault` naming a fork) that is not the upstream, and `@{push}` cannot
+---even be resolved under `push.default=simple`.
 ---
----The commits ahead are counted first, only for the summary: a push of a level branch reports nothing, a
----push whose count git could not tell (no upstream yet) is still run and reported as "pushed".
+---`on_done(0)` when no ref moved; `on_done(nil)` when the count is unknown (a ref was created, or a listing
+---or the count failed).
+---@param repo string Absolute path to the repository
+---@param before table<string, string>|nil
+---@param on_done fun(n: integer|nil): nil
+---@return nil
+local function pushed_count(repo, before, on_done)
+  if not before then
+    on_done(nil)
+    return
+  end
+  tracking_refs(repo, function(after)
+    if not after then
+      on_done(nil)
+      return
+    end
+    ---@type string[], string[]
+    local new, old = {}, {}
+    for name, sha in pairs(after) do
+      if before[name] == nil then
+        on_done(nil)
+        return
+      elseif before[name] ~= sha then
+        new[#new + 1] = sha
+        old[#old + 1] = before[name]
+      end
+    end
+    if #new == 0 then
+      on_done(0)
+      return
+    end
+    local args = { "rev-list", "--count" }
+    vim.list_extend(args, new)
+    args[#args + 1] = "--not"
+    vim.list_extend(args, old)
+    git.run_async(args, { dir = repo, read_only = true, env = C_LOCALE }, function(res)
+      local n = res.ok and (res.stdout or ""):match("^%s*(%d+)%s*$") or nil
+      on_done(n and tonumber(n) or nil)
+    end)
+  end)
+end
+
+---Pushes the current branch of `repo` (`git push`, to wherever git's config sends it) and reports what the
+---push sent: nothing when no remote-tracking ref moved, "pushed N commits", or "pushed" when the count is
+---unknown.
 ---@param repo string Absolute path to the repository
 ---@param on_done GitSuiteDashboardActionDone
 ---@return nil
 function M.push(repo, on_done)
-  ahead_behind(repo, function(ahead)
+  tracking_refs(repo, function(before)
     git.push_async({ dir = repo }, function(ok, err)
       if not ok then
         on_done(false, err)
-      elseif ahead == 0 then
-        on_done(true, nil)
-      else
-        on_done(true, nil, ahead and ("pushed " .. commits(ahead)) or "pushed")
+        return
       end
+      pushed_count(repo, before, function(n)
+        if n == 0 then
+          on_done(true, nil)
+        else
+          on_done(true, nil, n and ("pushed " .. commits(n)) or "pushed")
+        end
+      end)
     end)
   end)
 end
@@ -138,10 +213,10 @@ end
 ---
 ---The counts are read after the fetch, so they are the remote's state now, not the dashboard's of a moment
 ---ago.
----@param repo string Absolute path to the repository
 ---
----The summary detail names the direction and the count ("pulled 3 commits", "pushed 1 commit"); a
----repository with nothing to compare with is reported as skipped, a level one as unchanged.
+---The summary detail names the direction and the count ("pulled 3 commits", "pushed 1 commit"; the push
+---count is read against `@{push}`, like `M.push`); a repository with nothing to compare with is reported as
+---skipped, a level one as unchanged.
 ---@param repo string Absolute path to the repository
 ---@param on_done GitSuiteDashboardActionDone
 ---@return nil
@@ -154,14 +229,12 @@ function M.sync(repo, on_done)
     ahead_behind(repo, function(ahead, behind, err)
       if err then
         on_done(false, err)
-      elseif ahead == nil then
+      elseif ahead == nil or behind == nil then
         on_done(true, nil, nil, "no upstream or detached HEAD")
       elseif ahead == 0 and behind == 0 then
         on_done(true, nil)
       elseif behind == 0 then
-        git.push_async({ dir = repo }, function(ok, perr)
-          on_done(ok, perr, ok and ("pushed " .. commits(ahead)) or nil)
-        end)
+        M.push(repo, on_done)
       elseif ahead == 0 then
         git.pull_async({ dir = repo }, function(ok, perr)
           on_done(ok, perr, ok and ("pulled " .. commits(behind)) or nil)

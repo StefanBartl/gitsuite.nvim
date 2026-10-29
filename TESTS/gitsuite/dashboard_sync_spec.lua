@@ -175,6 +175,46 @@ describe("gitsuite.features.dashboard.actions.sync (real git, local remote)", fu
     assert.equals(git(a, "rev-parse", "HEAD"), git(remote, "rev-parse", "main"))
   end)
 
+  it("push and sync count against the push destination, not the upstream (triangular)", function()
+    ---@param dir string
+    ---@return boolean|nil ok
+    ---@return string|nil err
+    ---@return string|nil detail
+    local function push(dir)
+      local done, ok, err, detail = false, nil, nil, nil
+      actions.push(dir, function(o, e, d)
+        done, ok, err, detail = true, o, e, d
+      end)
+      assert.is_true(vim.wait(20000, function()
+        return done
+      end, 20))
+      return ok, err, detail
+    end
+
+    -- Upstream stays origin/main, pushes go to the fork; the fork already has both new commits.
+    git(root, "init", "-q", "--bare", "-b", "main", "fork.git")
+    git(a, "remote", "add", "fork", root .. "/fork.git")
+    git(a, "config", "remote.pushDefault", "fork")
+    commit(a, "t1")
+    commit(a, "t2")
+    git(a, "push", "-q", "fork", "main")
+    assert.equals("2\t0", git(a, "rev-list", "--left-right", "--count", "HEAD...@{u}"))
+
+    local ok, err, detail = push(a)
+    assert.is_true(ok, err)
+    assert.is_nil(detail, "the fork was level: nothing was pushed")
+
+    ok, err, detail = sync(a)
+    assert.is_true(ok, err)
+    assert.is_nil(detail, "sync's push sent nothing either")
+
+    commit(a, "t3")
+    ok, err, detail = sync(a)
+    assert.is_true(ok, err)
+    assert.equals("pushed 1 commit", detail, "one commit went to the fork, not three")
+    assert.equals(git(a, "rev-parse", "HEAD"), git(root .. "/fork.git", "rev-parse", "main"))
+  end)
+
   it("reads the counts after the fetch, not from the last time", function()
     -- a is level when b pushes; only a fetch inside sync can show that a is now behind.
     assert.equals("0\t0", git(a, "rev-list", "--left-right", "--count", "HEAD...@{u}"))

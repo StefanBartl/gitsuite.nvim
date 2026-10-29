@@ -137,7 +137,10 @@ line, then per repository what failed (and why), what changed (`pulled 3
 commits`, `pushed 1 commit`, `fetched new refs`, `fast-forwarded`) and what was
 skipped (a sync without an upstream). Repositories where nothing happened are
 only counted (`6 unchanged`), never listed; a cancelled batch names how many
-were not started.
+were not started. A push counts what it really sent (the remote-tracking refs
+it moved), so pushing to a fork that is already level reads as unchanged even
+when the branch is ahead of its upstream. A multi-line git error is cut to the
+line that names the reason (`! [rejected] ...`, `error:`, `fatal:`).
 
 ```
 sync: 1 of 9 failed, 2 changed, 1 skipped, 5 unchanged
