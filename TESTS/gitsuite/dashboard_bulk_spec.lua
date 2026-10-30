@@ -78,7 +78,7 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
     { "gitsuite.util.notify", "notify", "success" },
     { "gitsuite.util.progress", "create" },
     { "gitsuite.features.dashboard.actions", "fetch", "pull", "push", "sync" },
-    { "gitsuite.features.dashboard.status", "dashboard_one" },
+    { "gitsuite.features.dashboard.status", "dashboard_one", "scan" },
     { "ui.kit", "confirm" },
   })
 
@@ -499,6 +499,50 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
       assert.is_nil(row:find("queued", 1, true), row)
       assert.is_nil(row:find("fetch...", 1, true), row)
       assert.truthy(row:find("clean", 1, true), row)
+    end
+  end)
+
+  -- The reopened dashboard's own scan runs alongside the batch: a repository it
+  -- read before the batch's fetch of it landed carries the state from before
+  -- that fetch. The batch's re-read of it is newer and must win, or the row
+  -- shows "nothing behind" for good although the fetch just found new commits.
+  it("a dashboard reopened mid-batch keeps the re-reads its own scan raced", function()
+    actions.fetch = fake("fetch")
+    -- After the fetch the remote has moved on: every re-read is two behind.
+    require("gitsuite.features.dashboard.status").dashboard_one = function(path, on_done)
+      local r = record(vim.fn.fnamemodify(path, ":t"))
+      r.behind = 2
+      on_done(r)
+    end
+    -- The view binds `dashboard_one` when it is loaded.
+    package.loaded["gitsuite.features.dashboard.view"] = nil
+    view = require("gitsuite.features.dashboard.view")
+    view.show({ record("r1"), record("r2") }, { output = "buffer" })
+    press("gf")
+    vim.api.nvim_buf_delete(bufnr(), { force = true })
+
+    -- `:Git dashboard` again: its scan is in flight while r1's fetch lands.
+    local scanned
+    require("gitsuite.features.dashboard.status").scan = function(_, on_done)
+      scanned = on_done
+    end
+    require("gitsuite.features.dashboard").show(nil, "buffer")
+    assert.is_not_nil(scanned, "the reopened dashboard scans")
+    -- The scan read both repositories before the fetch moved anything.
+    local scan_result = { record("r1"), record("r2") }
+    release("fetch /fake/r1", true)
+    wait_for(function()
+      return state.phase("/fake/r1") == "done" and waiting["fetch /fake/r2"] ~= nil
+    end, "r1 done")
+    scanned(scan_result, {})
+    assert.truthy(row_text("r1"):find("↓2", 1, true), row_text("r1"))
+
+    release("fetch /fake/r2", true)
+    wait_for(function()
+      return state.bulk_verb() == nil
+    end, "bulk finished")
+    for _, name in ipairs({ "r1", "r2" }) do
+      assert.truthy(row_text(name):find("↓2", 1, true), row_text(name))
     end
   end)
 end)

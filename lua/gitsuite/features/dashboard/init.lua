@@ -73,6 +73,9 @@ function M.show(dir, output, out_path)
   local pages = build_pages()
   local view = require("gitsuite.features.dashboard.view")
   local live = view.live_begin(output or "popup")
+  -- A batch still running from a dashboard closed meanwhile re-reads rows
+  -- while this scan runs; those re-reads are newer than what it reads.
+  local reread_since = view.reread_mark()
 
   scan_page(pages[1], dir, function(records, errors)
     if #records > 0 or #pages > 1 then
@@ -80,6 +83,7 @@ function M.show(dir, output, out_path)
         output = output,
         path = out_path,
         dir = dir,
+        reread_since = reread_since,
         pages = pages,
         page_index = 1,
         on_switch_page = function(page, on_switched)

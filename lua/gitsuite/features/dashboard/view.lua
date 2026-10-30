@@ -122,6 +122,17 @@ local _last_view
 ---@type { bufnr: integer, records: RepoDashboardRecord[] }|nil
 local _view
 
+---Every row re-read after an action (see `_store_record`), by path, stamped
+---with `_reread_seq` at the time it was stored. A scan running alongside a
+---batch (`:Git dashboard` again mid-run) may read a repository before the
+---batch's action on it lands; `M.show` puts the newer re-read back in.
+---@type table<string, { record: RepoDashboardRecord, seq: integer }>
+local _rereads = {}
+
+---Bumped by every stored re-read; see `M.reread_mark`.
+---@type integer
+local _reread_seq = 0
+
 ---Discovery-order snapshot, so the `s` sort cycle can return to the order the
 ---directory scan produced without re-running it.
 ---@type RepoDashboardRecord[]
@@ -854,6 +865,8 @@ end
 local function _store_record(records, idx, new_record)
   if not new_record then return end
   records[idx] = new_record
+  _reread_seq = _reread_seq + 1
+  _rereads[new_record.path] = { record = new_record, seq = _reread_seq }
   local current = _view and _view.records
   if not current or current == records then return end
   for i, r in ipairs(current) do
@@ -2312,22 +2325,39 @@ local function show_path(lines, path)
   end
 end
 
+---Marks the start of a scan: hand the value to `M.show` as `reread_since`, and
+---every row re-read after this point (a batch's or a row action's, landing
+---while the scan runs) replaces what the scan read of that repository.
+---@return integer mark
+function M.reread_mark()
+  return _reread_seq
+end
+
 ---Renders `records` and displays them via the requested output backend.
 ---@param records RepoDashboardRecord[]
----@param opts? { output?: GitSuiteDashboardOutputMode, path?: string, dir?: string, pages?: table[], page_index?: integer, on_switch_page?: fun(page: table, on_done: fun(records: RepoDashboardRecord[], errors: string[])) }
+---@param opts? { output?: GitSuiteDashboardOutputMode, path?: string, dir?: string, pages?: table[], page_index?: integer, on_switch_page?: fun(page: table, on_done: fun(records: RepoDashboardRecord[], errors: string[])), reread_since?: integer }
 ---@return nil
 function M.show(records, opts)
   opts = opts or {}
   local mode = opts.output or "popup"
-  local lines, hls = M.render(records)
 
   -- Only reset the sort cycle for a genuinely new scan, so `reopen()` (which
   -- replays the cached records) doesn't silently undo the user's chosen order.
   if records ~= (_last_view or {}).records then
+    -- A row re-read after the scan began is at least as new as what the scan
+    -- read of it -- and newer when the scan got there before a still running
+    -- batch's action on it landed.
+    if opts.reread_since then
+      for i, r in ipairs(records) do
+        local hit = _rereads[r.path]
+        if hit and hit.seq > opts.reread_since then records[i] = hit.record end
+      end
+    end
     _discovery_order = vim.deepcopy(records)
     _sort_index = 1
   end
   _last_view = { records = records, opts = opts, line = (_last_view or {}).line or 2 }
+  local lines, hls = M.render(records)
 
   -- Only the interactive backends open/focus a dashboard window at all --
   -- "clipboard"/"path" (and an unrecognized mode) never do, so restoring a
