@@ -130,7 +130,10 @@ A running batch does not lock the whole dashboard. Each repository in it is
 right away, in parallel with the rest of the batch; a queued or in-flight row
 refuses with a message. A lock per repository keeps two writing `git`
 processes off the same repository. Sorting, re-scanning, page switches and a
-second batch still wait for the running one.
+second batch still wait for the running one. Closing the dashboard does not
+stop a batch: open it again while the batch runs and the new dashboard takes
+it over -- its rows keep showing the batch's progress and settle when it is
+through, and a second `gf` there is refused until then.
 
 When a batch is through, one notification sums it up: the counts in the first
 line, then per repository what failed (and why), what changed (`pulled 3

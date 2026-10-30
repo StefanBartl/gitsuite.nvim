@@ -113,6 +113,15 @@ local _bulk_running
 ---@type { records: RepoDashboardRecord[], opts: table, line: integer }|nil
 local _last_view
 
+---The dashboard on screen now: the buffer its row keymaps are bound to and the
+---records they act on. A batch or row action keeps the buffer and records it
+---was started from, but those are gone once the dashboard is closed and opened
+---again mid-run (a fresh scan, a fresh buffer) -- so every redraw also lands
+---here, and a re-read row is stored here too, or the reopened dashboard would
+---keep showing "fetch..." for rows the run long finished.
+---@type { bufnr: integer, records: RepoDashboardRecord[] }|nil
+local _view
+
 ---Discovery-order snapshot, so the `s` sort cycle can return to the order the
 ---directory scan produced without re-running it.
 ---@type RepoDashboardRecord[]
@@ -797,7 +806,7 @@ end
 ---@param bufnr integer
 ---@param records RepoDashboardRecord[]
 ---@return nil
-local function _redraw(bufnr, records)
+local function _draw(bufnr, records)
   local win = vim.fn.bufwinid(bufnr)
   local cursor = (win ~= -1) and vim.api.nvim_win_get_cursor(win) or nil
   local lines, hls = M.render(records)
@@ -812,6 +821,45 @@ local function _redraw(bufnr, records)
     if ok and cfg and cfg.relative and cfg.relative ~= "" and cfg.title then
       cfg.title = M.summary(records)
       pcall(vim.api.nvim_win_set_config, win, cfg)
+    end
+  end
+end
+
+---@private
+---@internal
+---Redraws `records` into `bufnr`, and the dashboard on screen now (`_view`) as
+---well when that is another one: a run started from a dashboard that was
+---closed and reopened meanwhile still keeps the reopened one current. The
+---current one is drawn last, so where both share a buffer it wins.
+---@param bufnr integer
+---@param records RepoDashboardRecord[]
+---@return nil
+local function _redraw(bufnr, records)
+  _draw(bufnr, records)
+  local view = _view
+  if view and (view.bufnr ~= bufnr or view.records ~= records) then
+    _draw(view.bufnr, view.records)
+  end
+end
+
+---@private
+---@internal
+---Stores a re-read row: at `idx` of the `records` the action was started on,
+---and by path into the dashboard on screen now when that holds other records
+---(see `_view`).
+---@param records RepoDashboardRecord[]
+---@param idx integer
+---@param new_record RepoDashboardRecord|nil Nil when the re-read failed: nothing changes
+---@return nil
+local function _store_record(records, idx, new_record)
+  if not new_record then return end
+  records[idx] = new_record
+  local current = _view and _view.records
+  if not current or current == records then return end
+  for i, r in ipairs(current) do
+    if r.path == new_record.path then
+      current[i] = new_record
+      return
     end
   end
 end
@@ -866,7 +914,7 @@ local function _refresh_row(bufnr, records, idx)
 
   dashboard_one(record.path, function(new_record)
     vim.schedule(function()
-      if new_record then records[idx] = new_record end
+      _store_record(records, idx, new_record)
       _redraw(bufnr, records)
     end)
   end)
@@ -984,7 +1032,11 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
   -- what else is behind it. Per-repository phases (not `_pending`) carry this,
   -- so a row the batch is through with can take its own action meanwhile.
   _bulk_running = verb
-  repo_state.begin_bulk(verb, paths)
+  -- The generation keeps this batch's callbacks out of a newer batch's phases:
+  -- should one start before this one is through (a page reload resets
+  -- `_bulk_running`), this one's late callbacks still release their locks but
+  -- neither move the newer batch's rows nor end it.
+  local generation = repo_state.begin_bulk(verb, paths)
   _redraw(bufnr, records)
 
   local handle = progress.create(("%s %d repositories"):format(verb, total), total)
@@ -1009,10 +1061,10 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
   local next_pos, running, finished = 1, 0, false
 
   local function finish()
-    _bulk_running = nil
     -- Clears the queue's own phases as well as the cancelled tail's. Row
-    -- actions started meanwhile keep their `_pending` spinner and lock.
-    repo_state.end_bulk()
+    -- actions started meanwhile keep their `_pending` spinner and lock. A
+    -- superseded batch ends nothing: the running flag is the newer one's.
+    if repo_state.end_bulk(generation) then _bulk_running = nil end
     _redraw(bufnr, records)
 
     if handle then handle:finish(("%s: %d of %d repositories"):format(verb, succeeded, total)) end
@@ -1032,7 +1084,7 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
   local pump
 
   local function launch(record, idx, pos)
-    repo_state.set_phase(record.path, "fetching")
+    repo_state.set_phase(record.path, "fetching", generation)
     _redraw(bufnr, records)
     if handle then handle:update({ text = record.name, current = completed, total = total }) end
 
@@ -1056,8 +1108,8 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
         -- started on it never races the batch's own stale refresh.
         dashboard_one(record.path, function(new_record)
           vim.schedule(function()
-            if new_record then records[idx] = new_record end
-            repo_state.set_phase(record.path, ok and "done" or "failed")
+            _store_record(records, idx, new_record)
+            repo_state.set_phase(record.path, ok and "done" or "failed", generation)
             _redraw(bufnr, records)
             running = running - 1
             completed = completed + 1
@@ -1949,6 +2001,7 @@ end
 local function _attach_row_keymaps(bufnr, records, before_open)
   local ctx = { bufnr = bufnr, records = records, before_open = before_open }
   local mo = { buffer = bufnr, nowait = true }
+  _view = { bufnr = bufnr, records = records }
 
   if require("gitsuite.config").get().dashboard.context_menu then
     contextmenu.bind_buffer(bufnr, function()

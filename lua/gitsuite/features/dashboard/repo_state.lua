@@ -45,6 +45,13 @@ local _phases = {}
 ---@type string|nil
 local _bulk_verb
 
+---Generation of the latest bulk, bumped by every `begin_bulk`. A bulk's own
+---callbacks pass it back, so the ones of a bulk that was superseded (its phases
+---replaced by a newer bulk's while its git calls were still in flight) can
+---neither write phases into the newer bulk nor end it.
+---@type integer
+local _generation = 0
+
 ---Takes `path`'s lock for `verb`. Never waits: the caller decides what to do
 ---when the repository is busy.
 ---@param path string Absolute repository path
@@ -75,21 +82,32 @@ end
 ---Starts a bulk over `paths`: every one of them becomes `pending`.
 ---@param verb string
 ---@param paths string[]
----@return nil
+---@return integer generation Hand back to `set_phase`/`end_bulk` from this bulk's callbacks
 function M.begin_bulk(verb, paths)
+  _generation = _generation + 1
   _bulk_verb = verb
   _phases = {}
   for _, path in ipairs(paths) do
     _phases[path] = "pending"
   end
+  return _generation
 end
 
----Moves `path` to `phase` within the running bulk.
+---Whether `generation` (nil: whoever asks) is the running bulk's.
+---@param generation integer|nil
+---@return boolean
+local function _current(generation)
+  return generation == nil or generation == _generation
+end
+
+---Moves `path` to `phase` within the running bulk. A no-op for a superseded
+---bulk's `generation`.
 ---@param path string
 ---@param phase GitSuiteDashboardPhase
+---@param generation? integer The bulk's own generation, from `begin_bulk`
 ---@return nil
-function M.set_phase(path, phase)
-  if _bulk_verb then _phases[path] = phase end
+function M.set_phase(path, phase, generation)
+  if _bulk_verb and _current(generation) then _phases[path] = phase end
 end
 
 ---`path`'s phase in the running bulk, or nil when it is not part of one.
@@ -106,11 +124,15 @@ function M.bulk_verb()
 end
 
 ---Ends the running bulk: every phase is dropped. Locks are left alone, they
----belong to the processes that hold them.
----@return nil
-function M.end_bulk()
+---belong to the processes that hold them. A superseded bulk's `generation`
+---ends nothing: the bulk running now is not its to end.
+---@param generation? integer The bulk's own generation, from `begin_bulk`
+---@return boolean ended
+function M.end_bulk(generation)
+  if not _current(generation) then return false end
   _bulk_verb = nil
   _phases = {}
+  return true
 end
 
 ---Progress of the running bulk.

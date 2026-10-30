@@ -50,6 +50,26 @@ describe("gitsuite.features.dashboard.repo_state", function()
     assert.is_nil(state.bulk_verb())
     assert.equals("pull", state.holder("/d"), "ending the bulk leaves locks to their holders")
   end)
+
+  it("a stale bulk's callbacks touch neither the phases nor the end of a newer bulk", function()
+    local first = state.begin_bulk("fetch", { "/a", "/b" })
+    state.set_phase("/a", "fetching", first)
+    local second = state.begin_bulk("pull", { "/b", "/c" })
+    assert.is_not.equal(first, second)
+
+    state.set_phase("/a", "done", first)
+    state.set_phase("/b", "done", first)
+    assert.is_nil(state.phase("/a"), "the first bulk no longer writes phases")
+    assert.equals("pending", state.phase("/b"))
+    assert.is_false(state.end_bulk(first), "the first bulk cannot end the second")
+    assert.equals("pull", state.bulk_verb())
+    assert.equals("pending", state.phase("/c"))
+
+    state.set_phase("/b", "done", second)
+    assert.equals("done", state.phase("/b"))
+    assert.is_true(state.end_bulk(second))
+    assert.is_nil(state.bulk_verb())
+  end)
 end)
 
 describe("gitsuite.features.dashboard.view: bulk does not block settled rows", function()
@@ -446,6 +466,40 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
       return state.bulk_verb() == nil
     end, "bulk finished")
     assert.equals(1, max_total)
+  end)
+
+  -- GS: gitsuite.nvim/dashboard-zweiter-lauf-haengt -- close the dashboard while
+  -- a batch still runs, open it again (a fresh scan, a fresh buffer): the new
+  -- dashboard takes the running batch over instead of starting a second one,
+  -- and every one of its rows settles once that batch is through.
+  it("a dashboard reopened mid-batch follows the running batch and settles every row", function()
+    actions.fetch = fake("fetch", 30)
+    view.show({ record("r1"), record("r2"), record("r3") }, { output = "buffer" })
+
+    press("gf")
+    wait_for(function()
+      return state.phase("/fake/r1") == "done"
+    end, "r1 done")
+
+    -- Closing the popup wipes its buffer; reopening scans again into a new one.
+    vim.api.nvim_buf_delete(bufnr(), { force = true })
+    view.show({ record("r1"), record("r2"), record("r3") }, { output = "buffer" })
+    assert.truthy(row_text("r3"):find("fetch queued", 1, true), row_text("r3"))
+
+    -- No second batch on top of the running one.
+    press("gf")
+    assert.truthy(last_message():find("already running", 1, true), last_message())
+
+    wait_for(function()
+      return state.bulk_verb() == nil
+    end, "bulk finished")
+    assert.same({ "fetch /fake/r1", "fetch /fake/r2", "fetch /fake/r3" }, calls)
+    for _, name in ipairs({ "r1", "r2", "r3" }) do
+      local row = row_text(name)
+      assert.is_nil(row:find("queued", 1, true), row)
+      assert.is_nil(row:find("fetch...", 1, true), row)
+      assert.truthy(row:find("clean", 1, true), row)
+    end
   end)
 end)
 
