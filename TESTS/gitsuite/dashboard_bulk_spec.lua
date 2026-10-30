@@ -545,6 +545,78 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
       assert.truthy(row_text(name):find("↓2", 1, true), row_text(name))
     end
   end)
+
+  local function line_of(name)
+    for i, l in ipairs(vim.api.nvim_buf_get_lines(bufnr(), 0, -1, false)) do
+      if l:find(name, 1, true) then return i end
+    end
+    error("no row for " .. name)
+  end
+
+  -- GS: gitsuite.nvim/dashboard-zeilenaktions-spinner-per-index-statt-per-pfad-fal
+  -- -- a row action's spinner belongs to its repository, not to its row: a
+  -- dashboard opened again (fresh scan, discovery order) while the action runs
+  -- shows it on that repository and lets every other row run its own action.
+  it("a row action's spinner follows its repository into a reopened dashboard", function()
+    actions.pull = fake("pull")
+    view.show({ record("rc"), record("ra"), record("rb") }, { output = "buffer" })
+    press("s") -- by name: ra, rb, rc
+    press("P", line_of("rc"))
+    assert.same({ "pull /fake/rc" }, calls)
+
+    vim.api.nvim_buf_delete(bufnr(), { force = true })
+    view.show({ record("rc"), record("ra"), record("rb") }, { output = "buffer" })
+    assert.truthy(row_text("rc"):find("pull...", 1, true), row_text("rc"))
+    assert.is_nil(row_text("rb"):find("pull...", 1, true), row_text("rb"))
+
+    press("P", line_of("rb"))
+    assert.same({ "pull /fake/rc", "pull /fake/rb" }, calls)
+
+    release("pull /fake/rc", true)
+    release("pull /fake/rb", true)
+    wait_for(function()
+      return state.holder("/fake/rc") == nil and state.holder("/fake/rb") == nil
+    end, "both pulls finished")
+    for _, name in ipairs({ "ra", "rb", "rc" }) do
+      assert.is_nil(row_text(name):find("pull...", 1, true), row_text(name))
+    end
+  end)
+
+  -- Same task: after a page switch the rows on screen were a copy of the page's
+  -- scan, so a re-read and a re-sort changed only the copy and `reopen()` (back
+  -- from a README) showed the stale, unsorted scan.
+  it("reopen after a page switch shows the re-read and sorted rows", function()
+    require("gitsuite.features.dashboard.status").dashboard_one = function(path, on_done)
+      local r = record(vim.fn.fnamemodify(path, ":t"))
+      r.behind = 2
+      on_done(r)
+    end
+    package.loaded["gitsuite.features.dashboard.view"] = nil
+    view = require("gitsuite.features.dashboard.view")
+    view.show({ record("r1") }, {
+      output = "buffer",
+      pages = { { name = "one" }, { name = "two" } },
+      page_index = 1,
+      on_switch_page = function(_, on_done)
+        on_done({ record("rc"), record("ra"), record("rb") }, {})
+      end,
+    })
+    press("<Right>")
+    wait_for(function()
+      return row_text("rc") ~= ""
+    end, "page two loaded")
+    press("s") -- by name: ra, rb, rc
+    press("r", line_of("rb"))
+    wait_for(function()
+      return row_text("rb"):find("↓2", 1, true) ~= nil
+    end, "rb re-read")
+
+    vim.api.nvim_buf_delete(bufnr(), { force = true })
+    assert.is_true(view.reopen())
+    assert.equals(2, line_of("ra"))
+    assert.equals(4, line_of("rc"))
+    assert.truthy(row_text("rb"):find("↓2", 1, true), row_text("rb"))
+  end)
 end)
 
 -- GS: gitsuite.nvim/git-dashboard-startablauf-optimieren -- the popup used to

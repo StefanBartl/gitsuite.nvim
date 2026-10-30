@@ -87,10 +87,14 @@ local progress = require("gitsuite.util.progress")
 local notify = require("gitsuite.util.notify").notify
 local notify_success = require("gitsuite.util.notify").success
 
----In-flight row actions, keyed by record index -> verb ("push", "pull", ...).
+---In-flight row actions, keyed by absolute path -> verb ("push", "pull", ...).
 ---Rendered in place of the row's state so a slow push isn't several seconds of
 ---no visible change at all.
----@type table<integer, string>
+---
+---By path and not by row index, like `_marks`: `s` re-sorts the rows and a
+---dashboard opened again mid-action is a fresh scan in discovery order, so an
+---index-keyed spinner would land on (and lock out) another repository.
+---@type table<string, string>
 local _pending = {}
 
 ---Marked repositories, keyed by absolute path -> true.
@@ -103,7 +107,7 @@ local _marks = {}
 
 ---The verb of the batch currently running ("push", "pull", ...), or nil.
 ---Guards the operations that would move rows out from under an in-flight
----batch, whose `_pending` spinners are keyed by index.
+---batch, which walks its rows by index.
 ---@type string|nil
 local _bulk_running
 
@@ -384,7 +388,7 @@ function M.render(records)
 
     local state = r.state
     if r.state == "dirty" then state = ("dirty (%d)"):format(r.dirty) end
-    local pending = _pending[i]
+    local pending = _pending[r.path]
     local phase = repo_state.phase(r.path)
     if pending then
       state = ("%s %s..."):format(SPINNER, pending)
@@ -484,7 +488,7 @@ function M.render(records)
 
     local phase = repo_state.phase(r.path)
     local state_hl
-    if _pending[i] or phase == "fetching" then
+    if _pending[r.path] or phase == "fetching" then
       state_hl = HL.pending
     elseif phase == "pending" then
       state_hl = HL.muted
@@ -947,8 +951,8 @@ local function _run_row_action(bufnr, records, verb, action_fn)
   local idx = line - 1
   local record = records[idx]
   if not record then return end
-  if _pending[idx] then
-    notify(("%s: %s already running"):format(record.name, _pending[idx]), 3)
+  if _pending[record.path] then
+    notify(("%s: %s already running"):format(record.name, _pending[record.path]), 3)
     return
   end
   -- A running batch no longer blocks every row: only the rows it has not
@@ -969,21 +973,15 @@ local function _run_row_action(bufnr, records, verb, action_fn)
   notify(("%s %s ..."):format(verb, record.name), 3)
   local handle = progress.create(("%s %s"):format(verb, record.name))
 
-  _pending[idx] = verb
+  _pending[record.path] = verb
   _redraw(bufnr, records)
 
   local function on_done(ok, err)
     vim.schedule(function()
       repo_state.unlock(record.path)
-      -- `_switch_page`/`_rescan_all`/the sort key all refuse to run while
-      -- any `_pending` entry is set (guarding exactly this), but a stale
-      -- completion for a row that *was* mid-flight before one of those
-      -- somehow still ran (or before that guard existed) must not clear a
-      -- different action's busy flag or overwrite a row it was never asked
-      -- to touch -- re-check identity by path, not just index, before
-      -- touching shared state.
-      local still_here = records[idx] and records[idx].path == record.path
-      if still_here then _pending[idx] = nil end
+      -- The lock held until just now keeps any other action off this
+      -- repository, so its spinner is this action's own.
+      _pending[record.path] = nil
       if ok then
         notify_success(("%s: %s done"):format(record.name, verb))
         if handle then handle:finish(("%s %s done"):format(verb, record.name)) end
@@ -991,7 +989,16 @@ local function _run_row_action(bufnr, records, verb, action_fn)
         notify(("%s: %s failed - %s"):format(record.name, verb, err or "unknown error"), 4)
         if handle then handle:finish(("%s %s failed"):format(verb, record.name)) end
       end
-      if still_here then _refresh_row(bufnr, records, idx) end
+      -- The row may have moved meanwhile (`s` re-sorts in place): look it
+      -- up again by path. `_store_record` also carries the re-read into a
+      -- dashboard opened again since.
+      for i, r in ipairs(records) do
+        if r.path == record.path then
+          _refresh_row(bufnr, records, i)
+          return
+        end
+      end
+      _redraw(bufnr, records)
     end)
   end
 
@@ -1032,7 +1039,7 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
   ---@type string[]
   local paths = {}
   for _, idx in ipairs(indices) do
-    local busy = _pending[idx] or repo_state.holder(records[idx].path)
+    local busy = _pending[records[idx].path] or repo_state.holder(records[idx].path)
     if busy then
       notify(("%s: %s already running"):format(records[idx].name, busy), 3)
       return
@@ -1399,11 +1406,9 @@ local function _switch_page(ctx, delta)
     notify(("Cannot switch pages while a bulk %s is running"):format(_bulk_running), 3)
     return
   end
-  -- A single-row action's own completion callback also clears its
-  -- `_pending[idx]` entry, keyed by row index -- rebuilding `ctx.records`
-  -- out from under it (a genuinely different page, or even a same-page
-  -- rescan) would let that stale completion clear the wrong row's flag, or
-  -- overwrite a row it was never asked to touch, once it finally settles.
+  -- A page reload starts from a clean slate (`_pending` is reset below);
+  -- a row action still running would lose its spinner and its re-read
+  -- would land on a page that may not even hold its repository.
   if next(_pending) ~= nil then
     notify("Cannot switch pages while a row action is still running", 3)
     return
@@ -1443,7 +1448,10 @@ local function _switch_page(ctx, delta)
       end
 
       local new_opts = vim.tbl_extend("force", view_state.opts, { page_index = new_index })
-      _last_view = { records = records, opts = new_opts, line = 2 }
+      -- The rows on screen (`ctx.records`, filled in place), not the scan's
+      -- own table: a re-read or re-sort changes only those, and `reopen()`
+      -- must show them, not the stale, unsorted scan.
+      _last_view = { records = ctx.records, opts = new_opts, line = 2 }
       _redraw(ctx.bufnr, ctx.records)
       notify(
         ("Loaded %s: %d repositor%s"):format(
@@ -1630,24 +1638,17 @@ local ROW_KEYMAPS = {
     label = "s Sort",
     desc = "Cycle sort order (discovery / name / state / age)",
     run = function(ctx)
-      -- `_pending` is keyed by row index, so reordering mid-batch would leave
-      -- the spinners pointing at repositories that are not the ones running
-      -- -- and a row action's own completion callback would then clear the
-      -- wrong row's flag, or overwrite a row it was never asked to touch,
-      -- once it finally settles against the reordered table.
+      -- A batch walks its rows by index, so reordering mid-batch would move
+      -- rows out from under it. Row actions (`_pending`, by path) look their
+      -- row up again by path once they settle and do not block a re-sort.
       if _bulk_running then
         notify(("Cannot re-sort while a bulk %s is running"):format(_bulk_running), 3)
-        return
-      end
-      if next(_pending) ~= nil then
-        notify("Cannot re-sort while a row action is still running", 3)
         return
       end
 
       _sort_index = (_sort_index % #SORT_MODES) + 1
       local mode = SORT_MODES[_sort_index]
       _sort_records(ctx.records, mode, _discovery_order)
-      _pending = {}
       _redraw(ctx.bufnr, ctx.records)
       notify("Sorted by " .. mode, 3)
     end,
