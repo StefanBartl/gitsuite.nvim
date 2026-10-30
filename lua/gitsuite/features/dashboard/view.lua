@@ -137,10 +137,25 @@ local _rereads = {}
 ---@type integer
 local _reread_seq = 0
 
----Discovery-order snapshot, so the `s` sort cycle can return to the order the
----directory scan produced without re-running it.
----@type RepoDashboardRecord[]
+---Discovery-order snapshot as path -> rank, so the `s` sort cycle can return
+---to the order the directory scan produced without re-running it. Only the
+---order is kept, never the records: a row re-read since the scan must keep its
+---new state when the cycle comes back to discovery order.
+---@type table<string, integer>
 local _discovery_order = {}
+
+---@private
+---@internal
+---Builds the path -> rank map `_discovery_order` holds for `records`.
+---@param records RepoDashboardRecord[] Dashboard records in discovery order
+---@return table<string, integer>
+local function _discovery_ranks(records)
+  local ranks = {}
+  for i, r in ipairs(records) do
+    ranks[r.path] = ranks[r.path] or i
+  end
+  return ranks
+end
 
 ---Index into `SORT_MODES`; 1 is discovery order.
 local _sort_index = 1
@@ -1315,18 +1330,15 @@ local STATE_RANK = { diverged = 1, dirty = 2, behind = 3, ahead = 4, clean = 5 }
 ---Reorders `records` in place according to `mode`.
 ---@param records RepoDashboardRecord[]
 ---@param mode string
----@param original RepoDashboardRecord[] Discovery-order snapshot
+---@param ranks table<string, integer> Discovery-order snapshot (path -> rank)
 ---@return nil
-local function _sort_records(records, mode, original)
-  if mode == "discovery" then
-    for i = 1, #original do
-      records[i] = original[i]
-    end
-    return
-  end
-
+local function _sort_records(records, mode, ranks)
   table.sort(records, function(a, b)
-    if mode == "name" then
+    if mode == "discovery" then
+      local ra, rb = ranks[a.path] or math.huge, ranks[b.path] or math.huge
+      if ra ~= rb then return ra < rb end
+      return a.name:lower() < b.name:lower()
+    elseif mode == "name" then
       return a.name:lower() < b.name:lower()
     elseif mode == "state" then
       local ra, rb = STATE_RANK[a.state] or 9, STATE_RANK[b.state] or 9
@@ -1451,7 +1463,7 @@ local function _switch_page(ctx, delta)
       _sort_index = 1
       _bulk_running = nil
       repo_state.end_bulk()
-      _discovery_order = vim.deepcopy(records)
+      _discovery_order = _discovery_ranks(records)
       for i = #ctx.records, 1, -1 do
         ctx.records[i] = nil
       end
@@ -2366,7 +2378,7 @@ function M.show(records, opts)
         if hit and hit.seq > opts.reread_since then records[i] = hit.record end
       end
     end
-    _discovery_order = vim.deepcopy(records)
+    _discovery_order = _discovery_ranks(records)
     _sort_index = 1
   end
   _last_view = { records = records, opts = opts, line = (_last_view or {}).line or 2 }

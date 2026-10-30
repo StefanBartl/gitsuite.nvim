@@ -686,6 +686,28 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
     assert.equals(2, line_of("rc"))
     assert.equals(3, line_of("ra"))
   end)
+
+  -- GS: gitsuite.nvim/dashboard-sortierung-zurueck-auf-fundreihenfolge-zeigt-wiede
+  -- -- the discovery-order snapshot held copies of the scanned records, so `s`
+  -- cycling back to discovery order put the scan's stale state back over every
+  -- row re-read since.
+  it("cycling the sort back to discovery order keeps a row's re-read", function()
+    local held = held_rereads()
+    view.show({ record("rc"), record("ra"), record("rb") }, { output = "buffer" })
+    press("r", line_of("rb"))
+    held["/fake/rb"]()
+    wait_for(function()
+      return row_text("rb"):find("↓7", 1, true) ~= nil
+    end, "rb re-read stored")
+
+    for _ = 1, 4 do
+      press("s") -- name, state, age, back to discovery
+    end
+    assert.equals(2, line_of("rc"))
+    assert.equals(3, line_of("ra"))
+    assert.equals(4, line_of("rb"))
+    assert.truthy(row_text("rb"):find("↓7", 1, true), row_text("rb"))
+  end)
 end)
 
 -- GS: gitsuite.nvim/git-dashboard-startablauf-optimieren -- the popup used to
