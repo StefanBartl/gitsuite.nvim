@@ -617,6 +617,75 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
     assert.equals(4, line_of("rc"))
     assert.truthy(row_text("rb"):find("↓2", 1, true), row_text("rb"))
   end)
+
+  ---Re-reads held back until `go(path)`, each returning the repository with ↓7.
+  local function held_rereads()
+    local held = {}
+    require("gitsuite.features.dashboard.status").dashboard_one = function(path, on_done)
+      held[path] = function()
+        local r = record(vim.fn.fnamemodify(path, ":t"))
+        r.behind = 7
+        on_done(r)
+      end
+    end
+    package.loaded["gitsuite.features.dashboard.view"] = nil
+    view = require("gitsuite.features.dashboard.view")
+    return held
+  end
+
+  -- Review of gitsuite.nvim@d003a9a: the re-read after a row action was
+  -- stored at the row index the repository had when the action settled. `s`
+  -- (allowed then) moved another repository to that index meanwhile, and the
+  -- re-read replaced it: one repository twice, the other gone.
+  it("a row action's re-read lands on its repository after a re-sort", function()
+    local held = held_rereads()
+    actions.pull = fake("pull")
+    view.show({ record("rc"), record("ra"), record("rb") }, { output = "buffer" })
+    press("P", line_of("rc"))
+    release("pull /fake/rc", true)
+    wait_for(function()
+      return held["/fake/rc"] ~= nil
+    end, "rc re-read started")
+
+    press("s") -- by name: ra, rb, rc
+    held["/fake/rc"]()
+    wait_for(function()
+      return row_text("rc"):find("↓7", 1, true) ~= nil
+    end, "rc re-read stored")
+    assert.equals(2, line_of("ra"))
+    assert.equals(3, line_of("rb"))
+    assert.equals(4, line_of("rc"))
+  end)
+
+  -- Same review: a page reload while that re-read was in flight put the old
+  -- page's repository over the new page's row at the same index.
+  it("a row action's re-read does not land on another page", function()
+    local held = held_rereads()
+    actions.pull = fake("pull")
+    view.show({ record("r1") }, {
+      output = "buffer",
+      pages = { { name = "one" }, { name = "two" } },
+      page_index = 1,
+      on_switch_page = function(_, on_done)
+        on_done({ record("rc"), record("ra") }, {})
+      end,
+    })
+    press("P", line_of("r1"))
+    release("pull /fake/r1", true)
+    wait_for(function()
+      return held["/fake/r1"] ~= nil
+    end, "r1 re-read started")
+
+    press("<Right>")
+    wait_for(function()
+      return row_text("rc") ~= ""
+    end, "page two loaded")
+    held["/fake/r1"]()
+    vim.wait(50)
+    assert.equals("", row_text("r1"))
+    assert.equals(2, line_of("rc"))
+    assert.equals(3, line_of("ra"))
+  end)
 end)
 
 -- GS: gitsuite.nvim/git-dashboard-startablauf-optimieren -- the popup used to

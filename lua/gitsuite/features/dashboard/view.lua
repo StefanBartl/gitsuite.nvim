@@ -859,26 +859,38 @@ end
 
 ---@private
 ---@internal
----Stores a re-read row: at `idx` of the `records` the action was started on,
----and by path into the dashboard on screen now when that holds other records
----(see `_view`).
----@param records RepoDashboardRecord[]
----@param idx integer
----@param new_record RepoDashboardRecord|nil Nil when the re-read failed: nothing changes
+---Replaces the row of `new_record`'s repository in `list`, if it holds one.
+---@param list RepoDashboardRecord[]
+---@param new_record RepoDashboardRecord
 ---@return nil
-local function _store_record(records, idx, new_record)
-  if not new_record then return end
-  records[idx] = new_record
-  _reread_seq = _reread_seq + 1
-  _rereads[new_record.path] = { record = new_record, seq = _reread_seq }
-  local current = _view and _view.records
-  if not current or current == records then return end
-  for i, r in ipairs(current) do
+local function _replace_by_path(list, new_record)
+  for i, r in ipairs(list) do
     if r.path == new_record.path then
-      current[i] = new_record
+      list[i] = new_record
       return
     end
   end
+end
+
+---@private
+---@internal
+---Stores a re-read row by path: into the `records` the action was started on,
+---and into the dashboard on screen now when that holds other records (see
+---`_view`).
+---
+---By path and not at the index the row had when the re-read began: `s` may
+---re-sort the rows and a page reload may refill them while the re-read runs,
+---so that index can hold another repository by now.
+---@param records RepoDashboardRecord[]
+---@param new_record RepoDashboardRecord|nil Nil when the re-read failed: nothing changes
+---@return nil
+local function _store_record(records, new_record)
+  if not new_record then return end
+  _reread_seq = _reread_seq + 1
+  _rereads[new_record.path] = { record = new_record, seq = _reread_seq }
+  _replace_by_path(records, new_record)
+  local current = _view and _view.records
+  if current and current ~= records then _replace_by_path(current, new_record) end
 end
 
 ---@private
@@ -931,7 +943,7 @@ local function _refresh_row(bufnr, records, idx)
 
   dashboard_one(record.path, function(new_record)
     vim.schedule(function()
-      _store_record(records, idx, new_record)
+      _store_record(records, new_record)
       _redraw(bufnr, records)
     end)
   end)
@@ -1103,7 +1115,7 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
 
   local pump
 
-  local function launch(record, idx, pos)
+  local function launch(record, pos)
     repo_state.set_phase(record.path, "fetching", generation)
     _redraw(bufnr, records)
     if handle then handle:update({ text = record.name, current = completed, total = total }) end
@@ -1128,7 +1140,7 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
         -- started on it never races the batch's own stale refresh.
         dashboard_one(record.path, function(new_record)
           vim.schedule(function()
-            _store_record(records, idx, new_record)
+            _store_record(records, new_record)
             repo_state.set_phase(record.path, ok and "done" or "failed", generation)
             _redraw(bufnr, records)
             running = running - 1
@@ -1160,7 +1172,7 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
       local pos = next_pos
       next_pos = next_pos + 1
       running = running + 1
-      launch(record, idx, pos)
+      launch(record, pos)
     end
     if running == 0 and (cancelled or next_pos > total) then
       finished = true
