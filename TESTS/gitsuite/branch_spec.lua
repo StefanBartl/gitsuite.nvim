@@ -1,5 +1,9 @@
--- TESTS/gitsuite/branch_spec.lua -- gitsuite.features.branch against this
--- repo's own real git state (branch "main"), no fixture needed.
+-- TESTS/gitsuite/branch_spec.lua -- gitsuite.features.branch against a
+-- throwaway repository (branches "main" and "other" on one commit). Never
+-- against the live checkout: a checkout there rewrites its HEAD, index and
+-- reflog while the suite runs (`testing stamp` then sees an input of the
+-- run change and refuses the stamp), and a shared checkout must not move
+-- under another session.
 ---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
 describe("gitsuite.features.branch", function()
@@ -11,9 +15,63 @@ describe("gitsuite.features.branch", function()
 
   local branch
 
+  -- The live checkout's HEAD and reflog, read once before any test: the last
+  -- test proves the suite left them alone.
+  local live_root = vim.fs.normalize(vim.fn.fnamemodify(dir_of_spec, ":p") .. "../..")
+  ---@return string snapshot HEAD, then the reflog of HEAD ("" when there is none)
+  local function live_head_state()
+    local out = {}
+    for _, rel in ipairs({ "HEAD", "logs/HEAD" }) do
+      local r = vim.system({ "git", "-C", live_root, "rev-parse", "--git-path", rel }):wait()
+      local path = vim.trim(r.stdout or "")
+      if path ~= "" and not path:match("^%a:") and not path:match("^/") then
+        path = live_root .. "/" .. path
+      end
+      local fh = r.code == 0 and io.open(path, "rb") or nil
+      out[#out + 1] = fh and fh:read("*a") or ""
+      if fh then fh:close() end
+    end
+    return table.concat(out, "\0")
+  end
+  local live_before = live_head_state()
+
+  local original_cwd, repo
+
+  ---@param args string[]
+  local function git_in_repo(args)
+    local argv = {
+      "git",
+      "-C",
+      repo,
+      "-c",
+      "user.name=t",
+      "-c",
+      "user.email=t@t",
+      "-c",
+      "commit.gpgsign=false",
+    }
+    vim.list_extend(argv, args)
+    local r = vim.system(argv):wait()
+    assert.equals(0, r.code, ("fixture: git %s failed: %s"):format(args[1], tostring(r.stderr)))
+  end
+
   before_each(function()
+    original_cwd = vim.fn.getcwd()
+    repo = vim.fn.tempname() .. "-gitsuite-branch"
+    vim.fn.mkdir(repo, "p")
+    git_in_repo({ "init", "-q", "-b", "main" })
+    vim.fn.writefile({ "x" }, repo .. "/a.txt")
+    git_in_repo({ "add", "a.txt" })
+    git_in_repo({ "commit", "-q", "-m", "init" })
+    git_in_repo({ "branch", "other" })
+    vim.api.nvim_set_current_dir(repo)
     package.loaded["gitsuite.features.branch"] = nil
     branch = require("gitsuite.features.branch")
+  end)
+
+  after_each(function()
+    vim.api.nvim_set_current_dir(original_cwd)
+    pcall(vim.fn.delete, repo, "rf")
   end)
 
   it("list() does not error and reports at least the 'main' branch", function()
@@ -71,17 +129,9 @@ describe("gitsuite.features.branch", function()
   it("switch() fires GitsuiteBranchSwitched with {dir, branch} after a real checkout", function()
     -- checkout() is a no-op (and fires nothing) when the choice equals the
     -- current branch (see the "re-select the current branch" tests above),
-    -- so this needs an actual checkout to something else. Detaching HEAD
-    -- onto the commit it is already on is a real `git checkout <sha>` that
-    -- still leaves the repo pointing at the same tree -- and every branch in
-    -- this worktree besides the current one is checked out in another
-    -- worktree already, so a real branch-to-branch switch is not available
-    -- here.
+    -- so this switches the throwaway repo to its second branch.
     local git = require("lib.nvim.git")
-    local original_branch = git.current_branch()
-    assert.is_not_nil(original_branch)
-    local head_sha = git.head_short_hash()
-    assert.is_not_nil(head_sha)
+    assert.equals("main", git.current_branch())
 
     local group = vim.api.nvim_create_augroup("gitsuite_branch_spec_events", { clear = true })
     local captured
@@ -95,7 +145,7 @@ describe("gitsuite.features.branch", function()
 
     local original_select = vim.ui.select
     vim.ui.select = function(_, _, on_choice)
-      on_choice(head_sha)
+      on_choice("other")
     end
 
     local ok = pcall(branch.switch)
@@ -103,19 +153,11 @@ describe("gitsuite.features.branch", function()
     vim.ui.select = original_select
     vim.api.nvim_del_augroup_by_id(group)
 
-    -- Back onto the original branch regardless of what the assertions below find.
-    local restore_ok, restore_out = require("lib.nvim.cross.run_argv").run_blocking_captured({
-      "git",
-      "checkout",
-      original_branch,
-    })
-    assert.is_true(restore_ok, restore_out)
-
     assert.is_true(ok)
     assert.is_not_nil(captured)
-    assert.equals(head_sha, captured.branch)
+    assert.equals("other", captured.branch)
     assert.equals(git.repo_root(), captured.dir)
-    assert.equals(original_branch, git.current_branch())
+    assert.equals("other", git.current_branch())
   end)
 
   it(
@@ -185,30 +227,9 @@ describe("gitsuite.features.branch", function()
 
   describe("checkout() + sessions.nvim (GS-24, opt-in)", function()
     local config = require("gitsuite.config")
-    local run_argv = require("lib.nvim.cross.run_argv")
 
-    -- Same trick as "fires GitsuiteBranchSwitched" above: check out HEAD's
-    -- own sha, a real `git checkout` (attached branch -> detached HEAD) that
-    -- leaves the tree unchanged, then restore the original branch
-    -- afterwards -- every OTHER local branch is checked out in another
-    -- worktree already, so an actual branch-to-branch switch is not
-    -- available here.
-    ---@return string original_branch
-    ---@return string head_sha
-    local function detach_and_restore_setup()
-      local git = require("lib.nvim.git")
-      local original_branch = git.current_branch()
-      assert.is_not_nil(original_branch)
-      local head_sha = git.head_short_hash()
-      assert.is_not_nil(head_sha)
-      return original_branch, head_sha
-    end
-
-    ---@param original_branch string
-    local function restore(original_branch)
-      local ok, out = run_argv.run_blocking_captured({ "git", "checkout", original_branch })
-      assert.is_true(ok, out)
-    end
+    -- Like "fires GitsuiteBranchSwitched" above: a real checkout of the
+    -- throwaway repo's second branch.
 
     after_each(function()
       config.setup({}) -- reset to defaults: this is shared, process-wide state
@@ -216,8 +237,6 @@ describe("gitsuite.features.branch", function()
     end)
 
     it("default (branch.sessions = false): never touches sessions.nvim", function()
-      local original_branch, head_sha = detach_and_restore_setup()
-
       local calls = {}
       package.loaded["sessions.core"] = {
         save = function()
@@ -230,12 +249,10 @@ describe("gitsuite.features.branch", function()
 
       local original_select = vim.ui.select
       vim.ui.select = function(_, _, on_choice)
-        on_choice(head_sha)
+        on_choice("other")
       end
       local ok = pcall(branch.switch)
       vim.ui.select = original_select
-
-      restore(original_branch)
 
       assert.is_true(ok)
       assert.same({}, calls)
@@ -243,7 +260,6 @@ describe("gitsuite.features.branch", function()
 
     it("opt-in (branch.sessions = true): saves before the checkout, loads after", function()
       local git = require("lib.nvim.git")
-      local original_branch, head_sha = detach_and_restore_setup()
       config.setup({ branch = { sessions = true } })
 
       local events = {}
@@ -258,25 +274,22 @@ describe("gitsuite.features.branch", function()
 
       local original_select = vim.ui.select
       vim.ui.select = function(_, _, on_choice)
-        on_choice(head_sha)
+        on_choice("other")
       end
       local ok = pcall(branch.switch)
       vim.ui.select = original_select
-
-      restore(original_branch)
 
       assert.is_true(ok)
       assert.equals(2, #events)
       assert.equals("save", events[1].fn)
       assert.is_nil(events[1].name, "save(nil) -- sessions.nvim auto-resolves the name")
-      assert.equals(original_branch, events[1].branch, "save() ran BEFORE HEAD moved")
+      assert.equals("main", events[1].branch, "save() ran BEFORE HEAD moved")
       assert.equals("load", events[2].fn)
       assert.is_nil(events[2].name)
-      assert.is_nil(events[2].branch, "load() ran AFTER HEAD moved (now detached, no branch)")
+      assert.equals("other", events[2].branch, "load() ran AFTER HEAD moved")
     end)
 
     it("opt-in but sessions.nvim absent: the checkout still succeeds", function()
-      local original_branch, head_sha = detach_and_restore_setup()
       config.setup({ branch = { sessions = true } })
 
       package.loaded["sessions.core"] = nil
@@ -287,15 +300,19 @@ describe("gitsuite.features.branch", function()
 
       local original_select = vim.ui.select
       vim.ui.select = function(_, _, on_choice)
-        on_choice(head_sha)
+        on_choice("other")
       end
       local ok = pcall(branch.switch)
       vim.ui.select = original_select
       package.preload["sessions.core"] = orig_preload
 
-      restore(original_branch)
-
       assert.is_true(ok)
+      assert.equals("other", require("lib.nvim.git").current_branch())
     end)
+  end)
+
+  -- Last on purpose: the snapshot was taken before the first test.
+  it("leaves the live checkout's HEAD and reflog untouched", function()
+    assert.equals(live_before, live_head_state(), "a test checked out the live repository")
   end)
 end)
