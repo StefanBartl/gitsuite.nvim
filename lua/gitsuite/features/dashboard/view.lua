@@ -832,6 +832,59 @@ end
 
 ---@private
 ---@internal
+---Widest display cell any of `lines` needs, plus the two-cell margin
+---`lib.nvim.window.make_scratch` itself gives a float whose width was never
+---given explicitly -- mirrored here so a *resize* ends up exactly as wide as
+---an `M.open` with these same `lines` would have opened.
+---@param lines string[]
+---@return integer
+local function _content_width(lines)
+  local w = 0
+  for _, line in ipairs(lines) do
+    w = math.max(w, vim.fn.strdisplaywidth(line))
+  end
+  return w + 2
+end
+
+---@private
+---@internal
+---Resizes a floating window to fit `lines` and re-centers it, exactly as
+---`lib.nvim.window.make_scratch` sizes and centers one at open -- a resize
+---has to redo that math itself, since changing `width`/`height` alone would
+---leave the window's top-left corner fixed and the float drifting off-centre
+---as it grows or shrinks. A no-op on a window that isn't a float (or isn't
+---valid any more) rather than an error, since the live popup's window may
+---have been closed by the user while its scan was still running.
+---
+---`title`, when given, widens the float to fit it as well: the title is
+---drawn into the top border, and one wider than the window is cut off from
+---the left ("<te Dashboard — ..."). Both sizes are clamped to the editor the
+---way `make_scratch` clamps them at open, so a resize never asks for more
+---than the screen has.
+---@param winid integer
+---@param lines string[]
+---@param title string|nil
+---@return nil
+local function _resize_float(winid, lines, title)
+  if not vim.api.nvim_win_is_valid(winid) then return end
+  local ok, cfg = pcall(vim.api.nvim_win_get_config, winid)
+  if not (ok and cfg and cfg.relative and cfg.relative ~= "") then return end
+  local width = _content_width(lines)
+  if title then width = math.max(width, vim.fn.strdisplaywidth(title)) end
+  width = math.max(1, math.min(width, vim.o.columns - 4))
+  -- +1 accounts for the winbar legend, which otherwise eats one row of
+  -- content out of a height sized exactly to the number of dashboard lines
+  -- (see `show_popup`'s own fresh-open height, which this mirrors).
+  local height = math.max(1, math.min(#lines + 1, vim.o.lines - 4))
+  cfg.width = width
+  cfg.height = height
+  cfg.row = math.max(0, math.floor((vim.o.lines - height) / 2 - 1))
+  cfg.col = math.max(0, math.floor((vim.o.columns - width) / 2))
+  pcall(vim.api.nvim_win_set_config, winid, cfg)
+end
+
+---@private
+---@internal
 ---Redraws the whole table into `bufnr`, preserving the cursor position.
 ---@param bufnr integer
 ---@param records RepoDashboardRecord[]
@@ -846,11 +899,17 @@ local function _draw(bufnr, records)
   -- A float's title is stamped once at open, but the summary it carries counts
   -- marks and dirty repositories -- both of which change while the window
   -- stays open. Re-stamping here is what keeps "3 marked" honest.
+  -- Its size is fitted again too: a batch widens the table while it runs (the
+  -- STATE column's "⟳ fetch...", a SYNC column once the first fetch lands)
+  -- and the summary grows by "fetch 1/6"; a float kept at its open width cut
+  -- LAST COMMIT off on the right and the title off on the left.
   if win ~= -1 then
     local ok, cfg = pcall(vim.api.nvim_win_get_config, win)
     if ok and cfg and cfg.relative and cfg.relative ~= "" and cfg.title then
-      cfg.title = M.summary(records)
+      local title = M.summary(records)
+      cfg.title = title
       pcall(vim.api.nvim_win_set_config, win, cfg)
+      _resize_float(win, lines, title)
     end
   end
 end
@@ -2107,50 +2166,6 @@ end
 
 ---@private
 ---@internal
----Widest display cell any of `lines` needs, plus the two-cell margin
----`lib.nvim.window.make_scratch` itself gives a float whose width was never
----given explicitly -- mirrored here so a *resize* ends up exactly as wide as
----an `M.open` with these same `lines` would have opened.
----@param lines string[]
----@return integer
-local function _content_width(lines)
-  local w = 0
-  for _, line in ipairs(lines) do
-    w = math.max(w, vim.fn.strdisplaywidth(line))
-  end
-  return w + 2
-end
-
----@private
----@internal
----Resizes a floating window to fit `lines` and re-centers it, exactly as
----`lib.nvim.window.make_scratch` sizes and centers one at open -- a resize
----has to redo that math itself, since changing `width`/`height` alone would
----leave the window's top-left corner fixed and the float drifting off-centre
----as it grows or shrinks. A no-op on a window that isn't a float (or isn't
----valid any more) rather than an error, since the live popup's window may
----have been closed by the user while its scan was still running.
----@param winid integer
----@param lines string[]
----@return nil
-local function _resize_float(winid, lines)
-  if not vim.api.nvim_win_is_valid(winid) then return end
-  local ok, cfg = pcall(vim.api.nvim_win_get_config, winid)
-  if not (ok and cfg and cfg.relative and cfg.relative ~= "") then return end
-  local width = _content_width(lines)
-  -- +1 accounts for the winbar legend, which otherwise eats one row of
-  -- content out of a height sized exactly to the number of dashboard lines
-  -- (see `show_popup`'s own fresh-open height, which this mirrors).
-  local height = #lines + 1
-  cfg.width = width
-  cfg.height = height
-  cfg.row = math.max(0, math.floor((vim.o.lines - height) / 2 - 1))
-  cfg.col = math.max(0, math.floor((vim.o.columns - width) / 2))
-  pcall(vim.api.nvim_win_set_config, winid, cfg)
-end
-
----@private
----@internal
 ---Re-renders `_live`'s rows, in discovery order, into its popup -- resizing
 ---it to fit every time, since a row's rendered width (a branch name, a sync
 ---count) is only known once that repository's own read comes back, unlike
@@ -2259,9 +2274,10 @@ local function show_popup(lines, hls, records)
   if _live and _live.surf:is_valid() then
     local surf = _live.surf
     _live = nil
-    _resize_float(surf.winid, lines)
+    local title = M.summary(records)
+    _resize_float(surf.winid, lines, title)
     _set_buffer_lines(surf.bufnr, lines, hls)
-    surf:set_title(M.summary(records))
+    surf:set_title(title)
     _attach_row_keymaps(surf.bufnr, records, function()
       surf:close()
     end)
@@ -2269,9 +2285,10 @@ local function show_popup(lines, hls, records)
   end
   _live = nil
 
+  local title = M.summary(records)
   local surf = kit.surface.open({
     lines = lines,
-    title = M.summary(records),
+    title = title,
     filetype = "gitsuite-dashboard",
     nice_quit = true,
     enter = true,
@@ -2283,6 +2300,9 @@ local function show_popup(lines, hls, records)
     wo = { wrap = false, cursorline = true, winbar = WINBAR },
   })
   if not surf then return end
+  -- `make_scratch` sizes by the lines alone; a title wider than them (a long
+  -- page name, a running batch's "fetch 1/6") would open cut off.
+  _resize_float(surf.winid, lines, title)
   _set_buffer_lines(surf.bufnr, lines, hls)
   _attach_row_keymaps(surf.bufnr, records, function()
     surf:close()

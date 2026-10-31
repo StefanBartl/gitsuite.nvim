@@ -742,6 +742,95 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
     assert.equals(4, line_of("rb"))
     assert.truthy(row_text("rb"):find("↓7", 1, true), row_text("rb"))
   end)
+
+  -- GS: gitsuite.nvim/git-dashboard-float-wird-nicht-breiter-wenn-state-sync-spalt
+  -- -- the popup kept the width it opened with while a batch widened the
+  -- table ("⟳ fetch...", a SYNC column) and the title ("fetch 1/3"): LAST
+  -- COMMIT was cut off on the right, the title on the left.
+  it("the popup grows and shrinks with the table and the title during a batch", function()
+    actions.fetch = fake("fetch")
+    local behind = {}
+    require("gitsuite.features.dashboard.status").dashboard_one = function(path, on_done)
+      local r = record(vim.fn.fnamemodify(path, ":t"))
+      if behind[path] then
+        r.behind, r.state = behind[path], "behind"
+      end
+      on_done(r)
+    end
+    package.loaded["gitsuite.features.dashboard.view"] = nil
+    view = require("gitsuite.features.dashboard.view")
+    view.show({ record("r1"), record("r2"), record("r3") }, { output = "popup" })
+    local win = vim.api.nvim_get_current_win()
+    local buf = vim.api.nvim_win_get_buf(win)
+    -- The float is closed whatever the outcome: a leftover one with
+    -- 'winfixbuf' breaks every later case of this file.
+    local ok, err = pcall(function()
+      assert.equals("gitsuite-dashboard", vim.bo[buf].filetype)
+      local function row_of(name)
+        for _, l in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+          if l:find(name, 1, true) then return l end
+        end
+        return ""
+      end
+
+      local function title()
+        local t = vim.api.nvim_win_get_config(win).title or ""
+        if type(t) == "table" then
+          local parts = {}
+          for _, chunk in ipairs(t) do
+            parts[#parts + 1] = chunk[1]
+          end
+          t = table.concat(parts)
+        end
+        return t
+      end
+      -- Exactly as wide as `make_scratch` would open these lines (+2), or the
+      -- title if that is wider -- never cutting either off, never wider.
+      local function assert_fits(what)
+        local w = 0
+        for _, l in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+          w = math.max(w, vim.fn.strdisplaywidth(l))
+        end
+        local want = math.max(w + 2, vim.fn.strdisplaywidth(title()))
+        assert.equals(want, vim.api.nvim_win_get_config(win).width, what)
+      end
+      local function press_here(lhs)
+        for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
+          if m.lhs == lhs then return m.callback() end
+        end
+        error("no dashboard mapping for " .. lhs)
+      end
+
+      assert_fits("at open")
+      local open_width = vim.api.nvim_win_get_config(win).width
+
+      press_here("gf")
+      assert.truthy(title():find("fetch 0/3", 1, true), title())
+      assert_fits("fetch running")
+      assert.is_true(vim.api.nvim_win_get_config(win).width > open_width, "grew")
+
+      behind["/fake/r1"] = 12
+      release("fetch /fake/r1", true)
+      wait_for(function()
+        return state.phase("/fake/r1") == "done" and waiting["fetch /fake/r2"] ~= nil
+      end, "r1 done, r2 fetching")
+      assert.truthy(row_of("r1"):find("↓12", 1, true), row_of("r1"))
+      assert_fits("SYNC column")
+
+      release("fetch /fake/r2", true)
+      wait_for(function()
+        return waiting["fetch /fake/r3"] ~= nil
+      end, "r3 fetching")
+      release("fetch /fake/r3", true)
+      wait_for(function()
+        return state.bulk_verb() == nil
+      end, "bulk finished")
+      assert_fits("settled")
+    end)
+    pcall(vim.api.nvim_win_close, win, true)
+    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+    if not ok then error(err, 0) end
+  end)
 end)
 
 -- GS: gitsuite.nvim/git-dashboard-startablauf-optimieren -- the popup used to

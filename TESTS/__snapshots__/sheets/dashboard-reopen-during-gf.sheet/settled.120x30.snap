@@ -13,16 +13,16 @@ mode: n
 08|~
 09|~
 10|~
-11|~                                 ╭───GitSuite Dashboard — 6 repos · 6 out of sync────╮
-12|~                                 │    <CR> Open  │  m Mark  │  p Push  │  ? Keys     │
-13|~                                 │  REPOSITORY  BRANCH  SYNC     STATE      LAST COMM│
-14|~                                 │  alpha        main    ↓1      behind         ###  │
-15|~                                 │  bravo        main    ↓1      behind         ###  │
-16|~                                 │  charlie      main    ↓1      behind         ###  │
-17|~                                 │  delta        main    ↓1      behind         ###  │
-18|~                                 │  echo         main    ↓1      behind         ###  │
-19|~                                 │  foxtrot      main    ↓1      behind         ###  │
-20|~                                 ╰───────────────────────────────────────────────────╯
+11|~                               ╭─────GitSuite Dashboard — 6 repos · 6 out of sync──────╮
+12|~                               │      <CR> Open  │  m Mark  │  p Push  │  ? Keys       │
+13|~                               │  REPOSITORY  BRANCH  SYNC     STATE      LAST COMMIT  │
+14|~                               │  alpha        main    ↓1      behind         ###      │
+15|~                               │  bravo        main    ↓1      behind         ###      │
+16|~                               │  charlie      main    ↓1      behind         ###      │
+17|~                               │  delta        main    ↓1      behind         ###      │
+18|~                               │  echo         main    ↓1      behind         ###      │
+19|~                               │  foxtrot      main    ↓1      behind         ###      │
+20|~                               ╰───────────────────────────────────────────────────────╯
 21|~
 22|~
 23|~
@@ -44,16 +44,16 @@ mode: n
 08|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 09|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 10|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-11|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbccccccccccccccccccccccccccccccccccccccccccccbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-12|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabddddeeeeedddddddddeedddddddddeedddddddddeedddddddddbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-13|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabfffffffffffffffffffffffffffffffffffffffffffffffffffbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-14|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabgghhhhhggggggggiiiigggggggggggghhhhhhggggggggg###ggbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-15|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjjbbbbbbbbkkkkbbbbbbbbbbbbjjjjjjbbbbbbbbb###bbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-16|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjjjjbbbbbbkkkkbbbbbbbbbbbbjjjjjjbbbbbbbbb###bbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-17|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjjbbbbbbbbkkkkbbbbbbbbbbbbjjjjjjbbbbbbbbb###bbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-18|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjbbbbbbbbbkkkkbbbbbbbbbbbbjjjjjjbbbbbbbbb###bbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-19|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjjjjbbbbbbkkkkbbbbbbbbbbbbjjjjjjbbbbbbbbb###bbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-20|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+11|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbccccccccccccccccccccccccccccccccccccccccccccbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+12|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabddddddeeeeedddddddddeedddddddddeedddddddddeedddddddddddbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+13|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabfffffffffffffffffffffffffffffffffffffffffffffffffffffbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+14|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabgghhhhhggggggggiiiigggggggggggghhhhhhggggggggg###ggggggbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+15|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjjbbbbbbbbkkkkbbbbbbbbbbbbjjjjjjbbbbbbbbb###bbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+16|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjjjjbbbbbbkkkkbbbbbbbbbbbbjjjjjjbbbbbbbbb###bbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+17|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjjbbbbbbbbkkkkbbbbbbbbbbbbjjjjjjbbbbbbbbb###bbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+18|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjbbbbbbbbbkkkkbbbbbbbbbbbbjjjjjjbbbbbbbbb###bbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+19|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjjjjbbbbbbkkkkbbbbbbbbbbbbjjjjjjbbbbbbbbb###bbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+20|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 21|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 22|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 23|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
