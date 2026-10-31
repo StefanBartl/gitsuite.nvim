@@ -38,7 +38,11 @@ return {
       keep = {
         "Git",
         "MyGit",
-        "gitsuite_",
+        -- Exact names: keep entries match as prefixes, "gitsuite_" would also hide the groups one open
+        -- creates (gitsuite_plugins_report, gitsuite_lazy_sync, gitsuite_blame_<n>).
+        "gitsuite_conflict_scan",
+        "gitsuite_statusline",
+        "gitsuite_plugins_report_hl",
         "lib_kit_toast_resize",
         "\\dc",
         "\\dh",

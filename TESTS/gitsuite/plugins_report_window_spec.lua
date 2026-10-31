@@ -6,7 +6,8 @@ local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or ".
 
 local editor_scope = dofile(dir_of_spec .. "editor_scope.lua")
 describe("gitsuite.features.plugins.report_ui window", function()
-  editor_scope.install()
+  -- window.reset() first: it deletes the WinClosed handler before the report tab is closed.
+  editor_scope.install({ manual = true })
   local ui, window, keys, report
   local columns
 

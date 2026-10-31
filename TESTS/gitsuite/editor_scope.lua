@@ -5,9 +5,16 @@
 --   local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
 --   local editor_scope = dofile(dir_of_spec .. "editor_scope.lua")
 --
--- and calls `editor_scope.install()` once at the top of each top-level `describe`. Its
--- `before_each` runs before the tests' own, its `after_each` after theirs, so a test that cleans up
--- by hand is not affected; one that throws halfway no longer leaves its windows behind.
+-- and calls `editor_scope.install()` once at the top of each top-level `describe`. Hooks of one
+-- describe run in the order they were registered, outermost describe first, so both its
+-- `before_each` and its `after_each` run BEFORE the describe's own (and before those of nested
+-- describes): the snapshot is taken before the test's set-up opens anything, and the layout is put
+-- back before the test's own clean-up runs. A test that throws halfway no longer leaves its
+-- windows behind.
+--
+-- A describe whose own clean-up must run first (say `window.reset()`, which deletes the autocmds
+-- that react to its windows closing) calls `editor_scope.install({ manual = true })` and ends its
+-- own `after_each` with `editor_scope.restore()`.
 --
 -- One thing it cannot undo: `:edit {file}` in the start window's empty, unnamed buffer reuses that
 -- buffer (Vim's `curbuf_reusable()`), so wiping the file buffer later leaves the window a fresh
@@ -45,8 +52,15 @@ function M.restore()
   if not s then return end
   if vim.api.nvim_tabpage_is_valid(s.tab) then pcall(vim.api.nvim_set_current_tabpage, s.tab) end
   for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
-    if not s.tabs[tab] and #vim.api.nvim_list_tabpages() > 1 then
-      pcall(vim.cmd.tabclose, { args = { vim.api.nvim_tabpage_get_number(tab) }, bang = true })
+    -- A tab page closed earlier in this loop (or by an autocmd of one) is no longer valid.
+    if
+      not s.tabs[tab]
+      and vim.api.nvim_tabpage_is_valid(tab)
+      and #vim.api.nvim_list_tabpages() > 1
+    then
+      pcall(function()
+        vim.cmd.tabclose({ args = { vim.api.nvim_tabpage_get_number(tab) }, bang = true })
+      end)
     end
   end
   for _, win in ipairs(vim.api.nvim_list_wins()) do
@@ -64,7 +78,10 @@ function M.restore()
 end
 
 ---Register the snapshot (`before_each`) and the clean-up (`after_each`) for the enclosing describe.
-function M.install()
+---With `opts.manual` only the snapshot: the describe's own `after_each` calls `restore()` itself,
+---after its clean-up. The snapshot is replaced by the next test's `before_each`.
+---@param opts? { manual?: boolean }
+function M.install(opts)
   before_each(function()
     snap = {
       bufs = set_of(vim.api.nvim_list_bufs()),
@@ -76,6 +93,7 @@ function M.install()
     }
   end)
 
+  if opts and opts.manual then return end
   after_each(function()
     M.restore()
     snap = nil

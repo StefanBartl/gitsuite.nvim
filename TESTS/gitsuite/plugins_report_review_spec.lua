@@ -86,7 +86,8 @@ describe("report.build with before (r reads against the store as it was)", funct
 end)
 
 describe("report tab review fixes", function()
-  editor_scope.install()
+  -- window.reset() first: it deletes the WinClosed handler before the report tab is closed.
+  editor_scope.install({ manual = true })
   local F = dofile(dir_of_spec .. "plugins_fixture.lua")()
   local ui, window, model, report
 

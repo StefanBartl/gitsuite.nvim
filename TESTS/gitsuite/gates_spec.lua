@@ -45,7 +45,6 @@ describe("gitsuite.features.status.gates", function()
 
   after_each(function()
     vim.api.nvim_set_current_dir(original_cwd)
-    editor_scope.restore()
     pcall(vim.fn.delete, repo, "rf")
   end)
 

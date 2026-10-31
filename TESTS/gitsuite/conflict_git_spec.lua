@@ -192,7 +192,6 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
 
   after_each(function()
     vim.notify = original_notify
-    editor_scope.restore()
     vim.api.nvim_set_current_dir(original_cwd)
     pcall(vim.fn.delete, repo, "rf")
   end)
