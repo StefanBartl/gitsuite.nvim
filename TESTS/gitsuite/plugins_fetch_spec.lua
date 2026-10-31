@@ -298,8 +298,10 @@ describe("gitsuite.features.plugins report --fetch", function()
       plugins = { roots = { root }, sources = { "clones" }, fetch_timeout_ms = deadline_ms },
     })
     local started = vim.uv.hrtime()
-    local r = report({ mode = "pending", fetch = true, yes = true })
+    local r, err = report({ mode = "pending", fetch = true, yes = true })
     local took = (vim.uv.hrtime() - started) / 1e6
+    assert.is_nil(err)
+    assert.is_not_nil(r and r.fetched, "report has a fetch result (" .. tostring(err) .. ")")
     assert.is_true(
       took < helper_s * 1000 - 2000,
       ("answered at the deadline (took %d ms)"):format(took)
@@ -307,9 +309,9 @@ describe("gitsuite.features.plugins report --fetch", function()
     local failed = vim.tbl_map(function(f)
       return ("%s: %s"):format(f.name, f.reason)
     end, r.fetched.failed or {})
-    local detail = ("took %d ms, fetched %d, failed { %s }"):format(
+    local detail = ("took %d ms, fetched %s, failed { %s }"):format(
       took,
-      r.fetched.fetched,
+      tostring(r.fetched.fetched),
       table.concat(failed, "; ")
     )
     assert.equals(1, r.fetched.fetched, "only the fast clone fetched (" .. detail .. ")")
@@ -318,9 +320,12 @@ describe("gitsuite.features.plugins report --fetch", function()
     assert.is_truthy(r.fetched.failed[1].reason:find("timed out", 1, true), detail)
     local fast = by_name(r).fast
     assert.is_not_nil(fast, "the fast clone is in the report (" .. detail .. ")")
-    assert.equals("forward", fast.status)
-    -- wait past the helper's sleep: a survivor would have written the marker by then
-    vim.wait((helper_s + 1.5) * 1000 - took, function()
+    assert.equals("forward", fast.status, detail)
+    -- wait past the helper's sleep: a survivor would have written the marker by then.
+    -- The slow fetch was spawned at some point S and killed at S + deadline_ms <= took,
+    -- so its helper would finish at S + helper_s; waiting helper_s - deadline + 1.5 s
+    -- from here lands past that however late (under load) the slow fetch was spawned.
+    vim.wait(helper_s * 1000 - deadline_ms + 1500, function()
       return false
     end, 100)
     assert.is_nil(vim.uv.fs_stat(marker), "the helper process was killed with git")
