@@ -1373,6 +1373,114 @@ local function _pull_all(ctx)
   })
 end
 
+---@private
+---@internal
+---Where `E` can send a report, in the order they are offered.
+---@type { label: string, id: "clipboard"|"buffer"|"file" }[]
+local EXPORT_TARGETS = {
+  { label = "Clipboard", id = "clipboard" },
+  { label = "New buffer", id = "buffer" },
+  { label = "File", id = "file" },
+}
+
+---@private
+---@internal
+---Opens `lines` in a fresh scratch buffer; `q` wipes it and returns to the dashboard.
+---@param lines string[]
+---@param id string Report id, for the buffer's name
+---@param before_open? fun(): nil Closes a popup dashboard first
+---@return nil
+local function _export_to_buffer(lines, id, before_open)
+  if before_open then before_open() end
+  vim.cmd.enew()
+  local buf = vim.api.nvim_get_current_buf()
+  vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].swapfile = false
+  pcall(vim.api.nvim_buf_set_name, buf, "gitsuite://dashboard-export-" .. id)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+  if _last_view then
+    map("n", "q", function()
+      vim.cmd("bwipeout")
+      M.reopen()
+    end, { buffer = buf, nowait = true }, "Close and return to the gitsuite dashboard")
+  end
+end
+
+---@private
+---@internal
+---Writes `lines` to a path asked for, defaulting to a file under the cache directory.
+---@param lines string[]
+---@param id string Report id, for the default file name
+---@return nil
+local function _export_to_file(lines, id)
+  local default = ("%s/gitsuite/dashboard-%s.txt"):format(vim.fn.stdpath("cache"), id)
+  vim.ui.input(
+    { prompt = "Export to file: ", default = default, completion = "file" },
+    function(input)
+      if not input or input == "" then return end
+      local target = expand_path(input)
+      local ok, err = write_to_file(target, table.concat(lines, "\n") .. "\n")
+      if ok then
+        notify("Dashboard written to " .. target, 2)
+      else
+        notify("Failed to write dashboard: " .. tostring(err), 4)
+      end
+    end
+  )
+end
+
+---@private
+---@internal
+---`E`: asks which report to export (all with status, dirty, behind, ...), then
+---where to put it (clipboard, new buffer, file).
+---@param ctx DashboardRowContext
+---@return nil
+local function _export(ctx)
+  local export = require("gitsuite.features.dashboard.export")
+  if #ctx.records == 0 then
+    notify("No repositories to export", 3)
+    return
+  end
+  local reports = export.reports(ctx.records)
+  kit.select({
+    items = reports,
+    title = "Export which repositories?",
+    format_item = function(rep)
+      return rep.label
+    end,
+    on_select = function(rep)
+      if #rep.indices == 0 then
+        notify("Nothing to export: no repository is " .. rep.title, 3)
+        return
+      end
+      kit.select({
+        items = EXPORT_TARGETS,
+        title = ("Export %s to"):format(rep.title),
+        format_item = function(target)
+          return target.label
+        end,
+        on_select = function(target)
+          local lines = export.build(rep.id, ctx.records)
+          if not lines then return end
+          if target.id == "clipboard" then
+            if copy_to_clipboard(table.concat(lines, "\n")) then
+              notify(("Copied %s to the clipboard"):format(rep.label), 2)
+            else
+              notify("Failed to copy to the clipboard", 4)
+            end
+          elseif target.id == "buffer" then
+            _export_to_buffer(lines, rep.id, ctx.before_open)
+          else
+            _export_to_file(lines, rep.id)
+          end
+        end,
+      })
+    end,
+  })
+end
+
 ---Context handed to every row keymap handler.
 ---@class DashboardRowContext
 ---@field bufnr integer
@@ -1816,6 +1924,12 @@ local ROW_KEYMAPS = {
         end,
       })
     end,
+  },
+  {
+    keys = { "E" },
+    label = "E Export",
+    desc = "Export a report (all, dirty, behind, ...) to the clipboard, a new buffer or a file",
+    run = _export,
   },
   {
     keys = { "y" },

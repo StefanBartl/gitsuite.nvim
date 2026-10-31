@@ -113,6 +113,7 @@ former `:Reposcope dashboard`.
 | `<C-l>`, `<Right>` / `<C-h>`, `<Left>` | n | Switch to the next / previous configured `dashboard.groups` page (see [configuration.md](configuration.md#dashboard)) |
 | `a` | n | Add a repository or directory path to the current page (`vim.ui.input`), persisted outside `setup()` |
 | `x` | n | Remove the repository under the cursor from the current page — never touches disk |
+| `E` | n | Export a report of the page: pick what (all with status, not clean, dirty, behind with the count, ahead, diverged; each with its repository count), then where (clipboard, new buffer, file) |
 | `y` | n | Yank the repository's path |
 | `?` | n | List every one of these keys |
 | `<RightMouse>` | n, x | Context menu of the same actions as the table above — the marked repositories (or the Visual selection) when any, otherwise the row under the **mouse pointer**. Disable with `dashboard.context_menu = false` (see [configuration.md](configuration.md#dashboard)) |
