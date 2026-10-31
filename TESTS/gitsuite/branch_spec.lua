@@ -15,25 +15,43 @@ describe("gitsuite.features.branch", function()
 
   local branch
 
-  -- The live checkout's HEAD and reflog, read once before any test: the last
-  -- test proves the suite left them alone.
+  -- The live checkout's reflog of HEAD, read once before any test: the last
+  -- test proves no test checked the live checkout out. Only checkout entries
+  -- count: in a shared checkout another session may commit, amend or
+  -- `pull --rebase` while the suite runs, which appends reflog lines too.
   local live_root = vim.fs.normalize(vim.fn.fnamemodify(dir_of_spec, ":p") .. "../..")
-  ---@return string snapshot HEAD, then the reflog of HEAD ("" when there is none)
-  local function live_head_state()
-    local out = {}
-    for _, rel in ipairs({ "HEAD", "logs/HEAD" }) do
-      local r = vim.system({ "git", "-C", live_root, "rev-parse", "--git-path", rel }):wait()
-      local path = vim.trim(r.stdout or "")
-      if path ~= "" and not path:match("^%a:") and not path:match("^/") then
-        path = live_root .. "/" .. path
-      end
-      local fh = r.code == 0 and io.open(path, "rb") or nil
-      out[#out + 1] = fh and fh:read("*a") or ""
-      if fh then fh:close() end
+  ---@return string reflog the reflog of HEAD ("" when there is none)
+  local function live_reflog()
+    local r = vim.system({ "git", "-C", live_root, "rev-parse", "--git-path", "logs/HEAD" }):wait()
+    local path = vim.trim(r.stdout or "")
+    if path ~= "" and not path:match("^%a:") and not path:match("^/") then
+      path = live_root .. "/" .. path
     end
-    return table.concat(out, "\0")
+    local fh = r.code == 0 and io.open(path, "rb") or nil
+    local text = fh and fh:read("*a") or ""
+    if fh then fh:close() end
+    return text
   end
-  local live_before = live_head_state()
+  --- Checkout entries in `after` that `before` does not have. A line counts
+  --- as old when `before` holds it, so a reflog that was expired or
+  --- rewritten in between does not report its kept lines again.
+  ---@param before string
+  ---@param after string
+  ---@return string[] lines
+  local function new_checkouts(before, after)
+    local seen = {}
+    for line in before:gmatch("[^\n]+") do
+      seen[line] = true
+    end
+    local found = {}
+    for line in after:gmatch("[^\n]+") do
+      if not seen[line] and line:find("\tcheckout: moving from ", 1, true) then
+        found[#found + 1] = line
+      end
+    end
+    return found
+  end
+  local live_before = live_reflog()
 
   local original_cwd, repo
 
@@ -86,8 +104,7 @@ describe("gitsuite.features.branch", function()
 
   it("current() reports the real current branch via lib.nvim.git", function()
     local git = require("lib.nvim.git")
-    local expected = git.current_branch()
-    assert.is_not_nil(expected, "this checkout is not in detached HEAD")
+    assert.equals("main", git.current_branch(), "the throwaway repo starts on main")
   end)
 
   it("switch() does not error when the picker is dismissed (no choice made)", function()
@@ -311,8 +328,31 @@ describe("gitsuite.features.branch", function()
     end)
   end)
 
-  -- Last on purpose: the snapshot was taken before the first test.
-  it("leaves the live checkout's HEAD and reflog untouched", function()
-    assert.equals(live_before, live_head_state(), "a test checked out the live repository")
+  describe("live checkout guard", function()
+    local id =
+      "0000000000000000000000000000000000000000 1111111111111111111111111111111111111111 t <t@t> 1 +0000\t"
+    it("ignores commits, amends and rebases another session appends", function()
+      local before = id .. "commit: one\n"
+      local after = before
+        .. id
+        .. "commit (amend): one\n"
+        .. id
+        .. "pull --rebase (start): checkout origin/main\n"
+        .. id
+        .. "pull --rebase (finish): returning to refs/heads/main\n"
+      assert.same({}, new_checkouts(before, after))
+    end)
+
+    it("reports a checkout appended since the snapshot", function()
+      local before = id .. "checkout: moving from main to other\n"
+      local line = id .. "checkout: moving from other to main"
+      assert.same({ line }, new_checkouts(before, before .. id .. "commit: x\n" .. line .. "\n"))
+    end)
+
+    -- Last on purpose: the snapshot was taken before the first test.
+    it("no test checked out the live checkout", function()
+      local moved = new_checkouts(live_before, live_reflog())
+      assert.same({}, moved, "a test checked out the live repository")
+    end)
   end)
 end)
