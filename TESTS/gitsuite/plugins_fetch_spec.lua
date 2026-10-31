@@ -285,25 +285,42 @@ describe("gitsuite.features.plugins report --fetch", function()
     local slow = clone_of(bare, "slow")
     advance(bare, work, "feat: more")
     -- the transport helper sleeps, then leaves a marker: a surviving process tree
-    -- would write it after the deadline
+    -- would write it after the deadline. The deadline leaves the fast clone's fetch
+    -- room under load (it took ~3 s on a busy machine), the helper sleeps far longer.
+    local deadline_ms, helper_s = 5000, 12
     local marker = (F.tmpdir("-marker") .. "/survived"):gsub("\\", "/")
     F.git(slow, {
       "config",
       "remote.origin.uploadpack",
-      ("sleep 4; echo x > '%s'; git-upload-pack"):format(marker),
+      ("sleep %d; echo x > '%s'; git-upload-pack"):format(helper_s, marker),
     })
     require("gitsuite.config").setup({
-      plugins = { roots = { root }, sources = { "clones" }, fetch_timeout_ms = 1000 },
+      plugins = { roots = { root }, sources = { "clones" }, fetch_timeout_ms = deadline_ms },
     })
     local started = vim.uv.hrtime()
     local r = report({ mode = "pending", fetch = true, yes = true })
     local took = (vim.uv.hrtime() - started) / 1e6
-    assert.is_true(took < 4000, ("answered at the deadline (took %d ms)"):format(took))
-    assert.equals(1, r.fetched.fetched)
-    assert.equals("slow", r.fetched.failed[1].name)
-    assert.is_truthy(r.fetched.failed[1].reason:find("timed out", 1, true))
-    assert.equals("forward", by_name(r).fast.status)
-    vim.wait(5000, function()
+    assert.is_true(
+      took < helper_s * 1000 - 2000,
+      ("answered at the deadline (took %d ms)"):format(took)
+    )
+    local failed = vim.tbl_map(function(f)
+      return ("%s: %s"):format(f.name, f.reason)
+    end, r.fetched.failed or {})
+    local detail = ("took %d ms, fetched %d, failed { %s }"):format(
+      took,
+      r.fetched.fetched,
+      table.concat(failed, "; ")
+    )
+    assert.equals(1, r.fetched.fetched, "only the fast clone fetched (" .. detail .. ")")
+    assert.equals(1, #failed, "only the slow clone failed (" .. detail .. ")")
+    assert.equals("slow", r.fetched.failed[1].name, detail)
+    assert.is_truthy(r.fetched.failed[1].reason:find("timed out", 1, true), detail)
+    local fast = by_name(r).fast
+    assert.is_not_nil(fast, "the fast clone is in the report (" .. detail .. ")")
+    assert.equals("forward", fast.status)
+    -- wait past the helper's sleep: a survivor would have written the marker by then
+    vim.wait((helper_s + 1.5) * 1000 - took, function()
       return false
     end, 100)
     assert.is_nil(vim.uv.fs_stat(marker), "the helper process was killed with git")
