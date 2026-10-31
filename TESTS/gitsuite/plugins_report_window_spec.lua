@@ -218,6 +218,16 @@ describe("gitsuite.features.plugins.report_ui window", function()
     assert.equals(1, summary_lines())
   end)
 
+  it("an empty view puts the cursor on its message under a two-line summary", function()
+    vim.o.columns = 140
+    report.plugins = {}
+    ui.open(report)
+    local r = S().rendered
+    assert.equals("summary", r.items[2].kind)
+    local line = vim.api.nvim_win_get_cursor(S().list_win)[1]
+    assert.equals("No plugin changed since the last sync", r.lines[line])
+  end)
+
   it("closing the list window closes the preview with it", function()
     ui.open(report)
     local p = S().preview_win

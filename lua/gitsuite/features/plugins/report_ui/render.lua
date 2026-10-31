@@ -159,10 +159,28 @@ local function state_of(m, entry)
   return glyph(m, "other"), text.one_line(st or "unknown"), "GitSuitePluginsDim"
 end
 
+---`s` cut to at most `width` display cells, marked with "…" when cut.
+---@param s string
+---@param width integer
+---@return string
+local function fit(s, width)
+  if vim.fn.strdisplaywidth(s) <= width then return s end
+  if width < 1 then return "" end
+  local out = ""
+  for i = 0, vim.fn.strchars(s) - 1 do
+    local nxt = out .. vim.fn.strcharpart(s, i, 1)
+    if vim.fn.strdisplaywidth(nxt) > width - 1 then break end
+    out = nxt
+  end
+  return out .. "…"
+end
+
 ---The first line of every view: what the report is (`plugins updated · <date>
 ---· <view>`) and its counts. When `width` (the list window's) is too narrow
 ---for both, the counts go onto a second summary line instead of being cut off
----(the list does not wrap).
+---(the list does not wrap); when even the head is too wide (a long plugin
+---name in its detail), `<view>` gets a line of its own, cut with "…" only
+---when it alone does not fit.
 ---@param m GitSuite.ReportUi.Model
 ---@param r table builder
 ---@param what string
@@ -176,11 +194,11 @@ local function summary_line(m, r, what, opts)
     breaking = breaking + (model.breaking(m, e))
     unseen = unseen + model.unseen(m, e)
   end
-  local head = ("plugins %s · %s · %s"):format(
+  local prefix = ("plugins %s · %s"):format(
     rep.mode or "?",
-    type(rep.at) == "number" and os.date("%Y-%m-%d %H:%M", rep.at) or "?",
-    what
+    type(rep.at) == "number" and os.date("%Y-%m-%d %H:%M", rep.at) or "?"
   )
+  local head = prefix .. " · " .. what
   local counts = { ("%s changed, %s"):format(changed, plural(commits, "commit")) }
   if breaking > 0 then counts[#counts + 1] = (", %d breaking"):format(breaking) end
   if unseen > 0 then counts[#counts + 1] = (", %d unseen"):format(unseen) end
@@ -191,8 +209,11 @@ local function summary_line(m, r, what, opts)
     r.add({ kind = "summary" }, { { one, "GitSuitePluginsHeader" } })
     return
   end
-  r.add({ kind = "summary" }, { { head, "GitSuitePluginsHeader" } })
-  r.add({ kind = "summary" }, { { tail, "GitSuitePluginsHeader" } })
+  local out = { head, tail }
+  if vim.fn.strdisplaywidth(head) > width then out = { prefix, what, tail } end
+  for _, l in ipairs(out) do
+    r.add({ kind = "summary" }, { { fit(l, width), "GitSuitePluginsHeader" } })
+  end
 end
 
 ---@param m GitSuite.ReportUi.Model

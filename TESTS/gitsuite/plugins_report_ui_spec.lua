@@ -74,6 +74,38 @@ describe("gitsuite.features.plugins.report_ui", function()
       end
     end)
 
+    it("keeps a long plugin name in the detail's summary within the list's width", function()
+      local long = "nvim-treesitter-textobjects-xx" -- 30 characters
+      assert.equals(30, #long)
+      report.plugins[1].name = long
+      local r = render.render(model.show(model.new(report), { kind = "detail", name = long }), {
+        width = 62,
+      })
+      local summary = {}
+      for i = 1, #r.lines do
+        if r.items[i].kind == "summary" then
+          summary[#summary + 1] = r.lines[i]
+          assert.is_true(vim.fn.strdisplaywidth(r.lines[i]) <= 62, r.lines[i])
+        end
+      end
+      -- the name gets a line of its own, whole; the counts follow
+      assert.equals(3, #summary)
+      assert.truthy(summary[1]:find("^plugins updated · %d+%-%d+%-%d+ %d+:%d+$"), summary[1])
+      assert.equals(long, summary[2])
+      assert.equals("5 changed, 9 commits, 1 breaking, 9 unseen", summary[3])
+
+      -- a name too long even for a line of its own is cut and marked
+      local r2 = render.render(model.show(model.new(report), { kind = "detail", name = long }), {
+        width = 20,
+      })
+      for i = 1, #r2.lines do
+        if r2.items[i].kind == "summary" then
+          assert.is_true(vim.fn.strdisplaywidth(r2.lines[i]) <= 20, r2.lines[i])
+        end
+      end
+      assert.equals("nvim-treesitter-tex…", r2.lines[2])
+    end)
+
     it("starts with a summary line and lists the changed plugins, breaking first", function()
       local r = render.render(model.new(report))
       assert.truthy(r.lines[1]:find("plugins updated", 1, true), r.lines[1])

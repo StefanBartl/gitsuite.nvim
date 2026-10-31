@@ -123,15 +123,19 @@ local function item_at_cursor()
   return S.rendered.items[line]
 end
 
----The first line worth putting the cursor on: the first plugin or commit.
+---The first line worth putting the cursor on: the first plugin or commit;
+---without one, the line after the summary (one or more lines) and its blank
+---spacer, where an empty view says why it is empty.
 ---@param rendered GitSuite.ReportUi.Rendered
 ---@return integer
 local function first_item_line(rendered)
+  local after_summary = 1
   for i = 1, #rendered.lines do
     local k = rendered.items[i].kind
     if k == "plugin" or k == "commit" then return i end
+    if k == "summary" then after_summary = i + 2 end
   end
-  return math.min(3, #rendered.lines)
+  return math.max(1, math.min(after_summary, #rendered.lines))
 end
 
 ---The preview's file loader (one per Neovim; `M.set_loader` for specs).
