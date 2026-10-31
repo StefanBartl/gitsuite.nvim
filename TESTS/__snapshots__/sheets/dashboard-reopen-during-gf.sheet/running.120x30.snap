@@ -1,0 +1,66 @@
+testing.nvim screen v1
+size: 120x30
+cursor: 4,2
+mode: n
+--- text
+01|
+02|~
+03|~
+04|~
+05|~
+06|~
+07|~
+08|~
+09|~
+10|~
+11|~                                  ╭────GitSuite Dashboard — 6 repos · fetch 0/6─────╮
+12|~                                  │   <CR> Open  │  m Mark  │  p Push  │  ? Keys    │
+13|~                                  │  REPOSITORY  BRANCH      STATE       LAST COMMIT│
+14|~                                  │  alpha        main     ⟳ fetch...        ###    │
+15|~                                  │  bravo        main     ⟳ fetch...        ###    │
+16|~                                  │  charlie      main     ⟳ fetch...        ###    │
+17|~                                  │  delta        main     ⟳ fetch...        ###    │
+18|~                                  │  echo         main   · fetch queued      ###    │
+19|~                                  │  foxtrot      main   · fetch queued      ###    │
+20|~                                  ╰─────────────────────────────────────────────────╯
+21|~
+22|~
+23|~
+24|~
+25|~
+26|~
+27|~
+28|~
+29|[No Name]
+30|
+--- attrs
+01|
+02|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+03|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+04|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+05|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+06|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+07|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+08|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+09|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+10|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+11|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbccccccccccccccccccccccccccccccccccccccccbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+12|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabdddeeeeedddddddddeedddddddddeedddddddddeeddddddddbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+13|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabfffffffffffffffffffffffffffffffffffffffffffffffffbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+14|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabgghhhhhggggggggiiiiggggghhhhhhhhhhgggggggg###ggggbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+15|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjjbbbbbbbbkkkkbbbbbjjjjjjjjjjbbbbbbbb###bbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+16|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjjjjbbbbbbkkkkbbbbbjjjjjjjjjjbbbbbbbb###bbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+17|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjjbbbbbbbbkkkkbbbbbjjjjjjjjjjbbbbbbbb###bbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+18|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjbbbbbbbbbkkkkbbbllllllllllllllbbbbbb###bbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+19|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbjjjjjjjbbbbbbkkkkbbbllllllllllllllbbbbbb###bbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+20|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+21|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+22|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+23|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+24|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+25|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+26|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+27|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+28|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+29|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm
+30|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
