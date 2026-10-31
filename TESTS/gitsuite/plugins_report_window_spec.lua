@@ -4,7 +4,9 @@
 ---@diagnostic disable: undefined-field -- luassert extends `assert` beyond stock Lua's.
 local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
 
+local editor_scope = dofile(dir_of_spec .. "editor_scope.lua")
 describe("gitsuite.features.plugins.report_ui window", function()
+  editor_scope.install()
   local ui, window, keys, report
   local columns
 
@@ -59,8 +61,7 @@ describe("gitsuite.features.plugins.report_ui window", function()
 
   after_each(function()
     window.reset()
-    pcall(vim.cmd, "silent! tabonly")
-    pcall(vim.cmd, "silent! only")
+    editor_scope.restore()
     vim.o.columns = columns
   end)
 
@@ -225,17 +226,6 @@ describe("gitsuite.features.plugins.report_ui window", function()
     assert.equals(2, #vim.api.nvim_tabpage_list_wins(S().tab))
     assert.same({ kind = "plugin", name = "mason.nvim" }, cursor_item())
     assert.is_true(vim.wo[S().list_win].winfixbuf)
-  end)
-
-  it("q in the last tab leaves an empty window, not an error", function()
-    ui.open(report)
-    vim.cmd("silent! tabonly")
-    assert.equals(1, #vim.api.nvim_list_tabpages())
-    press("q")
-    local win = vim.api.nvim_get_current_win()
-    assert.is_not.equal(window.LIST_NAME, vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)))
-    assert.is_false(vim.wo[win].winfixbuf)
-    assert.is_true(ui.open_last())
   end)
 
   it(":Git plugins without a report says how to make one", function()

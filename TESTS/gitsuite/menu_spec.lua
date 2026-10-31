@@ -5,7 +5,9 @@
 -- covers the "installed" ones.
 ---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
+local editor_scope = dofile(dir_of_spec .. "editor_scope.lua")
 describe("gitsuite.integrations.menu", function()
+  editor_scope.install()
   local G = dofile(dir_of_spec .. "spec_guard.lua")()
   G.install({
     { vim, "cmd" },
@@ -103,7 +105,7 @@ describe("gitsuite.integrations.menu", function()
 
   it("routes to blame.line() through the real :Git dispatch", function()
     local git = require("lib.nvim.git")
-    vim.cmd("edit " .. vim.fn.fnameescape(vim.fn.getcwd() .. "/README.md"))
+    editor_scope.open_file(vim.fn.getcwd() .. "/README.md")
     local bufnr = vim.api.nvim_get_current_buf()
 
     local items = menu.items()

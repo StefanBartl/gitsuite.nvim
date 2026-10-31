@@ -7,7 +7,9 @@
 -- insights.nvim's own test suite). `lint`/`spell` need no soft dependency.
 ---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
+local editor_scope = dofile(dir_of_spec .. "editor_scope.lua")
 describe("gitsuite.features.status.gates", function()
+  editor_scope.install()
   local G = dofile(dir_of_spec .. "spec_guard.lua")()
   G.install({
     { vim, "notify" },
@@ -43,7 +45,7 @@ describe("gitsuite.features.status.gates", function()
 
   after_each(function()
     vim.api.nvim_set_current_dir(original_cwd)
-    vim.cmd("silent! %bwipeout!")
+    editor_scope.restore()
     pcall(vim.fn.delete, repo, "rf")
   end)
 
@@ -152,7 +154,7 @@ describe("gitsuite.features.status.gates", function()
       vim.fn.writefile({ "content" }, open_path)
       vim.fn.writefile({ "content" }, closed_path)
 
-      vim.cmd("edit " .. vim.fn.fnameescape(open_path))
+      editor_scope.open_file(open_path)
       local bufnr = vim.api.nvim_get_current_buf()
       local ns = vim.api.nvim_create_namespace("gitsuite_gates_spec")
       vim.diagnostic.set(ns, bufnr, {

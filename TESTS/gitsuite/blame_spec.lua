@@ -2,14 +2,16 @@
 -- repo's own tracked README.md (real git history, no fixture needed).
 ---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
+local editor_scope = dofile(dir_of_spec .. "editor_scope.lua")
 describe("gitsuite.features.blame", function()
+  editor_scope.install()
   local blame
   local bufnr
 
   before_each(function()
     package.loaded["gitsuite.features.blame"] = nil
     blame = require("gitsuite.features.blame")
-    vim.cmd("edit " .. vim.fn.fnameescape(vim.fn.getcwd() .. "/README.md"))
+    editor_scope.open_file(vim.fn.getcwd() .. "/README.md")
     bufnr = vim.api.nvim_get_current_buf()
     vim.api.nvim_win_set_cursor(0, { 1, 0 })
   end)
@@ -107,6 +109,7 @@ end)
 -- is known exactly (two commits by two authors, one uncommitted edit), a path
 -- with a space, and -- unlike the block above -- no buffer anywhere.
 describe("gitsuite.features.blame.for_location", function()
+  editor_scope.install()
   local G = dofile(dir_of_spec .. "spec_guard.lua")()
   G.install({
     { vim, "notify" },
@@ -248,7 +251,7 @@ describe("gitsuite.features.blame.for_location", function()
     vim.notify = function(msg)
       notes[#notes + 1] = msg
     end
-    vim.cmd("edit " .. vim.fn.fnameescape(repo .. "/sub dir/a b.txt"))
+    editor_scope.open_file(repo .. "/sub dir/a b.txt")
     local bufnr = vim.api.nvim_get_current_buf()
 
     vim.api.nvim_win_set_cursor(0, { 2, 0 })

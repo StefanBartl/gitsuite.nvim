@@ -23,10 +23,31 @@ return {
     -- (`__gitsuite_*_scratch.md`) into the live repo root instead of a tempname() directory; running files
     -- in parallel can even see each other's file.
     fs = "warn",
-    -- "warn": diff_spec and hunk_spec leave kit floating windows and their autocmd groups/timers open (real);
-    -- the css* highlight groups and the 'syntax' option are runtime noise of loading a filetype (not a leak).
-    -- The plugin's own setup() state (commands, keymaps, autocmds) is harmless under isolated = "file".
-    state = "warn",
+    -- "error": the suite leaves no state behind. Every spec that opens windows or buffers closes and wipes
+    -- them (TESTS/gitsuite/editor_scope.lua). `keep` names what is the plugin's own on purpose and lives as
+    -- long as its module (under isolated = "file" it dies with the spec file's editor):
+    --   * setup() is one-shot (later calls are no-ops): the :Git tree, :GitsuiteLazygit{Badd,Replace}, the
+    --     default <leader> keymaps (\dc \dh \di \dv \gb \lg) and the gitsuite_conflict_scan autocmds; a spec
+    --     that deleted them would leave the next one a plugin that believes it is set up. menu_spec
+    --     registers the tree under a custom name (:MyGit) the same way.
+    --   * module-load autocmds: gitsuite_statusline (BufWipeout cache), GitsuiteDashboardHighlights and
+    --     gitsuite_plugins_report_hl (ColorScheme re-link), lib.nvim's lib_kit_toast_resize (VimResized):
+    --     the module stays in package.loaded, deleting its group would break it for the rest of the file.
+    state = {
+      mode = "error",
+      keep = {
+        "Git",
+        "MyGit",
+        "gitsuite_",
+        "lib_kit_toast_resize",
+        "\\dc",
+        "\\dh",
+        "\\di",
+        "\\dv",
+        "\\gb",
+        "\\lg",
+      },
+    },
     scheduled_error = "error",
     prompt = "error",
     deprecation = "error",

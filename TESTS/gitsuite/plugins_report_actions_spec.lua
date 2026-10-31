@@ -18,7 +18,9 @@ local function with(mod, key, value, fn)
   assert(ok, err)
 end
 
+local editor_scope = dofile(dir_of_spec .. "editor_scope.lua")
 describe("gitsuite.features.plugins.report_ui.actions (pure)", function()
+  editor_scope.install()
   local actions, model, links, report, m
   local opened
 
@@ -114,6 +116,7 @@ describe("gitsuite.features.plugins.report_ui.actions (pure)", function()
 end)
 
 describe("gitsuite.features.plugins.report_ui.actions against real clones", function()
+  editor_scope.install()
   local F = dofile(dir_of_spec .. "plugins_fixture.lua")()
   local actions = require("gitsuite.features.plugins.report_ui.actions")
   local links = require("gitsuite.features.plugins.links")
@@ -152,6 +155,7 @@ describe("gitsuite.features.plugins.report_ui.actions against real clones", func
 end)
 
 describe("gitsuite.features.plugins.gitlog allows status for S", function()
+  editor_scope.install()
   local gitlog = require("gitsuite.features.plugins.gitlog")
 
   it("passes status --short --branch, and nothing of status anywhere else", function()
@@ -163,6 +167,7 @@ describe("gitsuite.features.plugins.gitlog allows status for S", function()
 end)
 
 describe("gitsuite.features.plugins.report_ui opening keys in the tab", function()
+  editor_scope.install()
   local ui, window, report, seen_path
   local links, view, lazygit, kit
 
@@ -285,6 +290,10 @@ describe("gitsuite.features.plugins.report_ui opening keys in the tab", function
     local dir = F.tmpdir("-clone")
     F.write(dir .. "/CHANGELOG.md", "# Changes\n")
     report.plugins[2].dir = dir
+    -- The origin window shows a named buffer: `:edit` would otherwise reuse the editor's empty
+    -- start buffer for the CHANGELOG, and that one cannot be wiped afterwards.
+    F.write(dir .. "/start.txt", "start\n")
+    editor_scope.open_file(dir .. "/start.txt")
     local origin = vim.api.nvim_get_current_tabpage()
     ui.open(report, { seen_path = seen_path })
     local report_tab = S().tab
@@ -294,7 +303,7 @@ describe("gitsuite.features.plugins.report_ui opening keys in the tab", function
     assert.equals("# Changes", vim.api.nvim_get_current_line())
     assert.is_false(vim.bo.modifiable)
     assert.equals(2, #vim.api.nvim_tabpage_list_wins(report_tab), "the report tab is untouched")
-    vim.cmd("bwipeout!")
+    editor_scope.restore()
     F.cleanup()
   end)
 

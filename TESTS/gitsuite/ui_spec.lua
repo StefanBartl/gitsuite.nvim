@@ -11,7 +11,9 @@
 -- is present but stubs `jobstart`, so it still never starts a process.
 ---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
+local editor_scope = dofile(dir_of_spec .. "editor_scope.lua")
 describe("gitsuite.features.ui", function()
+  editor_scope.install()
   local G = dofile(dir_of_spec .. "spec_guard.lua")()
   G.install({
     { vim.fn, "executable", "jobstart" },

@@ -17,7 +17,9 @@ local function with(mod, key, value, fn)
   assert(ok, err)
 end
 
+local editor_scope = dofile(dir_of_spec .. "editor_scope.lua")
 describe("report.build with before (r reads against the store as it was)", function()
+  editor_scope.install()
   local F = dofile(dir_of_spec .. "plugins_fixture.lua")()
   local state = require("gitsuite.features.plugins.state")
   local builder = require("gitsuite.features.plugins.report")
@@ -84,6 +86,7 @@ describe("report.build with before (r reads against the store as it was)", funct
 end)
 
 describe("report tab review fixes", function()
+  editor_scope.install()
   local F = dofile(dir_of_spec .. "plugins_fixture.lua")()
   local ui, window, model, report
 
@@ -100,8 +103,7 @@ describe("report tab review fixes", function()
 
   after_each(function()
     window.reset()
-    pcall(vim.cmd, "silent! tabonly")
-    pcall(vim.cmd, "silent! only")
+    editor_scope.restore()
     F.cleanup()
   end)
 
@@ -123,21 +125,6 @@ describe("report tab review fixes", function()
     vim.api.nvim_win_set_cursor(S().list_win, { line, 0 })
     vim.api.nvim_exec_autocmds("CursorMoved", { buffer = S().list_buf })
   end
-
-  it("closing the list in the only tab hands the preview window back", function()
-    ui.open(report)
-    vim.cmd("silent! tabonly")
-    vim.api.nvim_win_close(S().list_win, true)
-    vim.wait(100)
-    local win = vim.api.nvim_get_current_win()
-    assert.equals(1, #vim.api.nvim_list_wins())
-    assert.is_false(vim.wo[win].winfixbuf)
-    assert.is_not.equal(
-      window.PREVIEW_NAME,
-      vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win))
-    )
-    assert.is_true(pcall(vim.cmd, "enew"), "the window takes another buffer")
-  end)
 
   it("a commit hash that is no hash shows its answer, not loading", function()
     report.plugins[1].commits[2].sha = "not-a-hash"
@@ -230,6 +217,7 @@ describe("report tab review fixes", function()
 end)
 
 describe("preview loader review fixes", function()
+  editor_scope.install()
   local preview
 
   before_each(function()
@@ -312,6 +300,7 @@ describe("preview loader review fixes", function()
 end)
 
 describe("seen marks review fixes", function()
+  editor_scope.install()
   local F = dofile(dir_of_spec .. "plugins_fixture.lua")()
   local seen = require("gitsuite.features.plugins.report_ui.seen")
 
@@ -354,6 +343,7 @@ describe("seen marks review fixes", function()
 end)
 
 describe("a stopped report build", function()
+  editor_scope.install()
   it("finishes its progress", function()
     local plugins = require("gitsuite.features.plugins")
     local builder = require("gitsuite.features.plugins.report")

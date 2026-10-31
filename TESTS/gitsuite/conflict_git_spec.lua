@@ -18,7 +18,9 @@ local FILE = "conflicted file.txt" -- a space on purpose
 
 ---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
 local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
+local editor_scope = dofile(dir_of_spec .. "editor_scope.lua")
 describe("gitsuite.features.conflict against real `git merge` conflicts", function()
+  editor_scope.install()
   local G = dofile(dir_of_spec .. "spec_guard.lua")()
   G.install({
     { vim, "notify" },
@@ -147,8 +149,8 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
   ---@param path string
   ---@return integer bufnr
   local function open(path)
-    vim.cmd("silent! %bwipeout!")
-    vim.cmd.edit(vim.fn.fnameescape(path))
+    editor_scope.restore()
+    editor_scope.open_file(path)
     return vim.api.nvim_get_current_buf()
   end
 
@@ -190,7 +192,7 @@ describe("gitsuite.features.conflict against real `git merge` conflicts", functi
 
   after_each(function()
     vim.notify = original_notify
-    vim.cmd("silent! %bwipeout!")
+    editor_scope.restore()
     vim.api.nvim_set_current_dir(original_cwd)
     pcall(vim.fn.delete, repo, "rf")
   end)

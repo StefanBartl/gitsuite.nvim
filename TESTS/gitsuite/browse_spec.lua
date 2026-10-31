@@ -6,14 +6,17 @@
 -- parse_remote() grammar moved to lib.nvim (GS-16) and is covered there by
 -- lib.nvim's TESTS/git_remote_spec.lua.
 ---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
+local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
+local editor_scope = dofile(dir_of_spec .. "editor_scope.lua")
 describe("gitsuite.features.browse", function()
+  editor_scope.install()
   local browse
   local bufnr
 
   before_each(function()
     package.loaded["gitsuite.features.browse"] = nil
     browse = require("gitsuite.features.browse")
-    vim.cmd("edit " .. vim.fn.fnameescape(vim.fn.getcwd() .. "/README.md"))
+    editor_scope.open_file(vim.fn.getcwd() .. "/README.md")
     bufnr = vim.api.nvim_get_current_buf()
   end)
 
@@ -57,7 +60,7 @@ describe("gitsuite.features.browse", function()
     vim.api.nvim_set_current_dir(dir)
 
     local ok, err = pcall(function()
-      vim.cmd("edit " .. vim.fn.fnameescape(scratch))
+      editor_scope.open_file(scratch)
       assert.is_true(pcall(browse.file))
     end)
 

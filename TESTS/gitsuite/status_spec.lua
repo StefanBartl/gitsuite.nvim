@@ -1,7 +1,10 @@
 -- TESTS/gitsuite/status_spec.lua -- gitsuite.features.status against this
 -- repo's own real git state, no fixture needed.
 ---@diagnostic disable: undefined-field -- luassert extends `assert` (assert.is_nil, assert.equals, ...) beyond stock Lua's; the test body itself is the guard, so one disable per file beats one disable-next-line per assertion (LLS-40/42 discipline).
+local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
+local editor_scope = dofile(dir_of_spec .. "editor_scope.lua")
 describe("gitsuite.features.status", function()
+  editor_scope.install()
   local status
 
   before_each(function()
