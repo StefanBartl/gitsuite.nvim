@@ -1,15 +1,15 @@
 testing.nvim screen v1
 size: 160x40
-cursor: 6,1
+cursor: 7,1
 mode: n
 --- text
 01| tab 2 of 2
 02| <CR> open  │  <BS> back  │  D digest  │  ]b breaking  │  ? keys       │feat(picker)!: drop the old layout API
-03|plugins updated · ################ · breaking digest · 3 changed, 6 com│Ada · 2026-09-21 · 8827b77fe3506a85de2437b7305fb67149fff6c9
-04|                                                                       │! sure  (bang, footer)
-05|BREAKING (1)                                                           │
-06|  • telescope.nvim  8827b77 feat(picker)!: drop the old layout API     │BREAKING CHANGE: layout_strategy is gone.
-07|~                                                                      │Use layout_config instead.
+03|plugins updated · ################ · breaking digest                   │Ada · 2026-09-21 · 8827b77fe3506a85de2437b7305fb67149fff6c9
+04|3 changed, 6 commits, 1 breaking, 6 unseen                             │! sure  (bang, footer)
+05|                                                                       │
+06|BREAKING (1)                                                           │BREAKING CHANGE: layout_strategy is gone.
+07|  • telescope.nvim  8827b77 feat(picker)!: drop the old layout API     │Use layout_config instead.
 08|~                                                                      │
 09|~                                                                      │Files (1)  +1 -0
 10|~                                                                      │  A +1 -0  lua/telescope/layout.lua
@@ -46,11 +46,11 @@ mode: n
 --- attrs
 01|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 02|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcdddddddddddddddddddddddddddddddddddddd
-03|dddddddddddddddddd################dddddddddddddddddddddddddddddddddddddceee                ffffffffffffffffffffffffffffffffffffffff
-04|                                                                       cgggggg
-05|dddddddddddd                                                           c
-06|hhihiiiiiiiiiiiiiihhjjjjjjjhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhc
-07|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkc
+03|dddddddddddddddddd################dddddddddddddddddd                   ceee                ffffffffffffffffffffffffffffffffffffffff
+04|dddddddddddddddddddddddddddddddddddddddddd                             cgggggg
+05|                                                                       c
+06|dddddddddddd                                                           c
+07|hhihiiiiiiiiiiiiiihhjjjjjjjhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhc
 08|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkc
 09|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkcdddddddddddddddd
 10|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkc  f lllll

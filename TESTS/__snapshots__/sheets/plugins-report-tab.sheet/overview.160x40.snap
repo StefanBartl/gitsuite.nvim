@@ -1,18 +1,18 @@
 testing.nvim screen v1
 size: 160x40
-cursor: 5,1
+cursor: 6,1
 mode: n
 --- text
 01| tab 2 of 2
 02| <CR> open  │  D digest  │  s sort  │  ]b breaking  │  ? keys          │Move to a commit to see its message here
-03|plugins updated · ################ · overview · 3 changed, 6 commits, 1│~
-04|                                                                       │~
-05|! breaking  telescope.nvim  3237450..19281ca  3 commits, • 3 unseen    │~
-06|+ new       fresh.nvim      a0c0eb1                                    │~
-07|↑ updated   mason.nvim      405f8bf..84b10f7  3 commits, • 3 unseen    │~
-08|                                                                       │~
-09|1 unchanged (A lists them)                                             │~
-10|~                                                                      │~
+03|plugins updated · ################ · overview                          │~
+04|3 changed, 6 commits, 1 breaking, 6 unseen                             │~
+05|                                                                       │~
+06|! breaking  telescope.nvim  3237450..19281ca  3 commits, • 3 unseen    │~
+07|+ new       fresh.nvim      a0c0eb1                                    │~
+08|↑ updated   mason.nvim      405f8bf..84b10f7  3 commits, • 3 unseen    │~
+09|                                                                       │~
+10|1 unchanged (A lists them)                                             │~
 11|~                                                                      │~
 12|~                                                                      │~
 13|~                                                                      │~
@@ -46,14 +46,14 @@ mode: n
 --- attrs
 01|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 02|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbc
-03|dddddddddddddddddd################dddddddddddddddddddddddddddddddddddddceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-04|                                                                       ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-05|fffffffffffghhhhhhhhhhhhhhggiiiiiiiiiiiiiiiiggggggggggggghhhhhhhhhhggggceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-06|jjjjjjjjjjj kkkkkkkkkkkkkk  lllllll                                    ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-07|jjjjjjjjjjj kkkkkkkkkkkkkk  llllllllllllllll             kkkkkkkkkk    ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-08|                                                                       ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-09|mmmmmmmmmmmmmmmmmmmmmmmmmm                                             ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-10|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+03|dddddddddddddddddd################ddddddddddd                          ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+04|dddddddddddddddddddddddddddddddddddddddddd                             ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+05|                                                                       ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+06|fffffffffffghhhhhhhhhhhhhhggiiiiiiiiiiiiiiiiggggggggggggghhhhhhhhhhggggceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+07|jjjjjjjjjjj kkkkkkkkkkkkkk  lllllll                                    ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+08|jjjjjjjjjjj kkkkkkkkkkkkkk  llllllllllllllll             kkkkkkkkkk    ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+09|                                                                       ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+10|mmmmmmmmmmmmmmmmmmmmmmmmmm                                             ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 11|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 12|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 13|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

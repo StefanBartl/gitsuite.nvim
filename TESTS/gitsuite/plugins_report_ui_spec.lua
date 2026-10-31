@@ -44,6 +44,36 @@ describe("gitsuite.features.plugins.report_ui", function()
   end)
 
   describe("overview", function()
+    it("breaks the summary onto a second line when the list is too narrow for it", function()
+      local wide = render.render(model.new(report), { width = 200 })
+      assert.equals("summary", wide.items[1].kind)
+      assert.equals("blank", wide.items[2].kind)
+      local full = wide.lines[1]
+
+      local r = render.render(model.new(report), { width = 71 })
+      assert.equals("summary", r.items[1].kind)
+      assert.equals("summary", r.items[2].kind)
+      assert.equals("blank", r.items[3].kind)
+      assert.truthy(r.lines[1]:find("plugins updated", 1, true), r.lines[1])
+      assert.truthy(r.lines[1]:find("· overview$"), r.lines[1])
+      assert.equals("5 changed, 9 commits, 1 breaking, 9 unseen", r.lines[2])
+      assert.equals(full, r.lines[1] .. " · " .. r.lines[2])
+      for i = 1, 2 do
+        assert.is_true(vim.fn.strdisplaywidth(r.lines[i]) <= 71, r.lines[i])
+        assert.truthy(hls(r, i - 1).GitSuitePluginsHeader, "line " .. i)
+      end
+      -- the plugins are still all there, the cursor key still found
+      assert.same(plugin_names(wide), plugin_names(r))
+      assert.is_not_nil(render.find(r, { name = "telescope.nvim" }))
+
+      -- the digest and a plugin's detail break the same way
+      for _, view in ipairs({ { kind = "digest" }, { kind = "detail", name = "telescope.nvim" } }) do
+        local v = render.render(model.show(model.new(report), view), { width = 71 })
+        assert.equals("summary", v.items[2].kind, view.kind)
+        assert.equals("5 changed, 9 commits, 1 breaking, 9 unseen", v.lines[2], view.kind)
+      end
+    end)
+
     it("starts with a summary line and lists the changed plugins, breaking first", function()
       local r = render.render(model.new(report))
       assert.truthy(r.lines[1]:find("plugins updated", 1, true), r.lines[1])

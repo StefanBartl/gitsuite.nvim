@@ -3,7 +3,8 @@
 --- out. Pure -- no buffer, no window, no process -- so every view is tested
 --- against a fixture report.
 ---
----   * `lines`  the buffer text; the first line is always a summary of the view;
+---   * `lines`  the buffer text; the first line is always a summary of the view
+---              (two lines when the list is too narrow for it, `opts.width`);
 ---   * `marks`  highlights, `{ line, col, end_col, hl }` (0-based line, byte
 ---              columns), applied by the window as extmarks;
 ---   * `items`  what a line stands for, by key (`{ kind, name?, sha? }`), indexed
@@ -52,6 +53,9 @@ end
 ---@field col integer      byte column, 0-based
 ---@field end_col integer  exclusive
 ---@field hl string
+
+---@class GitSuite.ReportUi.RenderOpts
+---@field width? integer  The list window's width: a summary wider than it takes two lines.
 
 ---@class GitSuite.ReportUi.Rendered
 ---@field lines string[]
@@ -155,11 +159,15 @@ local function state_of(m, entry)
   return glyph(m, "other"), text.one_line(st or "unknown"), "GitSuitePluginsDim"
 end
 
----The first line of every view.
+---The first line of every view: what the report is (`plugins updated · <date>
+---· <view>`) and its counts. When `width` (the list window's) is too narrow
+---for both, the counts go onto a second summary line instead of being cut off
+---(the list does not wrap).
 ---@param m GitSuite.ReportUi.Model
 ---@param r table builder
 ---@param what string
-local function summary_line(m, r, what)
+---@param opts? GitSuite.ReportUi.RenderOpts
+local function summary_line(m, r, what, opts)
   local rep = m.report
   local changed, commits, breaking, unseen = 0, 0, 0, 0
   for _, e in ipairs(model.entries(m)) do
@@ -168,24 +176,31 @@ local function summary_line(m, r, what)
     breaking = breaking + (model.breaking(m, e))
     unseen = unseen + model.unseen(m, e)
   end
-  local parts = {
-    ("plugins %s · %s · %s"):format(
-      rep.mode or "?",
-      type(rep.at) == "number" and os.date("%Y-%m-%d %H:%M", rep.at) or "?",
-      what
-    ),
-    (" · %s changed, %s"):format(changed, plural(commits, "commit")),
-  }
-  if breaking > 0 then parts[#parts + 1] = (", %d breaking"):format(breaking) end
-  if unseen > 0 then parts[#parts + 1] = (", %d unseen"):format(unseen) end
-  r.add({ kind = "summary" }, { { table.concat(parts), "GitSuitePluginsHeader" } })
+  local head = ("plugins %s · %s · %s"):format(
+    rep.mode or "?",
+    type(rep.at) == "number" and os.date("%Y-%m-%d %H:%M", rep.at) or "?",
+    what
+  )
+  local counts = { ("%s changed, %s"):format(changed, plural(commits, "commit")) }
+  if breaking > 0 then counts[#counts + 1] = (", %d breaking"):format(breaking) end
+  if unseen > 0 then counts[#counts + 1] = (", %d unseen"):format(unseen) end
+  local tail = table.concat(counts)
+  local one = head .. " · " .. tail
+  local width = opts and opts.width
+  if type(width) ~= "number" or vim.fn.strdisplaywidth(one) <= width then
+    r.add({ kind = "summary" }, { { one, "GitSuitePluginsHeader" } })
+    return
+  end
+  r.add({ kind = "summary" }, { { head, "GitSuitePluginsHeader" } })
+  r.add({ kind = "summary" }, { { tail, "GitSuitePluginsHeader" } })
 end
 
 ---@param m GitSuite.ReportUi.Model
+---@param opts? GitSuite.ReportUi.RenderOpts
 ---@return GitSuite.ReportUi.Rendered
-function M.render_overview(m)
+function M.render_overview(m, opts)
   local r = builder()
-  summary_line(m, r, "overview")
+  summary_line(m, r, "overview", opts)
   r.blank()
 
   local entries = model.entries(m)
@@ -286,10 +301,11 @@ local function commit_row(m, r, name, c, opts)
 end
 
 ---@param m GitSuite.ReportUi.Model
+---@param opts? GitSuite.ReportUi.RenderOpts
 ---@return GitSuite.ReportUi.Rendered
-function M.render_digest(m)
+function M.render_digest(m, opts)
   local r = builder()
-  summary_line(m, r, "breaking digest")
+  summary_line(m, r, "breaking digest", opts)
 
   local tiers = {
     { key = "sure", title = "BREAKING" },
@@ -334,18 +350,19 @@ function M.render_digest(m)
 end
 
 ---@param m GitSuite.ReportUi.Model
+---@param opts? GitSuite.ReportUi.RenderOpts
 ---@return GitSuite.ReportUi.Rendered
-function M.render_detail(m)
+function M.render_detail(m, opts)
   local r = builder()
   local entry = m.view.kind == "detail" and model.entry(m, m.view.name) or nil
   if not entry then
-    summary_line(m, r, "detail")
+    summary_line(m, r, "detail", opts)
     r.blank()
     r.add({ kind = "blank" }, { { "This plugin is not in the report", "GitSuitePluginsDim" } })
     return r
   end
   local name = text.one_line(entry.name)
-  summary_line(m, r, name)
+  summary_line(m, r, name, opts)
   r.blank()
 
   local g, word, hl = state_of(m, entry)
@@ -578,11 +595,12 @@ end
 
 ---The view the model shows.
 ---@param m GitSuite.ReportUi.Model
+---@param opts? GitSuite.ReportUi.RenderOpts
 ---@return GitSuite.ReportUi.Rendered
-function M.render(m)
-  if m.view.kind == "digest" then return M.render_digest(m) end
-  if m.view.kind == "detail" then return M.render_detail(m) end
-  return M.render_overview(m)
+function M.render(m, opts)
+  if m.view.kind == "digest" then return M.render_digest(m, opts) end
+  if m.view.kind == "detail" then return M.render_detail(m, opts) end
+  return M.render_overview(m, opts)
 end
 
 ---Where the commit `sha` of plugin `name` stands in its update: `i` of `n`,

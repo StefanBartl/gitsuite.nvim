@@ -5,33 +5,33 @@ mode: n
 --- text
 01| tab 2 of 2
 02| <CR> open  │  D digest  │  s sort  │  ]b breaking  │  ? keys          │Move to a commit to see its message here
-03|plugins updated · ################ · overview · 3 changed, 6 commits, 1│~
-04|                                                                       │~
-05|! breaking  telescope.nvim  3237450..19281ca  3 commits                │~
-06|╭─────────────────────────────────────────────plugins report─────────────────────────────────────────────╮
-07|│ <CR>  On a plugin: its detail. On a commit in the digest: its plugin's detail, cursor on the commit    │
-08|│ D  Breaking digest: the breaking commits of every plugin in one list                                   │
-09|│ s  Cycle the sort: breaking first, name, number of commits, time of the update                         │
-10|│ A  List the unchanged plugins too, or count them again                                                 │
-11|│ ]b  Next / previous breaking commit not marked as seen                                                 │
-12|│ m  Mark the commit under the cursor as seen, or every new commit of the plugin under it; again: unmark │
-13|│ M  Mark every commit this view lists as seen                                                           │
-14|│ o  Open in the browser: the commit, or on a plugin the compare page of its update; counts as seen      │
-15|│ go  Open the compare page of the plugin's update, also from a commit line                              │
-16|│ gy  Copy the URL `o` would open                                                                        │
-17|│ y  Copy the short / full hash (on a plugin: the commit its update ended on)                            │
-18|│ L  lazygit in the plugin's clone (lazygit can change the clone; the report itself never does)          │
-19|│ S  The clone's git status and last five commits, read only                                             │
-20|│ C  The plugin's CHANGELOG, in the tab the report was opened from                                       │
-21|│ Q  The breaking commits into the quickfix list, opened in the tab the report was opened from           │
-22|│ F  Jump to a plugin or a commit by name (picker)                                                       │
-23|│ r  Read the clone under the cursor again (a failed one, say); for this tab only, nothing is stored     │
-24|│ R  Build a new report (same mode), store it and show it                                                │
-25|│ p  Show or hide the preview (follows the cursor)                                                       │
-26|│ q  Close the report tab; the report stays, `:Git plugins` opens it again                               │
-27|│ ?  List every one of these keys                                                                        │
-28|╰────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-29|~                                                                      │~
+03|plugins updated · ################ · overview                          │~
+04|3 changed, 6 commits, 1 breaking, 3 unseen                             │~
+05|                                                                       │~
+06|! breaking  telescope.nvim  3237450..19281ca  3 commits                │~
+07|╭─────────────────────────────────────────────plugins report─────────────────────────────────────────────╮
+08|│ <CR>  On a plugin: its detail. On a commit in the digest: its plugin's detail, cursor on the commit    │
+09|│ D  Breaking digest: the breaking commits of every plugin in one list                                   │
+10|│ s  Cycle the sort: breaking first, name, number of commits, time of the update                         │
+11|│ A  List the unchanged plugins too, or count them again                                                 │
+12|│ ]b  Next / previous breaking commit not marked as seen                                                 │
+13|│ m  Mark the commit under the cursor as seen, or every new commit of the plugin under it; again: unmark │
+14|│ M  Mark every commit this view lists as seen                                                           │
+15|│ o  Open in the browser: the commit, or on a plugin the compare page of its update; counts as seen      │
+16|│ go  Open the compare page of the plugin's update, also from a commit line                              │
+17|│ gy  Copy the URL `o` would open                                                                        │
+18|│ y  Copy the short / full hash (on a plugin: the commit its update ended on)                            │
+19|│ L  lazygit in the plugin's clone (lazygit can change the clone; the report itself never does)          │
+20|│ S  The clone's git status and last five commits, read only                                             │
+21|│ C  The plugin's CHANGELOG, in the tab the report was opened from                                       │
+22|│ Q  The breaking commits into the quickfix list, opened in the tab the report was opened from           │
+23|│ F  Jump to a plugin or a commit by name (picker)                                                       │
+24|│ r  Read the clone under the cursor again (a failed one, say); for this tab only, nothing is stored     │
+25|│ R  Build a new report (same mode), store it and show it                                                │
+26|│ p  Show or hide the preview (follows the cursor)                                                       │
+27|│ q  Close the report tab; the report stays, `:Git plugins` opens it again                               │
+28|│ ?  List every one of these keys                                                                        │
+29|╰────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 30|~                                                                      │~
 31|~                                                                      │~
 32|~                                                                      │~
@@ -46,12 +46,12 @@ mode: n
 --- attrs
 01|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 02|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbc
-03|dddddddddddddddddd################dddddddddddddddddddddddddddddddddddddceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-04|                                                                       ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-05|fffffffffffghhhhhhhhhhhhhhggiiiiiiiiiiiiiiiigggggggggggggggggggggggggggceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-06|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-07|jkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkjeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-08|jlllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllljeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+03|dddddddddddddddddd################ddddddddddd                          ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+04|dddddddddddddddddddddddddddddddddddddddddd                             ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+05|                                                                       ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+06|fffffffffffghhhhhhhhhhhhhhggiiiiiiiiiiiiiiiigggggggggggggggggggggggggggceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+07|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+08|jkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkjeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 09|jlllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllljeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 10|jlllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllljeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 11|jlllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllljeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
@@ -71,8 +71,8 @@ mode: n
 25|jlllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllljeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 26|jlllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllljeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 27|jlllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllljeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-28|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-29|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+28|jlllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllljeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+29|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 30|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 31|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 32|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

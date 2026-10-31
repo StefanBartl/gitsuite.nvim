@@ -182,6 +182,42 @@ describe("gitsuite.features.plugins.report_ui window", function()
     end, 10))
   end)
 
+  it("the summary line is never cut: two lines next to the preview, one without it", function()
+    vim.o.columns = 160
+    ui.open(report)
+    local function fits()
+      local width = vim.api.nvim_win_get_width(S().list_win)
+      for i, l in ipairs(lines(S().list_buf)) do
+        if S().rendered.items[i].kind == "summary" and vim.fn.strdisplaywidth(l) > width then
+          return false
+        end
+      end
+      return true
+    end
+    local function summary_lines()
+      local n = 0
+      for i = 1, #S().rendered.lines do
+        if S().rendered.items[i].kind == "summary" then n = n + 1 end
+      end
+      return n
+    end
+    assert.is_true(fits())
+    assert.equals(2, summary_lines())
+    assert.same({ kind = "plugin", name = "telescope.nvim" }, cursor_item())
+    -- p: the list takes the whole width, the summary one line again
+    press("p")
+    assert.is_true(fits())
+    assert.equals(1, summary_lines())
+    assert.same({ kind = "plugin", name = "telescope.nvim" }, cursor_item())
+    press("p")
+    assert.equals(2, summary_lines())
+    -- a resize by hand (WinResized) lays it out anew as well
+    vim.api.nvim_win_set_width(S().list_win, 150)
+    vim.api.nvim_exec_autocmds("WinResized", {})
+    assert.is_true(fits())
+    assert.equals(1, summary_lines())
+  end)
+
   it("closing the list window closes the preview with it", function()
     ui.open(report)
     local p = S().preview_win

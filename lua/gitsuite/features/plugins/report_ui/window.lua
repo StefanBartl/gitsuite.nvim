@@ -48,6 +48,7 @@ local AUGROUP = "gitsuite_plugins_report"
 ---@field gen? integer  Counts the tab's (re)builds: a scheduled callback from before one is stale.
 ---@field unsaved? table<string, boolean>  Seen marks the file did not take (kept for this session).
 ---@field seen_path? string  The marks file (nil: the default; specs set one).
+---@field width? integer  The list window's width of the last render (the summary is laid out for it).
 
 ---@type GitSuite.ReportUi.State
 local S = { preview_on = true }
@@ -189,8 +190,12 @@ end
 function M.redraw(key)
   if not valid_buf(S.list_buf) or not S.model then return end
   key = key or item_at_cursor() or S.cursor
-  local rendered = render.render(S.model)
+  -- The summary line takes two lines when the list is too narrow for it (the
+  -- list does not wrap); a change of the width redraws (`WinResized`).
+  local width = valid_win(S.list_win) and vim.api.nvim_win_get_width(S.list_win) or nil
+  local rendered = render.render(S.model, { width = width })
   S.rendered = rendered
+  S.width = width
   paint(S.list_buf, rendered)
   if valid_win(S.list_win) then
     local line = key and render.find(rendered, { name = key.name, sha = key.sha }) or nil
@@ -200,6 +205,13 @@ function M.redraw(key)
     vim.cmd.redrawstatus()
   end
   update_preview()
+end
+
+---Redraw the list when its width is not the one of the last render: the
+---summary line is laid out for it.
+local function relayout()
+  if not valid_win(S.list_win) or not S.model then return end
+  if vim.api.nvim_win_get_width(S.list_win) ~= S.width then M.redraw() end
 end
 
 ---The winbar legend of the list window (called by the `winbar` expression).
@@ -678,6 +690,7 @@ ACTIONS.preview = function()
     S.preview_on = true
     open_preview()
   end
+  relayout()
 end
 
 ACTIONS.close = function()
@@ -784,6 +797,14 @@ local function autocmds()
       close_win(S.preview_win)
       S.preview_win = nil
       open_preview()
+    end,
+  })
+  -- The preview opened, closed or moved, or the user resized: the summary line
+  -- is laid out for the list's width, so a new width redraws the list.
+  vim.api.nvim_create_autocmd("WinResized", {
+    group = group,
+    callback = function()
+      relayout()
     end,
   })
 end

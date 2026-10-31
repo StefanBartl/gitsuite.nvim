@@ -131,6 +131,29 @@ return {
         return s.rendered.items[vim.api.nvim_win_get_cursor(s.list_win)[1]] or {}
       end
       _G.list = function() return vim.api.nvim_buf_get_lines(_G.rs().list_buf, 0, -1, false) end
+      -- the summary: one line, or two next to the preview when the list is too narrow for it
+      _G.sum = function()
+        local out = {}
+        for i, l in ipairs(_G.list()) do
+          if _G.rs().rendered.items[i].kind == "summary" then out[#out + 1] = l end
+        end
+        return table.concat(out, " · ")
+      end
+      -- line n of the list as it would stand under a one-line summary
+      _G.row = function(n)
+        local extra = #vim.tbl_filter(function(it) return it.kind == "summary" end, _G.rs().rendered.items) - 1
+        return _G.list()[n + extra]
+      end
+      -- no summary line is wider than the list window (nothing cut, the list does not wrap)
+      _G.summary_fits = function()
+        local width = vim.api.nvim_win_get_width(_G.rs().list_win)
+        for i, l in ipairs(_G.list()) do
+          if _G.rs().rendered.items[i].kind == "summary" and vim.fn.strdisplaywidth(l) > width then
+            return "cut at " .. width .. ": " .. l
+          end
+        end
+        return true
+      end
       _G.preview = function()
         return table.concat(vim.api.nvim_buf_get_lines(_G.rs().preview_buf, 0, -1, false), "\n")
       end
@@ -166,12 +189,16 @@ return {
     { settle = 500 },
     { lua = 'vim.cmd("echo")', note = "clear the progress message of the scan" },
     {
-      expect = [[_G.list()[1]:find("3 changed, 6 commits, 1 breaking, 6 unseen", 1, true) ~= nil]],
+      expect = [[_G.sum():find("3 changed, 6 commits, 1 breaking, 6 unseen", 1, true) ~= nil]],
       note = "the first line sums up: 3 plugins changed, 6 commits, 1 breaking, all unseen",
     },
     {
-      expect = [[_G.list()[3]:find("^! breaking  telescope%.nvim") and _G.list()[4]:find("^%+ new +fresh%.nvim")
-        and _G.list()[5]:find("^↑ updated +mason%.nvim") and _G.list()[7]:find("1 unchanged", 1, true)]],
+      expect = [[_G.summary_fits() == true]],
+      note = "the summary is whole: next to the preview (160) the counts go onto a second line",
+    },
+    {
+      expect = [[_G.row(3):find("^! breaking  telescope%.nvim") and _G.row(4):find("^%+ new +fresh%.nvim")
+        and _G.row(5):find("^↑ updated +mason%.nvim") and _G.row(7):find("1 unchanged", 1, true)]],
       note = "breaking first; every state with a glyph AND a word; the unchanged plugin only counted",
     },
     {
@@ -221,7 +248,7 @@ return {
 
     { keys = "D", note = "the breaking digest" },
     {
-      expect = [[_G.list()[1]:find("breaking digest", 1, true) ~= nil]],
+      expect = [[_G.sum():find("breaking digest", 1, true) ~= nil]],
       note = "the digest over every plugin",
     },
     { keys = "gg]b", note = "]b: the next breaking commit not seen yet" },
@@ -243,17 +270,17 @@ return {
       note = "the commit page of telescope.nvim is handed to the system's opener",
     },
     {
-      expect = [[_G.list()[1]:find("5 unseen", 1, true) ~= nil]],
+      expect = [[_G.sum():find("5 unseen", 1, true) ~= nil]],
       note = "what was opened counts as seen: the unseen counter drops from 6 to 5",
     },
     { keys = "m", note = "m on the opened (seen) commit: unmark" },
     {
-      expect = [[_G.list()[1]:find("6 unseen", 1, true) ~= nil]],
+      expect = [[_G.sum():find("6 unseen", 1, true) ~= nil]],
       note = "unmarked: 6 unseen again",
     },
     { keys = "m", note = "m again: mark the commit as seen" },
     {
-      expect = [[_G.list()[1]:find("5 unseen", 1, true) ~= nil]],
+      expect = [[_G.sum():find("5 unseen", 1, true) ~= nil]],
       note = "marked: 5 unseen",
     },
     { keys = "<BS>", note = "back to the overview" },
@@ -263,22 +290,22 @@ return {
       note = "the compare page of the update",
     },
     {
-      expect = [[_G.list()[1]:find("3 unseen", 1, true) ~= nil]],
+      expect = [[_G.sum():find("3 unseen", 1, true) ~= nil]],
       note = "what was opened counts as seen: telescope.nvim's commits are no longer unseen",
     },
     { keys = "2j", note = "the cursor on mason.nvim" },
     {
-      expect = [[_G.item().name == "mason.nvim" and _G.list()[5]:find("3 unseen", 1, true) ~= nil]],
+      expect = [[_G.item().name == "mason.nvim" and _G.row(5):find("3 unseen", 1, true) ~= nil]],
       note = "mason.nvim shows its 3 unseen commits",
     },
     { keys = "m", note = "m on the plugin: every new commit of mason.nvim as seen" },
     {
-      expect = [[_G.list()[5]:find("unseen", 1, true) == nil and _G.list()[1]:find("unseen", 1, true) == nil]],
+      expect = [[_G.row(5):find("unseen", 1, true) == nil and _G.sum():find("unseen", 1, true) == nil]],
       note = "mason.nvim has no unseen commit left, nor has the summary",
     },
     { keys = "m", note = "m again on the plugin: unmark" },
     {
-      expect = [[_G.list()[5]:find("3 unseen", 1, true) ~= nil and _G.list()[1]:find("3 unseen", 1, true) ~= nil]],
+      expect = [[_G.row(5):find("3 unseen", 1, true) ~= nil and _G.sum():find("3 unseen", 1, true) ~= nil]],
       note = "mason.nvim's 3 commits are unseen again",
     },
     { keys = "2k", note = "back on telescope.nvim" },
@@ -334,7 +361,7 @@ return {
     },
     {
       expect = [[_G.rs().model.view.kind == "overview" and _G.item().name == "fresh.nvim"
-        and _G.list()[1]:find("3 unseen", 1, true) ~= nil]],
+        and _G.sum():find("3 unseen", 1, true) ~= nil]],
       note = "same view, the cursor on the same line, the marks kept",
     },
     { screen = "reopened", masks = { "%d%d%d%d%-%d%d%-%d%d %d%d:%d%d" } },
@@ -350,7 +377,7 @@ return {
     },
   },
   judge = {
-    "The layout reads well: list and preview side by side at 160 columns, one above the other at 120; the legend fits (at 160 the summary line of the list is cut after '1 breaking' -- acceptable?)",
+    "The layout reads well: list and preview side by side at 160 columns, one above the other at 120; the legend fits; at 160 the summary takes two lines (the counts below the date and the view) and reads well",
     "The ? list at 120x30 is taller than the screen: its last rows (?, q / <Esc>) are reached by scrolling -- acceptable, or should it fit?",
     "The O menu names each action with its first key only (o, not o / K) -- reads well?",
   },

@@ -1,21 +1,21 @@
 testing.nvim screen v1
 size: 160x40
-cursor: 8,1
+cursor: 9,1
 mode: n
 --- text
 01| tab 2 of 2
 02| <CR> open  │  <BS> back  │  D digest  │  ]] next  │  ? keys     c 1/3 │feat(picker)!: drop the old layout API
-03|plugins updated · ################ · telescope.nvim · 3 changed, 6 comm│Ada · 2026-09-21 · 8827b77fe3506a85de2437b7305fb67149fff6c9
-04|                                                                       │! sure  (bang, footer)
-05|! breaking  telescope.nvim  3237450..19281ca                           │
-06|                                                                       │BREAKING CHANGE: layout_strategy is gone.
-07|BREAKING (1)                                                           │Use layout_config instead.
-08|  • 8827b77 [sure] feat(picker)!: drop the old layout API              │
-09|                                                                       │Files (1)  +1 -0
-10|OTHER (2)                                                              │  A +1 -0  lua/telescope/layout.lua
-11|  • 19281ca docs: layout_config in the readme                          │~
-12|  • 214be44 fix: keep the cursor in the prompt                         │~
-13|~                                                                      │~
+03|plugins updated · ################ · telescope.nvim                    │Ada · 2026-09-21 · 8827b77fe3506a85de2437b7305fb67149fff6c9
+04|3 changed, 6 commits, 1 breaking, 6 unseen                             │! sure  (bang, footer)
+05|                                                                       │
+06|! breaking  telescope.nvim  3237450..19281ca                           │BREAKING CHANGE: layout_strategy is gone.
+07|                                                                       │Use layout_config instead.
+08|BREAKING (1)                                                           │
+09|  • 8827b77 [sure] feat(picker)!: drop the old layout API              │Files (1)  +1 -0
+10|                                                                       │  A +1 -0  lua/telescope/layout.lua
+11|OTHER (2)                                                              │~
+12|  • 19281ca docs: layout_config in the readme                          │~
+13|  • 214be44 fix: keep the cursor in the prompt                         │~
 14|~                                                                      │~
 15|~                                                                      │~
 16|~                                                                      │~
@@ -46,17 +46,17 @@ mode: n
 --- attrs
 01|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 02|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbccccccdeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-03|eeeeeeeeeeeeeeeeee################eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeedfff                gggggggggggggggggggggggggggggggggggggggg
-04|                                                                       dhhhhhh
-05|hhhhhhhhhh  ffffffffffffff  gggggggggggggggg                           d
-06|                                                                       d
-07|eeeeeeeeeeee                                                           d
-08|iijikkkkkkkilllllliiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiid
-09|                                                                       deeeeeeeeeeeeeeee
-10|eeeeeeeee                                                              d  g mmmmm
-11|  f ggggggg                                                            dnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+03|eeeeeeeeeeeeeeeeee################eeeeeeeeeeeeeeeee                    dfff                gggggggggggggggggggggggggggggggggggggggg
+04|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                             dhhhhhh
+05|                                                                       d
+06|hhhhhhhhhh  ffffffffffffff  gggggggggggggggg                           d
+07|                                                                       d
+08|eeeeeeeeeeee                                                           d
+09|iijikkkkkkkilllllliiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiideeeeeeeeeeeeeeee
+10|                                                                       d  g mmmmm
+11|eeeeeeeee                                                              dnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
 12|  f ggggggg                                                            dnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
-13|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnndnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+13|  f ggggggg                                                            dnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
 14|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnndnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
 15|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnndnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
 16|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnndnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
