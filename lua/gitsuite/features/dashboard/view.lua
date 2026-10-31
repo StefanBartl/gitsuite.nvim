@@ -1391,6 +1391,8 @@ local EXPORT_TARGETS = {
 ---@param before_open? fun(): nil Closes a popup dashboard first
 ---@return nil
 local function _export_to_buffer(lines, id, before_open)
+  -- So that `q` puts the dashboard back on the row the user was on.
+  if _last_view then _last_view.line = vim.api.nvim_win_get_cursor(0)[1] end
   if before_open then before_open() end
   vim.cmd.enew()
   local buf = vim.api.nvim_get_current_buf()
@@ -1421,7 +1423,7 @@ local function _export_to_file(lines, id)
     function(input)
       if not input or input == "" then return end
       local target = expand_path(input)
-      local ok, err = write_to_file(target, table.concat(lines, "\n") .. "\n")
+      local ok, err = write_to_file(target, table.concat(lines, "\n"))
       if ok then
         notify("Dashboard written to " .. target, 2)
       else
@@ -2157,7 +2159,8 @@ local function _context_menu_items(ctx)
     contextmenu.entry(#ctx.records > 0, "Pull all…", call("gP"), "gP"),
     contextmenu.entry(#ctx.records > 0, "Push all", call("gp"), "gp"),
     contextmenu.entry(#ctx.records > 0, "Update all", call("gu"), "gu"),
-    contextmenu.entry(#ctx.records > 0, "Sync all", call("gS"), "gS")
+    contextmenu.entry(#ctx.records > 0, "Sync all", call("gS"), "gS"),
+    contextmenu.entry(#ctx.records > 0, "Export…", call("E"), "E")
   )
 
   return out

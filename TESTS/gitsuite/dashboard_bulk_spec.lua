@@ -1192,6 +1192,7 @@ describe("gitsuite.features.dashboard.view: context menu", function()
       "Push all",
       "Update all",
       "Sync all",
+      "Export…",
     }, names)
   end)
 

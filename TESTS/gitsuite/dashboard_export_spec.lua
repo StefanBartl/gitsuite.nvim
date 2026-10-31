@@ -104,16 +104,97 @@ describe("gitsuite.features.dashboard.export.build", function()
   end)
 end)
 
-describe("dashboard E key", function()
-  it("is bound among the row keys and listed with a legend label", function()
-    local src = vim.fn.readfile(
-      vim.fn.fnamemodify(
-        vim.api.nvim_get_runtime_file("lua/gitsuite/features/dashboard/view.lua", false)[1],
-        ":p"
-      )
-    )
-    local text = table.concat(src, "\n")
-    assert.is_truthy(text:find('keys = { "E" },', 1, true))
-    assert.is_truthy(text:find('label = "E Export"', 1, true))
+describe("gitsuite.features.dashboard.view: E exports a report", function()
+  local dir_of_spec = debug.getinfo(1, "S").source:sub(2):match("(.*[/\\])") or "./"
+  local G = dofile(dir_of_spec .. "spec_guard.lua")()
+  G.install({
+    { "gitsuite.util.notify", "notify", "success" },
+    { "ui.kit", "select" },
+    { vim.ui, "input" },
+    { package.loaded, "lib.nvim.cross.copy_to_clipboard" },
+  })
+
+  local view, picks, messages, copied
+
+  local function bufnr()
+    return vim.fn.bufnr("gitsuite://dashboard")
+  end
+
+  local function press(lhs)
+    for _, m in ipairs(vim.api.nvim_buf_get_keymap(bufnr(), "n")) do
+      if m.lhs == lhs then
+        m.callback()
+        return
+      end
+    end
+    error("no dashboard mapping for " .. lhs)
+  end
+
+  before_each(function()
+    messages, copied = {}, nil
+    require("gitsuite.util.notify").notify = function(msg)
+      messages[#messages + 1] = msg
+    end
+    package.loaded["lib.nvim.cross.copy_to_clipboard"] = function(text)
+      copied = text
+      return true
+    end
+    -- Answers each `kit.select` with the item whose label starts with the next entry of `picks`.
+    require("ui.kit").select = function(o)
+      local want = table.remove(picks, 1)
+      for _, item in ipairs(o.items) do
+        if o.format_item(item):find(want, 1, true) == 1 then return o.on_select(item) end
+      end
+      error(("no choice starting with %q"):format(want))
+    end
+    package.loaded["gitsuite.features.dashboard.view"] = nil
+    view = require("gitsuite.features.dashboard.view")
+    view.show({
+      rec({ name = "alpha" }),
+      rec({ name = "beta", behind = 2, state = "behind" }),
+    }, { output = "buffer" })
+  end)
+
+  after_each(function()
+    local buf = bufnr()
+    if buf ~= -1 then pcall(vim.api.nvim_buf_delete, buf, { force = true }) end
+  end)
+
+  it("copies the chosen report to the clipboard", function()
+    picks = { "Behind", "Clipboard" }
+    press("E")
+    assert.is_truthy(copied, "nothing was copied")
+    assert.is_truthy(copied:find("beta", 1, true))
+    assert.is_nil(copied:find("alpha", 1, true), "a clean repository is not behind")
+  end)
+
+  it("opens the report in a new scratch buffer", function()
+    picks = { "All", "New buffer" }
+    press("E")
+    local buf = vim.api.nvim_get_current_buf()
+    assert.equals("nofile", vim.bo[buf].buftype)
+    local text = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n")
+    assert.is_truthy(text:find("alpha", 1, true))
+    assert.is_truthy(text:find("beta", 1, true))
+    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+  end)
+
+  it("writes the report to the path asked for", function()
+    local target = vim.fn.tempname() .. "/out.txt"
+    vim.ui.input = function(_, on_confirm)
+      on_confirm(target)
+    end
+    picks = { "Behind", "File" }
+    press("E")
+    local written = vim.fn.readfile(target)
+    assert.is_truthy(table.concat(written, "\n"):find("beta", 1, true))
+    vim.fn.delete(vim.fn.fnamemodify(target, ":h"), "rf")
+  end)
+
+  it("says so, and asks nothing more, when the report is empty", function()
+    picks = { "Diverged" }
+    press("E")
+    assert.is_truthy((messages[#messages] or ""):find("Nothing to export", 1, true))
+    assert.equals(0, #picks)
   end)
 end)
