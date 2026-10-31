@@ -2,11 +2,12 @@
 -- task gitsuite.nvim/plugins-report-ui-live-check, which went into gitsuite.nvim/live-test-checklist).
 -- Automated: four local clones (no network) with hand-written reflogs of one update run -- a
 -- breaking update, a plain one, a fresh install, an unchanged plugin -- scanned by the real
--- `:Git plugins report`; then the keys: <CR> detail, j through the commits, <BS>, D digest, ]b, m,
--- o on a plugin and on a commit (the system's opener is stubbed and records the URL), ? (nothing
--- cut), O (the menu), a colorscheme change (the groups still have a colour), q and `:Git plugins`
--- again. A snapshot per state. The colours themselves, real blobless lazy clones and the real
--- browser stay with a person.
+-- `:Git plugins report`; then the keys: <CR> detail, j through the commits, <BS>, D digest, ]b,
+-- o on a commit and on a plugin (the system's opener is stubbed and records the URL; both count as
+-- seen), m on a commit and on a plugin (mark, again: unmark), ? (every key, nothing cut), O (the
+-- menu), a colorscheme change (the groups still have a colour), q and `:Git plugins` again (the
+-- marks file was written). A snapshot per state. The colours themselves (the snapshots hold
+-- attribute letters, not colours), real blobless lazy clones and the real browser stay with a person.
 return {
   id = "gitsuite.plugins-report-tab",
   title = "gitsuite.nvim: report tab of :Git plugins (keys, layout, colours)",
@@ -236,15 +237,24 @@ return {
         and _G.preview():find("drop the old layout API", 1, true) ~= nil]],
       note = "its plugin's detail, the cursor on that commit",
     },
-    { keys = "m", note = "m: mark the commit as seen" },
-    {
-      expect = [[_G.list()[1]:find("5 unseen", 1, true) ~= nil]],
-      note = "the unseen counter drops from 6 to 5",
-    },
-    { keys = "o", note = "o on the commit" },
+    { keys = "o", note = "o on the commit (not marked yet)" },
     {
       expect = [[#_G.opened == 1 and _G.opened[1]:find("^https://github%.com/example/telescope%.nvim/commit/%x+$") ~= nil]],
       note = "the commit page of telescope.nvim is handed to the system's opener",
+    },
+    {
+      expect = [[_G.list()[1]:find("5 unseen", 1, true) ~= nil]],
+      note = "what was opened counts as seen: the unseen counter drops from 6 to 5",
+    },
+    { keys = "m", note = "m on the opened (seen) commit: unmark" },
+    {
+      expect = [[_G.list()[1]:find("6 unseen", 1, true) ~= nil]],
+      note = "unmarked: 6 unseen again",
+    },
+    { keys = "m", note = "m again: mark the commit as seen" },
+    {
+      expect = [[_G.list()[1]:find("5 unseen", 1, true) ~= nil]],
+      note = "marked: 5 unseen",
     },
     { keys = "<BS>", note = "back to the overview" },
     { keys = "o", note = "o on the plugin telescope.nvim" },
@@ -256,6 +266,22 @@ return {
       expect = [[_G.list()[1]:find("3 unseen", 1, true) ~= nil]],
       note = "what was opened counts as seen: telescope.nvim's commits are no longer unseen",
     },
+    { keys = "2j", note = "the cursor on mason.nvim" },
+    {
+      expect = [[_G.item().name == "mason.nvim" and _G.list()[5]:find("3 unseen", 1, true) ~= nil]],
+      note = "mason.nvim shows its 3 unseen commits",
+    },
+    { keys = "m", note = "m on the plugin: every new commit of mason.nvim as seen" },
+    {
+      expect = [[_G.list()[5]:find("unseen", 1, true) == nil and _G.list()[1]:find("unseen", 1, true) == nil]],
+      note = "mason.nvim has no unseen commit left, nor has the summary",
+    },
+    { keys = "m", note = "m again on the plugin: unmark" },
+    {
+      expect = [[_G.list()[5]:find("3 unseen", 1, true) ~= nil and _G.list()[1]:find("3 unseen", 1, true) ~= nil]],
+      note = "mason.nvim's 3 commits are unseen again",
+    },
+    { keys = "2k", note = "back on telescope.nvim" },
 
     { keys = "?", note = "?: every key" },
     { wait = [[_G.float() ~= nil]], note = "the key list is up" },
@@ -263,12 +289,17 @@ return {
       expect = [[(function()
         local w = _G.float()
         local width = vim.api.nvim_win_get_width(w)
-        for _, l in ipairs(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(w), 0, -1, false)) do
-          if vim.fn.strdisplaywidth(l) > width then return false end
+        local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(w), 0, -1, false)
+        local bad = {}
+        for _, l in ipairs(lines) do
+          if vim.fn.strdisplaywidth(l) > width then bad[#bad + 1] = "too wide: " .. l end
         end
-        return #require("gitsuite.features.plugins.report_ui.keys").KEYS + 5
-          == vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(w))
-      end)()]],
+        local text = "\n" .. table.concat(lines, "\n")
+        for _, k in ipairs(require("gitsuite.features.plugins.report_ui.keys").KEYS) do
+          if not text:find("\n  " .. vim.pesc(k.keys[1]) .. " ") then bad[#bad + 1] = "missing: " .. k.keys[1] end
+        end
+        return #bad == 0 or table.concat(bad, "; ")
+      end)() == true]],
       note = "every key is listed and no line is wider than the window (nothing cut)",
     },
     { screen = "help", masks = { "%d%d%d%d%-%d%d%-%d%d %d%d:%d%d" } },
@@ -306,15 +337,25 @@ return {
         and _G.list()[1]:find("3 unseen", 1, true) ~= nil]],
       note = "same view, the cursor on the same line, the marks kept",
     },
+    { screen = "reopened", masks = { "%d%d%d%d%-%d%d%-%d%d %d%d:%d%d" } },
+    {
+      expect = [[(function()
+        local f = io.open(_G.sheet_root .. "/plugins_seen.json", "rb")
+        if not f then return "no marks file" end
+        local ok, marks = pcall(vim.json.decode, f:read("a"))
+        f:close()
+        return ok and type(marks) == "table" and next(marks) ~= nil or "marks file empty or broken"
+      end)() == true]],
+      note = "the seen marks went into the marks file",
+    },
   },
   judge = {
-    "Colours in the snapshots: breaking red, updated green, hashes as numbers, dimmed text grey, and still coloured after the colorscheme change",
     "The layout reads well: list and preview side by side at 160 columns, one above the other at 120; the legend fits (at 160 the summary line of the list is cut after '1 breaking' -- acceptable?)",
     "The ? list at 120x30 is taller than the screen: its last rows (?, q / <Esc>) are reached by scrolling -- acceptable, or should it fit?",
     "The O menu names each action with its first key only (o, not o / K) -- reads well?",
   },
   manual = {
-    "In your own config with real lazy clones: :Git plugins report, the colours fit your colorscheme; :colorscheme <another> keeps them coloured",
+    "In your own config with real lazy clones: :Git plugins report, the colours fit your colorscheme (breaking red, updated green, hashes as numbers, dimmed text grey); :colorscheme <another> keeps them coloured (the snapshots hold attribute letters, not colours)",
     "On a real blobless lazy clone: the preview of a commit lists the changed files without +/- counts and says 'blobless'",
     "o on a commit opens the commit page in the real browser; o on a plugin its compare page",
     "The feel of the keys: nothing lags, the cursor lands where you expect",
