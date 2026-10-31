@@ -15,8 +15,9 @@ return {
   sizes = { { rows = 30, cols = 120 }, { rows = 40, cols = 160 } },
   steps = {
     {
-      lua = 'vim.opt.shortmess:append("I"); vim.o.ruler = false; vim.o.showcmd = false',
-      note = "no intro, no ruler",
+      lua = [[vim.opt.shortmess:append("I"); vim.o.ruler = false; vim.o.showcmd = false
+      vim.o.tabline = " tab %{tabpagenr()} of %{tabpagenr('$')}"]],
+      note = "no intro, no ruler; a tabline of its own (the default shortens the gitsuite:// name per platform)",
     },
     {
       lua = [=[_G.opened = {}
