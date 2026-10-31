@@ -831,6 +831,68 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
     pcall(vim.api.nvim_buf_delete, buf, { force = true })
     if not ok then error(err, 0) end
   end)
+
+  -- Same task: a title wider than the table (a long page name over a single
+  -- row) must widen the float to the title, both at open and on every redraw,
+  -- instead of being cut off from the left ("<te Dashboard ...").
+  it("the popup is as wide as a title that is wider than the table", function()
+    local page = "a-page-name-far-wider-than-the-whole-one-row-table-below-it"
+    -- Room for the whole title: `_resize_float` clamps to `columns - 4`,
+    -- which on the headless default of 80 would cut it short again.
+    local columns = vim.o.columns
+    vim.o.columns = 200
+    view.show({ record("r1") }, {
+      output = "popup",
+      pages = { { name = page }, { name = "other" } },
+      page_index = 1,
+      on_switch_page = function(_, on_done)
+        on_done({ record("r1") }, {})
+      end,
+    })
+    local win = vim.api.nvim_get_current_win()
+    local buf = vim.api.nvim_win_get_buf(win)
+    local ok, err = pcall(function()
+      assert.equals("gitsuite-dashboard", vim.bo[buf].filetype)
+      local function title()
+        local t = vim.api.nvim_win_get_config(win).title or ""
+        if type(t) == "table" then
+          local parts = {}
+          for _, chunk in ipairs(t) do
+            parts[#parts + 1] = chunk[1]
+          end
+          t = table.concat(parts)
+        end
+        return t
+      end
+      local function assert_title_fits(what)
+        local t = title()
+        assert.truthy(t:find(page, 1, true), what .. ": " .. t)
+        local w = 0
+        for _, l in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+          w = math.max(w, vim.fn.strdisplaywidth(l))
+        end
+        assert.is_true(vim.fn.strdisplaywidth(t) > w + 2, what .. ": title not wider than table")
+        assert.equals(vim.fn.strdisplaywidth(t), vim.api.nvim_win_get_config(win).width, what)
+        assert.is_nil(t:find("^<"), what .. ": " .. t)
+      end
+      local function press_here(lhs)
+        for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
+          if m.lhs == lhs then return m.callback() end
+        end
+        error("no dashboard mapping for " .. lhs)
+      end
+
+      assert_title_fits("at open")
+      vim.api.nvim_win_set_cursor(win, { 2, 0 })
+      press_here("m")
+      assert.truthy(title():find("1 marked", 1, true), title())
+      assert_title_fits("after a mark")
+    end)
+    pcall(vim.api.nvim_win_close, win, true)
+    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+    vim.o.columns = columns
+    if not ok then error(err, 0) end
+  end)
 end)
 
 -- GS: gitsuite.nvim/git-dashboard-startablauf-optimieren -- the popup used to
