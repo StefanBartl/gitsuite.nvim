@@ -133,7 +133,8 @@ processes off the same repository. Sorting, re-scanning, page switches and a
 second batch still wait for the running one. Closing the dashboard does not
 stop a batch: open it again while the batch runs and the new dashboard takes
 it over -- its rows keep showing the batch's progress and settle when it is
-through, and a second `gf` there is refused until then.
+through, and a second `gf` there is refused until then (at once, without
+asking first).
 
 When a batch is through, one notification sums it up: the counts in the first
 line, then per repository what failed (and why), what changed (`pulled 3

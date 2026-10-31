@@ -8,7 +8,8 @@
 -- The sh script needs `sh` on PATH for git (Git for Windows brings its own). Sabotage: without the
 -- redraw of the reopened dashboard (`_redraw` in view.lua, gitsuite.nvim@0f81590) it is red.
 -- Steps: `:Git dashboard`, `gf` and yes (4 fetching, 2 queued), q, `:Git dashboard` again (the rows still
--- show the batch), a second `gf` is refused ("A bulk fetch is already running"), one gate opens
+-- show the batch), a second `gf` is refused at once, without a question ("A bulk fetch is already running";
+-- gitsuite.nvim/git-dashboard-gf-waehrend-eines-laufenden-batches-fragt-erst), one gate opens
 -- (that row settles with its new commit, a queued one starts), all gates open (every row settles,
 -- none stays on "fetch..."). A snapshot per state. The look of it, real remotes over the network
 -- (slow, failing) and the feel stay with a person.
@@ -204,12 +205,11 @@ return {
     { screen = "reopened", masks = { "%d+y " } },
 
     { keys = "gf", note = "a second gf in the reopened dashboard" },
-    { wait = [[_G.asking("Fetch 6 repositories in this dashboard?")]], note = "it asks as well" },
-    { keys = "y", note = "yes" },
     {
       wait = [[_G.said("A bulk fetch is already running")]],
-      note = "it is refused: a bulk fetch is already running",
+      note = "it is refused at once: a bulk fetch is already running",
     },
+    { expect = [[not _G.asking("Fetch 6 repositories")]], note = "without asking first" },
     {
       expect = [[_G.count("⟳ fetch...") == 4 and _G.count("· fetch queued") == 2]],
       note = "no second batch: the rows are as before",
@@ -266,7 +266,6 @@ return {
     "The rows of the running batch read clearly in the reopened dashboard (· fetch queued / ⟳ fetch...) and match the first one",
     "The title's counter (fetch 1/6) is noticeable enough to tell the batch is still running",
     "running/progress/settled: the float keeps the width it was opened with while the STATE and SYNC cells widen -- LAST COMMIT is cut at the border and the title starts with '<' (bug or acceptable?)",
-    "A second gf during the batch first asks 'Fetch 6 repositories ...?' and only refuses after yes -- acceptable?",
   },
   manual = {
     "With your real repositories over the network: :Git dashboard, gf, close the popup before all repositories are through, :Git dashboard again; the rows go on and all settle",

@@ -1037,6 +1037,18 @@ end
 
 ---@private
 ---@internal
+---Refuses a new batch while one is running, with the message saying so.
+---Called before a batch's question is asked, so a second `gf` (or `gF`, `gP`,
+---...) during a batch is refused at once instead of after a pointless yes.
+---@return boolean refused
+local function _refuse_while_bulk()
+  if not _bulk_running then return false end
+  notify(("A bulk %s is already running"):format(_bulk_running), 3)
+  return true
+end
+
+---@private
+---@internal
 ---Runs `action_fn` against every record named by `indices`, one after another,
 ---then reports a single summary: per repository what changed, what failed and
 ---why, what was skipped, and a count of the rest
@@ -1059,10 +1071,8 @@ local function _run_bulk(bufnr, records, verb, action_fn, indices)
   local total = #indices
   if total == 0 then return end
 
-  if _bulk_running then
-    notify(("A bulk %s is already running"):format(_bulk_running), 3)
-    return
-  end
+  -- Checked again here: a batch may have started while the question was open.
+  if _refuse_while_bulk() then return end
   ---@type string[]
   local paths = {}
   for _, idx in ipairs(indices) do
@@ -1218,6 +1228,7 @@ local function _confirm_bulk(bufnr, records, verb, action_fn, indices, what)
     notify("No repositories to " .. verb, 3)
     return
   end
+  if _refuse_while_bulk() then return end
 
   kit.confirm({
     question = ("%s%s %d %s?"):format(verb:sub(1, 1):upper(), verb:sub(2), #indices, what),
@@ -1285,6 +1296,7 @@ local function _pull_all(ctx)
     notify("No repositories to pull", 3)
     return
   end
+  if _refuse_while_bulk() then return end
   local scope = require("gitsuite.config").get().dashboard.pull_scope
   local plan = require("gitsuite.features.dashboard.pull_scope").plan(ctx.records, scope)
   kit.confirm({

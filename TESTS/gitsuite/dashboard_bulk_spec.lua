@@ -427,6 +427,40 @@ describe("gitsuite.features.dashboard.view: bulk does not block settled rows", f
     assert.is_nil(state.bulk_verb())
   end)
 
+  -- GS: gitsuite.nvim/git-dashboard-gf-waehrend-eines-laufenden-batches-fragt-erst
+  -- -- a second whole-page action during a batch is refused at once, without
+  -- first asking a question whose yes could only be refused.
+  it("a second gf / gP during a batch is refused without asking first", function()
+    actions.fetch = fake("fetch")
+    view.show({ record("r1"), record("r2") }, { output = "buffer" })
+    press("gf")
+    assert.equals("fetch", state.bulk_verb())
+
+    local questions = {}
+    require("ui.kit").confirm = function(o)
+      questions[#questions + 1] = o.question
+      o.on_answer(true)
+    end
+    press("gf")
+    assert.same({}, questions)
+    assert.equals("A bulk fetch is already running", last_message())
+    press("gP")
+    assert.same({}, questions)
+    assert.equals("A bulk fetch is already running", last_message())
+    assert.same({ "fetch /fake/r1" }, calls, "no second batch started")
+
+    release("fetch /fake/r1", true)
+    wait_for(function()
+      return waiting["fetch /fake/r2"] ~= nil
+    end, "r2 fetching")
+    release("fetch /fake/r2", true)
+    wait_for(function()
+      return state.bulk_verb() == nil
+    end, "bulk finished")
+    press("gf")
+    assert.same({ "Fetch 2 repositories in this dashboard?" }, questions, "asks again once through")
+  end)
+
   it("gS has a description, which is what the ? help lists", function()
     view.show({ record("r1") }, { output = "buffer" })
     local desc
