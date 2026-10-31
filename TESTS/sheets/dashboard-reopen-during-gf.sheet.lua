@@ -21,8 +21,16 @@ return {
   steps = {
     {
       lua = [[vim.opt.shortmess:append("I"); vim.o.ruler = false; vim.o.showcmd = false
-      vim.o.messagesopt = "wait:0,history:500"]],
-      note = "no intro, no ruler; no hit-enter prompt (the scan's progress messages would stop the child)",
+      -- the fetch notifications pile up into a hit-enter prompt that would stop the child.
+      -- 'messagesopt' exists from Neovim 0.11 on; the plugin promises 0.10+, so older ones keep
+      -- the notifications in a list instead of on the screen (_G.said reads both)
+      _G.sheet_said = {}
+      if vim.fn.exists("+messagesopt") == 1 then
+        vim.o.messagesopt = "wait:0,history:500"
+      else
+        vim.notify = function(msg) table.insert(_G.sheet_said, tostring(msg)) end
+      end]],
+      note = "no intro, no ruler; no hit-enter prompt",
     },
     {
       lua = [=[local root = vim.fs.normalize(vim.fn.tempname())
@@ -32,8 +40,10 @@ return {
       vim.fn.mkdir(root .. "/gates", "p")
       _G.sheet_root = root
       _G.NAMES = { "alpha", "bravo", "charlie", "delta", "echo", "foxtrot" }
-      -- fixed dates, so the LAST COMMIT column only ever reads "<n>y" (masked in the snapshots)
-      local env = { GIT_AUTHOR_DATE = "2020-01-01T12:00:00Z", GIT_COMMITTER_DATE = "2020-01-01T12:00:00Z" }
+      -- dates 400 days back from now, so the LAST COMMIT column always reads "1y" (masked in the
+      -- snapshots); a fixed date would turn into "10y" one day and widen the column
+      local date = os.date("!%Y-%m-%dT12:00:00Z", os.time() - 400 * 86400)
+      local env = { GIT_AUTHOR_DATE = date, GIT_COMMITTER_DATE = date }
       local function git(dir, args)
         local argv = { "git", "-c", "user.name=sheet", "-c", "user.email=sheet@example.invalid",
           "-c", "commit.gpgsign=false", "-c", "core.autocrlf=false", "-c", "init.defaultBranch=main" }
@@ -72,7 +82,9 @@ return {
       _G.release = function(name)
         write(root .. "/gates/" .. name, "")
       end
-      require("gitsuite").setup({ dashboard = { fetch_jobs = 4 } })
+      -- progress in memory only: the default ("auto" without fidget) adds one vim.notify per
+      -- repository to the flood above (the user-facing side of that is a `manual` entry below)
+      require("gitsuite").setup({ progress_style = "statusline", dashboard = { fetch_jobs = 4 } })
       _G.dashboard = function()
         vim.cmd("Git dashboard " .. vim.fn.fnameescape(root .. "/repos"))
       end
@@ -124,6 +136,7 @@ return {
       end
       _G.said = function(text)
         return vim.fn.execute("messages"):find(text, 1, true) ~= nil
+          or table.concat(_G.sheet_said, " | "):find(text, 1, true) ~= nil
       end
       _G.verb = function()
         return require("gitsuite.features.dashboard.repo_state").bulk_verb()
@@ -259,6 +272,7 @@ return {
     "With your real repositories over the network: :Git dashboard, gf, close the popup before all repositories are through, :Git dashboard again; the rows go on and all settle",
     "A second gf in the reopened dashboard says 'A bulk fetch is already running' while the first runs",
     "A remote that fails (offline, no access) shows ✗ fetch failed in the reopened dashboard, the closing message names it",
+    "In a Neovim without a notifier plugin or fidget (progress_style 'auto' falls back to vim.notify): :Git dashboard on a directory with many clones opens without a 'Press ENTER' prompt during the scan",
     "Enter findings under 'Befunde' in docs/ROADMAP/Final_Checks/gitsuite-live-checks-2026-10-22.md (nvim config), each as a kind: bug task",
   },
 }
