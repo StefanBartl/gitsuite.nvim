@@ -1,0 +1,86 @@
+testing.nvim screen v1
+size: 160x40
+cursor: 8,1
+mode: n
+--- text
+01| [No Name]  2 g://p/report                                                                                                                                     X
+02| <CR> open  │  <BS> back  │  D digest  │  ]] next  │  ? keys     c 1/3 │feat(picker)!: drop the old layout API
+03|plugins updated · ################ · telescope.nvim · 3 changed, 6 comm│Ada · 2026-09-21 · 8827b77fe3506a85de2437b7305fb67149fff6c9
+04|                                                                       │! sure  (bang, footer)
+05|! breaking  telescope.nvim  3237450..19281ca                           │
+06|                                                                       │BREAKING CHANGE: layout_strategy is gone.
+07|BREAKING (1)                                                           │Use layout_config instead.
+08|  • 8827b77 [sure] feat(picker)!: drop the old layout API              │
+09|                                                                       │Files (1)  +1 -0
+10|OTHER (2)                                                              │  A +1 -0  lua/telescope/layout.lua
+11|  • 19281ca docs: layout_config in the readme                          │~
+12|  • 214be44 fix: keep the cursor in the prompt                         │~
+13|~                                                                      │~
+14|~                                                                      │~
+15|~                                                                      │~
+16|~                                                                      │~
+17|~                                                                      │~
+18|~                                                                      │~
+19|~                                                                      │~
+20|~                                                                      │~
+21|~                                                                      │~
+22|~                                                                      │~
+23|~                                                                      │~
+24|~                                                                      │~
+25|~                                                                      │~
+26|~                                                                      │~
+27|~                                                                      │~
+28|~                                                                      │~
+29|~                                                                      │~
+30|~                                                                      │~
+31|~                                                                      │~
+32|~                                                                      │~
+33|~                                                                      │~
+34|~                                                                      │~
+35|~                                                                      │~
+36|~                                                                      │~
+37|~                                                                      │~
+38|~                                                                      │~
+39|gitsuite://plugins/report [-]                                           gitsuite://plugins/preview [-]
+40|
+--- attrs
+01|aaaaaaaaaaabcbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+02|dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddeeeeeefcccccccccccccccccccccccccccccccccccccc
+03|cccccccccccccccccc################cccccccccccccccccccccccccccccccccccccfggg                hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+04|                                                                       fiiiiii
+05|iiiiiiiiii  gggggggggggggg  hhhhhhhhhhhhhhhh                           f
+06|                                                                       f
+07|cccccccccccc                                                           f
+08|jjkjllllllljmmmmmmjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjf
+09|                                                                       fcccccccccccccccc
+10|ccccccccc                                                              f  h nnnnn
+11|  g hhhhhhh                                                            foooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+12|  g hhhhhhh                                                            foooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+13|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+14|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+15|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+16|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+17|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+18|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+19|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+20|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+21|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+22|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+23|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+24|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+25|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+26|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+27|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+28|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+29|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+30|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+31|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+32|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+33|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+34|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+35|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+36|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+37|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+38|ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooofoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+39|ppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+40|qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq

@@ -61,7 +61,8 @@ return {
   guard_allow = {
     -- The specs build temporary repositories and test the plugin's git wrappers (`git init`, `commit`,
     -- `rev-parse`, `blame`, `diff`): about 500 spawns in 53 files.
-    spawn = { "git" },
+    -- sheets_spec.lua: every test sheet (TESTS/sheets/) runs in a child editor.
+    spawn = { "git", "nvim" },
   },
   -- The runner counts which commands, keymaps and autocommands the specs exercise (docs/SURFACE.md of testing.nvim);
   -- `scripts/test.sh surface` compares that with surface.baseline.json (a regression gate, not a percentage).

@@ -101,7 +101,16 @@ bash scripts/test.sh --json ir.json        # also write the machine-readable res
 Most specs run against this repository's own real git state (its actual
 branch, its actual conflict-free tree) rather than mocked output — see
 existing specs under `TESTS/gitsuite/` for the pattern before adding a
-mock where a real temp repo would do. [GitHub Actions](../.github/workflows/ci.yml)
+mock where a real temp repo would do.
+
+Live checks that a machine can walk through stand as test sheets under
+`TESTS/sheets/` (format: testing.nvim's `docs/SHEETS.md`): `TESTS/sheets_spec.lua`
+runs each in a child editor as the case `sheet:<id>` and compares its screens with
+the snapshots under `TESTS/__snapshots__/sheets/` (a new one is written on the
+first local run; review and commit it, CI never writes one). What only a person
+can judge is listed by `testing sheets report`.
+
+[GitHub Actions](../.github/workflows/ci.yml)
 runs the full suite on Linux, Windows and macOS on every push and PR to
 `main`.
 

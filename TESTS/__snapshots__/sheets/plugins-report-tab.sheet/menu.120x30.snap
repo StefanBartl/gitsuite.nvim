@@ -1,0 +1,66 @@
+testing.nvim screen v1
+size: 120x30
+cursor: 2,2
+mode: n
+--- text
+01| [No Name]  3 [Scratch]                                                                                                X
+02| <CR> open  │  D digest  │  s sort  │  ]b breaking  │  m seen  │  o browser  │  O actions  │  p preview  │  ? keys
+03|plugins updated · ################ · overview · 3 changed, 6 commits, 1 breaking, 3 unseen
+04|
+05|! breaking  telescope.nvim  3237450..19281ca  3 commits
+06|╭─────────────────────────────────────────────plugins report─────────────────────────────────────────────╮
+07|│ <CR>  On a plugin: its detail. On a commit in the digest: its plugin's detail, cursor on the commit    │
+08|│ D  Breaking digest: the breaking commits of every plugin in one list                                   │
+09|│ s  Cycle the sort: breaking first, name, number of commits, time of the update                         │
+10|│ A  List the unchanged plugins too, or count them again                                                 │
+11|│ ]b  Next / previous breaking commit not marked as seen                                                 │
+12|│ m  Mark the commit under the cursor as seen, or every new commit of the plugin under it; again: unmark │
+13|│ M  Mark every commit this view lists as seen                                                           │
+14|│ o  Open in the browser: the commit, or on a plugin the compare page of its update; counts as seen      │
+15|│ go  Open the compare page of the plugin's update, also from a commit line                              │
+16|│ gy  Copy the URL `o` would open                                                                        │
+17|│ y  Copy the short / full hash (on a plugin: the commit its update ended on)                            │
+18|│ L  lazygit in the plugin's clone (lazygit can change the clone; the report itself never does)          │
+19|│ S  The clone's git status and last five commits, read only                                             │
+20|│ C  The plugin's CHANGELOG, in the tab the report was opened from                                       │
+21|│ Q  The breaking commits into the quickfix list, opened in the tab the report was opened from           │
+22|│ F  Jump to a plugin or a commit by name (picker)                                                       │
+23|│ r  Read the clone under the cursor again (a failed one, say); for this tab only, nothing is stored     │
+24|│ R  Build a new report (same mode), store it and show it                                                │
+25|│ p  Show or hide the preview (follows the cursor)                                                       │
+26|│ q  Close the report tab; the report stays, `:Git plugins` opens it again                               │
+27|│ ?  List every one of these keys                                                                        │
+28|╰────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+29|gitsuite://plugins/preview [-]
+30|
+--- attrs
+01|aaaaaaaaaaabcbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+02|dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+03|cccccccccccccccccc################cccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+04|
+05|eeeeeeeeeeefggggggggggggggffhhhhhhhhhhhhhhhhffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+06|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+07|ijjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjji
+08|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkki
+09|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkki
+10|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+11|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+12|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+13|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+14|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkiaaaaaaaaaaaaaa
+15|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkki
+16|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+17|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+18|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+19|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+20|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+21|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+22|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+23|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+24|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+25|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+26|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+27|ikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkillllllllllllll
+28|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiillllllllllllll
+29|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+30|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm

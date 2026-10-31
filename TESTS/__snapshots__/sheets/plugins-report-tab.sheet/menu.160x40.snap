@@ -1,0 +1,86 @@
+testing.nvim screen v1
+size: 160x40
+cursor: 2,2
+mode: n
+--- text
+01| [No Name]  3 [Scratch]                                                                                                                                        X
+02| <CR> open  │  D digest  │  s sort  │  ]b breaking  │  ? keys          │Move to a commit to see its message here
+03|plugins updated · ################ · overview · 3 changed, 6 commits, 1│~
+04|                                                                       │~
+05|! breaking  telescope.nvim  3237450..19281ca  3 commits                │~
+06|╭─────────────────────────────────────────────plugins report─────────────────────────────────────────────╮
+07|│ <CR>  On a plugin: its detail. On a commit in the digest: its plugin's detail, cursor on the commit    │
+08|│ D  Breaking digest: the breaking commits of every plugin in one list                                   │
+09|│ s  Cycle the sort: breaking first, name, number of commits, time of the update                         │
+10|│ A  List the unchanged plugins too, or count them again                                                 │
+11|│ ]b  Next / previous breaking commit not marked as seen                                                 │
+12|│ m  Mark the commit under the cursor as seen, or every new commit of the plugin under it; again: unmark │
+13|│ M  Mark every commit this view lists as seen                                                           │
+14|│ o  Open in the browser: the commit, or on a plugin the compare page of its update; counts as seen      │
+15|│ go  Open the compare page of the plugin's update, also from a commit line                              │
+16|│ gy  Copy the URL `o` would open                                                                        │
+17|│ y  Copy the short / full hash (on a plugin: the commit its update ended on)                            │
+18|│ L  lazygit in the plugin's clone (lazygit can change the clone; the report itself never does)          │
+19|│ S  The clone's git status and last five commits, read only                                             │
+20|│ C  The plugin's CHANGELOG, in the tab the report was opened from                                       │
+21|│ Q  The breaking commits into the quickfix list, opened in the tab the report was opened from           │
+22|│ F  Jump to a plugin or a commit by name (picker)                                                       │
+23|│ r  Read the clone under the cursor again (a failed one, say); for this tab only, nothing is stored     │
+24|│ R  Build a new report (same mode), store it and show it                                                │
+25|│ p  Show or hide the preview (follows the cursor)                                                       │
+26|│ q  Close the report tab; the report stays, `:Git plugins` opens it again                               │
+27|│ ?  List every one of these keys                                                                        │
+28|╰────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+29|~                                                                      │~
+30|~                                                                      │~
+31|~                                                                      │~
+32|~                                                                      │~
+33|~                                                                      │~
+34|~                                                                      │~
+35|~                                                                      │~
+36|~                                                                      │~
+37|~                                                                      │~
+38|~                                                                      │~
+39|gitsuite://plugins/report [-]                                           gitsuite://plugins/preview [-]
+40|
+--- attrs
+01|aaaaaaaaaaabcbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+02|ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddde
+03|cccccccccccccccccc################ccccccccccccccccccccccccccccccccccccceffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+04|                                                                       effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+05|ggggggggggghiiiiiiiiiiiiiihhjjjjjjjjjjjjjjjjhhhhhhhhhhhhhhhhhhhhhhhhhhheffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+06|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+07|kllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+08|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+09|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+10|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+11|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+12|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+13|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+14|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+15|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+16|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+17|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+18|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+19|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+20|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+21|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+22|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+23|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+24|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+25|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+26|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+27|kmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+28|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkffffffffffffffffffffffffffffffffffffffffffffffffffffff
+29|fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+30|fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+31|fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+32|fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+33|fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+34|fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+35|fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+36|fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+37|fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+38|fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+39|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+40|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn

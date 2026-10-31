@@ -1,0 +1,66 @@
+testing.nvim screen v1
+size: 120x30
+cursor: 5,1
+mode: n
+--- text
+01| [No Name]  2 g://p/report                                                                                             X
+02| <CR> open  │  <BS> back  │  D digest  │  ]] next  │  ]b breaking  │  m seen  │  o browser  │  O actions  │  ? keys
+03|plugins updated · ################ · telescope.nvim · 3 changed, 6 commits, 1 breaking, 6 unseen
+04|
+05|! breaking  telescope.nvim  3237450..19281ca
+06|
+07|BREAKING (1)
+08|  • 8827b77 [sure] feat(picker)!: drop the old layout API
+09|
+10|OTHER (2)
+11|  • 19281ca docs: layout_config in the readme
+12|  • 214be44 fix: keep the cursor in the prompt
+13|~
+14|gitsuite://plugins/report [-]
+15|Move to a commit to see its message here
+16|~
+17|~
+18|~
+19|~
+20|~
+21|~
+22|~
+23|~
+24|~
+25|~
+26|~
+27|~
+28|~
+29|gitsuite://plugins/preview [-]
+30|
+--- attrs
+01|aaaaaaaaaaabcbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+02|dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+03|cccccccccccccccccc################cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+04|
+05|eeeeeeeeeeffggggggggggggggffhhhhhhhhhhhhhhhhffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+06|
+07|cccccccccccc
+08|  i jjjjjjj kkkkkk
+09|
+10|ccccccccc
+11|  i jjjjjjj
+12|  i jjjjjjj
+13|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+14|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm
+15|
+16|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+17|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+18|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+19|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+20|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+21|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+22|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+23|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+24|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+25|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+26|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+27|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+28|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+29|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+30|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn

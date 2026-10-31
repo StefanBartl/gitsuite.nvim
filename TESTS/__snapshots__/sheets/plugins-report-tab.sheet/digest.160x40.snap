@@ -1,0 +1,86 @@
+testing.nvim screen v1
+size: 160x40
+cursor: 6,1
+mode: n
+--- text
+01| [No Name]  2 g://p/report                                                                                                                                     X
+02| <CR> open  │  <BS> back  │  D digest  │  ]b breaking  │  ? keys       │feat(picker)!: drop the old layout API
+03|plugins updated · ################ · breaking digest · 3 changed, 6 com│Ada · 2026-09-21 · 8827b77fe3506a85de2437b7305fb67149fff6c9
+04|                                                                       │! sure  (bang, footer)
+05|BREAKING (1)                                                           │
+06|  • telescope.nvim  8827b77 feat(picker)!: drop the old layout API     │BREAKING CHANGE: layout_strategy is gone.
+07|~                                                                      │Use layout_config instead.
+08|~                                                                      │
+09|~                                                                      │Files (1)  +1 -0
+10|~                                                                      │  A +1 -0  lua/telescope/layout.lua
+11|~                                                                      │~
+12|~                                                                      │~
+13|~                                                                      │~
+14|~                                                                      │~
+15|~                                                                      │~
+16|~                                                                      │~
+17|~                                                                      │~
+18|~                                                                      │~
+19|~                                                                      │~
+20|~                                                                      │~
+21|~                                                                      │~
+22|~                                                                      │~
+23|~                                                                      │~
+24|~                                                                      │~
+25|~                                                                      │~
+26|~                                                                      │~
+27|~                                                                      │~
+28|~                                                                      │~
+29|~                                                                      │~
+30|~                                                                      │~
+31|~                                                                      │~
+32|~                                                                      │~
+33|~                                                                      │~
+34|~                                                                      │~
+35|~                                                                      │~
+36|~                                                                      │~
+37|~                                                                      │~
+38|~                                                                      │~
+39|gitsuite://plugins/report [-]                                           gitsuite://plugins/preview [-]
+40|
+--- attrs
+01|aaaaaaaaaaabcbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+02|dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddecccccccccccccccccccccccccccccccccccccc
+03|cccccccccccccccccc################cccccccccccccccccccccccccccccccccccccefff                gggggggggggggggggggggggggggggggggggggggg
+04|                                                                       ehhhhhh
+05|cccccccccccc                                                           e
+06|iijijjjjjjjjjjjjjjiikkkkkkkiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiie
+07|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllle
+08|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllle
+09|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllecccccccccccccccc
+10|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllle  g mmmmm
+11|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+12|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+13|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+14|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+15|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+16|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+17|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+18|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+19|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+20|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+21|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+22|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+23|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+24|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+25|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+26|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+27|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+28|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+29|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+30|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+31|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+32|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+33|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+34|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+35|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+36|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+37|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+38|lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllellllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
+39|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+40|oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
